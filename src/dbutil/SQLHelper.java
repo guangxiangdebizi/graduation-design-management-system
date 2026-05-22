@@ -11,7 +11,7 @@ import java.util.List;
 
 public class SQLHelper {
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
-    private static final String URL = "jdbc:mysql://127.0.0.1:3306/graduation_design?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8";
+    private static final String URL = "jdbc:mysql://127.0.0.1:3306/graduation_design?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci";
     private static final String DB_USER = "root";
     private static final String DB_PWD = "12345";
 

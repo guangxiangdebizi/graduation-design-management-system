@@ -22,6 +22,8 @@ public class AuthFilter implements Filter {
             throws IOException, ServletException {
         HttpServletRequest request = (HttpServletRequest) req;
         HttpServletResponse response = (HttpServletResponse) res;
+        request.setCharacterEncoding("UTF-8");
+        response.setCharacterEncoding("UTF-8");
         String uri = request.getRequestURI();
         String ctx = request.getContextPath();
         String path = uri.substring(ctx.length());
