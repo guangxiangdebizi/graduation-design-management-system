@@ -202,4 +202,5 @@
 
 
 
-<%@ include file="/WEB-INF/includes/footer.j
+<%@ include file="/WEB-INF/includes/footer.jsp" %>
+

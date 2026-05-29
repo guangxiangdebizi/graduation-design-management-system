@@ -146,7 +146,7 @@
 
        request.setAttribute("baseUrl", pagBase);
 
-       request.setAttribute("page", page);
+       request.setAttribute("page", currentPageNum);
 
        request.setAttribute("pageSize", pageSize);
 
@@ -202,4 +202,5 @@
 
 
 
-<%@ include file="/WEB-INF/includes/footer.j
+<%@ include file="/WEB-INF/includes/footer.jsp" %>
+
