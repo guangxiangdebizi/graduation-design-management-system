@@ -10,6 +10,8 @@ import javax.servlet.http.HttpSession;
 import bean.Announcement;
 import bean.User;
 import dao.AnnouncementDao;
+import util.OperationLogUtil;
+import util.WebUtil;
 
 @WebServlet("/admin/announcement.action")
 public class AdminAnnouncementController extends HttpServlet {
@@ -28,7 +30,8 @@ public class AdminAnnouncementController extends HttpServlet {
             a.setPublisherId(user.getId());
             a.setIsTop("1".equals(request.getParameter("isTop")) ? 1 : 0);
             dao.insert(a);
-            redirect(response, "announcements.jsp?msg=add_ok");
+            OperationLogUtil.log(user.getId(), "ADD", "announcement", "发布公告: " + a.getTitle());
+            WebUtil.redirect(request, response, "/admin/announcements.jsp?msg=add_ok");
         } else if ("edit".equals(action)) {
             Announcement a = new Announcement();
             a.setId(Integer.parseInt(request.getParameter("id")));
@@ -36,16 +39,15 @@ public class AdminAnnouncementController extends HttpServlet {
             a.setContent(request.getParameter("content"));
             a.setIsTop("1".equals(request.getParameter("isTop")) ? 1 : 0);
             dao.update(a);
-            redirect(response, "announcements.jsp?msg=edit_ok");
+            OperationLogUtil.log(user.getId(), "UPDATE", "announcement", "编辑公告 id=" + a.getId());
+            WebUtil.redirect(request, response, "/admin/announcements.jsp?msg=edit_ok");
         } else if ("delete".equals(action)) {
-            dao.delete(Integer.parseInt(request.getParameter("id")));
-            redirect(response, "announcements.jsp?msg=delete_ok");
+            int id = Integer.parseInt(request.getParameter("id"));
+            dao.delete(id);
+            OperationLogUtil.log(user.getId(), "DELETE", "announcement", "删除公告 id=" + id);
+            WebUtil.redirect(request, response, "/admin/announcements.jsp?msg=delete_ok");
         } else {
-            redirect(response, "announcements.jsp");
+            WebUtil.redirect(request, response, "/admin/announcements.jsp");
         }
-    }
-
-    private void redirect(HttpServletResponse response, String url) throws IOException {
-        response.sendRedirect(url);
     }
 }

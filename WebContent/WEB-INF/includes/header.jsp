@@ -9,3 +9,4 @@
   <link href="<%= request.getContextPath() %>/css/app.css" rel="stylesheet">
 </head>
 <body>
+<%@ include file="/WEB-INF/includes/csrf-meta.jsp" %>

@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*" %>
+<%@ page import="bean.*,dao.*,java.util.*,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "学生进度");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -27,15 +27,15 @@
            for (Document d : docs) { docMap.put(d.getDocType(), d); }
       %>
       <tr>
-        <td><%= s.getStudentName() %></td>
-        <td><%= s.getStudentNo() %></td>
-        <td><%= s.getTopicTitle() %></td>
+        <td><%= EscapeUtil.html(s.getStudentName()) %></td>
+        <td><%= EscapeUtil.html(s.getStudentNo()) %></td>
+        <td><%= EscapeUtil.html(s.getTopicTitle()) %></td>
         <% for (String type : typeNames.keySet()) {
              Document d = docMap.get(type);
              if (d == null) { %>
           <td><span class="text-muted">未提交</span></td>
         <% } else { %>
-          <td><span class="badge-status badge-<%= d.getStatus() %>"><%= d.getStatus() %></span>
+          <td><% request.setAttribute("status", d.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %>
             <% if (d.getScore()!=null) { %>(<%= d.getScore() %>分)<% } %>
           </td>
         <% }} %>

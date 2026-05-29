@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat" %>
+<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "我的课题");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -20,8 +20,8 @@
     <div class="empty-state" style="grid-column:1/-1"><div class="icon">&#128221;</div><p>还没有发布课题</p></div>
   <% } else { for (Topic t : topics) { %>
     <div class="topic-card">
-      <h6><%= t.getTitle() %></h6>
-      <p><%= t.getDescription().length()>100 ? t.getDescription().substring(0,100)+"..." : t.getDescription() %></p>
+      <h6><%= EscapeUtil.html(t.getTitle()) %></h6>
+      <p><%= EscapeUtil.html(t.getDescription().length()>100 ? t.getDescription().substring(0,100)+"..." : t.getDescription()) %></p>
       <div class="meta">
         名额: <%= t.getSelectedCount() %>/<%= t.getMaxStudents() %>
         &nbsp;|&nbsp;

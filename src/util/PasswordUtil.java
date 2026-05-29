@@ -1,8 +1,27 @@
 package util;
 
 import java.security.MessageDigest;
+import org.mindrot.jbcrypt.BCrypt;
 
 public class PasswordUtil {
+    public static String hash(String input) {
+        return BCrypt.hashpw(input, BCrypt.gensalt());
+    }
+
+    public static boolean matches(String plain, String hash) {
+        if (plain == null || hash == null) {
+            return false;
+        }
+        if (hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$")) {
+            try {
+                return BCrypt.checkpw(plain, hash);
+            } catch (IllegalArgumentException ex) {
+                return false;
+            }
+        }
+        return md5(plain).equals(hash);
+    }
+
     public static String md5(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");

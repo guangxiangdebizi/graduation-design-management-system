@@ -1,11 +1,15 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*" %>
+<%@ page import="bean.*,dao.*,java.util.*,util.PageUtil,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "用户管理");
   User loginUser = (User) session.getAttribute("loginUser");
   UserDao dao = new UserDao();
   String roleFilter = request.getParameter("role");
-  List<User> users = dao.findAll(roleFilter);
+  int currentPageNum = PageUtil.getPage(request);
+  int pageSize = PageUtil.getPageSize(request);
+  List<User> users = dao.findAllPaged(roleFilter, currentPageNum, pageSize);
+  int total = dao.countAll(roleFilter);
+  String pagBase = "users.jsp" + (roleFilter != null && roleFilter.length() > 0 ? "?role=" + roleFilter : "");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <div class="app-layout">
@@ -46,6 +50,11 @@
     </tr>
     <% } %>
   </table>
+  <% request.setAttribute("baseUrl", pagBase);
+     request.setAttribute("page", currentPageNum);
+     request.setAttribute("pageSize", pageSize);
+     request.setAttribute("total", total); %>
+  <%@ include file="/WEB-INF/includes/pagination.jsp" %>
 </div>
 
 <!-- Add Modal -->

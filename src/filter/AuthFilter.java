@@ -12,6 +12,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import bean.User;
+import util.CsrfUtil;
 
 @WebFilter("/*")
 public class AuthFilter implements Filter {
@@ -53,6 +54,18 @@ public class AuthFilter implements Filter {
             return;
         }
 
+        if ("GET".equalsIgnoreCase(request.getMethod())) {
+            CsrfUtil.getToken(session);
+        }
+
+        if ("POST".equalsIgnoreCase(request.getMethod()) && path.endsWith(".action")
+                && !"/login.action".equals(path)) {
+            if (!CsrfUtil.validate(request)) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "CSRF token invalid");
+                return;
+            }
+        }
+
         chain.doFilter(req, res);
     }
 
@@ -63,7 +76,7 @@ public class AuthFilter implements Filter {
         if (path.equals("/login.action")) {
             return true;
         }
-        if (path.startsWith("/css/") || path.startsWith("/js/")) {
+        if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/error/")) {
             return true;
         }
         return false;

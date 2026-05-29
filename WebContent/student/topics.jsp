@@ -1,5 +1,6 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
 <%@ page import="bean.*,dao.*,java.util.*" %>
+<%@ page import="util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "浏览课题");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -23,10 +24,10 @@
     <div class="empty-state" style="grid-column:1/-1"><div class="icon">&#128269;</div><p>没有找到匹配的课题</p></div>
   <% } else { for (Topic t : topics) { %>
     <div class="topic-card">
-      <h6><%= t.getTitle() %></h6>
-      <p><%= t.getDescription() %></p>
+      <h6><%= EscapeUtil.html(t.getTitle()) %></h6>
+      <p><%= EscapeUtil.html(t.getDescription()) %></p>
       <div class="meta">
-        指导教师: <%= t.getTeacherName() %><br>
+        指导教师: <%= EscapeUtil.html(t.getTeacherName()) %><br>
         名额: <%= t.getSelectedCount() %>/<%= t.getMaxStudents() %>
       </div>
       <% if (!hasApplied && t.getSelectedCount() < t.getMaxStudents()) { %>

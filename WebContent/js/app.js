@@ -48,10 +48,27 @@ function validateScore(input) {
   }
 }
 
+function injectCsrfToken() {
+  var meta = document.querySelector('meta[name="csrf-token"]');
+  if (!meta) return;
+  var token = meta.getAttribute('content');
+  if (!token) return;
+  document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
+    if (form.querySelector('input[name="_csrf"]')) return;
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = '_csrf';
+    input.value = token;
+    form.appendChild(input);
+  });
+}
+
 function initPageMessages() {
   var params = new URLSearchParams(window.location.search);
   var msg = params.get('msg');
-  if (!msg) return;
+  var path = window.location.pathname || '';
+  var errorKeys = ['error', 'quota_full', 'import_empty', 'import_error', 'csrf_error',
+    'upload_invalid', 'rejected', 'already_applied', 'no_topic', 'exists'];
   var messages = {
     'add_ok': '添加成功',
     'edit_ok': '修改成功',
@@ -61,16 +78,38 @@ function initPageMessages() {
     'submit_ok': '文档提交成功',
     'no_topic': '请先完成选题后再提交文档',
     'approved': '已批准选题申请',
-    'rejected': '已驳回选题申请',
+    'rejected': path.indexOf('documents') >= 0 ? '文档已退回' : '已驳回选题申请',
     'reviewed': '文档审核完成',
+    'send_ok': '消息发送成功',
+    'exists': '该学生已有答辩安排',
+    'quota_full': '课题名额已满，无法批准',
+    'import_empty': '请选择要导入的 Excel 文件',
+    'import_error': '导入失败，请检查文件格式',
+    'csrf_error': '安全验证失败，请刷新页面后重试',
+    'upload_invalid': '文件格式或大小不符合要求',
+    'locked': '登录失败次数过多，请稍后再试',
     'error': '操作失败，请重试'
   };
-  if (messages[msg]) {
-    showToast(messages[msg], msg === 'error' || msg === 'already_applied' || msg === 'no_topic');
+
+  if (msg === 'import_ok') {
+    var success = params.get('success') || '0';
+    var skipped = params.get('skipped') || '0';
+    showToast('导入完成：成功 ' + success + ' 条，跳过 ' + skipped + ' 条', false);
+    return;
+  }
+
+  if (msg && messages[msg]) {
+    showToast(messages[msg], errorKeys.indexOf(msg) >= 0);
   }
   if (params.get('error') === '1') {
     showToast('用户名或密码错误', true);
   }
+  if (params.get('error') === 'locked') {
+    showToast(messages['locked'], true);
+  }
 }
 
-document.addEventListener('DOMContentLoaded', initPageMessages);
+document.addEventListener('DOMContentLoaded', function() {
+  injectCsrfToken();
+  initPageMessages();
+});

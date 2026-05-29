@@ -9,6 +9,9 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import bean.User;
 import dao.UserDao;
+import util.LoginAttemptUtil;
+import util.OperationLogUtil;
+import util.WebUtil;
 
 @WebServlet("/login.action")
 public class LoginController extends HttpServlet {
@@ -17,15 +20,24 @@ public class LoginController extends HttpServlet {
         request.setCharacterEncoding("UTF-8");
         String username = request.getParameter("username");
         String password = request.getParameter("password");
+        HttpSession session = request.getSession(true);
+
+        if (LoginAttemptUtil.isLocked(session, username)) {
+            WebUtil.redirect(request, response, "/login.jsp?error=locked");
+            return;
+        }
+
         UserDao dao = new UserDao();
         if (dao.validate(username, password)) {
             User user = dao.findByUsername(username);
             user.setPassword(null);
-            HttpSession session = request.getSession(true);
             session.setAttribute("loginUser", user);
-            response.sendRedirect("dashboard.jsp");
+            LoginAttemptUtil.clear(session, username);
+            OperationLogUtil.log(user.getId(), "LOGIN", user.getRole(), username + " 登录系统");
+            WebUtil.redirect(request, response, "/dashboard.jsp");
         } else {
-            response.sendRedirect("login.jsp?error=1");
+            LoginAttemptUtil.recordFailure(session, username);
+            WebUtil.redirect(request, response, "/login.jsp?error=1");
         }
     }
 

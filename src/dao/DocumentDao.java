@@ -6,27 +6,38 @@ import java.util.List;
 import bean.Document;
 import dbutil.SQLHelper;
 import util.DateUtil;
+import util.PageUtil;
 
 public class DocumentDao {
+    private static final String BASE_SQL =
+        "SELECT d.id,d.student_id,d.topic_id,d.doc_type,d.title,d.content,d.file_path,d.status,d.score,"
+        + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title "
+        + "FROM documents d "
+        + "JOIN users u ON d.student_id=u.id "
+        + "JOIN topics t ON d.topic_id=t.id ";
+
     public List<Document> findByStudent(int studentId) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT d.id,d.student_id,d.topic_id,d.doc_type,d.title,d.content,d.file_path,d.status,d.score,"
-            + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title "
-            + "FROM documents d "
-            + "JOIN users u ON d.student_id=u.id "
-            + "JOIN topics t ON d.topic_id=t.id "
-            + "WHERE d.student_id=? ORDER BY d.doc_type",
-            studentId);
+            BASE_SQL + "WHERE d.student_id=? ORDER BY d.doc_type", studentId);
         return mapList(rows);
     }
 
+    public List<Document> findByStudentPaged(int studentId, int page, int pageSize) {
+        int offset = PageUtil.offset(page, pageSize);
+        List<Object[]> rows = SQLHelper.queryList(
+            BASE_SQL + "WHERE d.student_id=? ORDER BY d.doc_type LIMIT ? OFFSET ?",
+            studentId, pageSize, offset);
+        return mapList(rows);
+    }
+
+    public int countByStudent(int studentId) {
+        Object val = SQLHelper.queryScalar(
+            "SELECT COUNT(*) FROM documents WHERE student_id=?", studentId);
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
     public List<Document> findByTeacher(int teacherId, String docType, String status) {
-        String sql = "SELECT d.id,d.student_id,d.topic_id,d.doc_type,d.title,d.content,d.file_path,d.status,d.score,"
-            + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title "
-            + "FROM documents d "
-            + "JOIN users u ON d.student_id=u.id "
-            + "JOIN topics t ON d.topic_id=t.id "
-            + "WHERE t.teacher_id=?";
+        String sql = BASE_SQL + "WHERE t.teacher_id=?";
         List<Object> params = new ArrayList<Object>();
         params.add(teacherId);
         if (docType != null && docType.length() > 0) {
@@ -42,15 +53,44 @@ public class DocumentDao {
         return mapList(rows);
     }
 
+    public List<Document> findByTeacherPaged(int teacherId, String docType, String status,
+            int page, int pageSize) {
+        String sql = BASE_SQL + "WHERE t.teacher_id=?";
+        List<Object> params = new ArrayList<Object>();
+        params.add(teacherId);
+        if (docType != null && docType.length() > 0) {
+            sql += " AND d.doc_type=?";
+            params.add(docType);
+        }
+        if (status != null && status.length() > 0) {
+            sql += " AND d.status=?";
+            params.add(status);
+        }
+        sql += " ORDER BY d.submit_time DESC LIMIT ? OFFSET ?";
+        params.add(pageSize);
+        params.add(PageUtil.offset(page, pageSize));
+        List<Object[]> rows = SQLHelper.queryList(sql, params.toArray());
+        return mapList(rows);
+    }
+
+    public int countByTeacher(int teacherId, String docType, String status) {
+        String sql = "SELECT COUNT(*) FROM documents d JOIN topics t ON d.topic_id=t.id WHERE t.teacher_id=?";
+        List<Object> params = new ArrayList<Object>();
+        params.add(teacherId);
+        if (docType != null && docType.length() > 0) {
+            sql += " AND d.doc_type=?";
+            params.add(docType);
+        }
+        if (status != null && status.length() > 0) {
+            sql += " AND d.status=?";
+            params.add(status);
+        }
+        Object val = SQLHelper.queryScalar(sql, params.toArray());
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
     public Document findById(int id) {
-        List<Object[]> rows = SQLHelper.queryList(
-            "SELECT d.id,d.student_id,d.topic_id,d.doc_type,d.title,d.content,d.file_path,d.status,d.score,"
-            + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title "
-            + "FROM documents d "
-            + "JOIN users u ON d.student_id=u.id "
-            + "JOIN topics t ON d.topic_id=t.id "
-            + "WHERE d.id=?",
-            id);
+        List<Object[]> rows = SQLHelper.queryList(BASE_SQL + "WHERE d.id=?", id);
         if (rows.isEmpty()) {
             return null;
         }
@@ -59,13 +99,7 @@ public class DocumentDao {
 
     public Document findByStudentAndType(int studentId, String docType) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT d.id,d.student_id,d.topic_id,d.doc_type,d.title,d.content,d.file_path,d.status,d.score,"
-            + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title "
-            + "FROM documents d "
-            + "JOIN users u ON d.student_id=u.id "
-            + "JOIN topics t ON d.topic_id=t.id "
-            + "WHERE d.student_id=? AND d.doc_type=?",
-            studentId, docType);
+            BASE_SQL + "WHERE d.student_id=? AND d.doc_type=?", studentId, docType);
         if (rows.isEmpty()) {
             return null;
         }
@@ -73,8 +107,11 @@ public class DocumentDao {
     }
 
     public int submit(Document doc) {
+        DocumentVersionDao versionDao = new DocumentVersionDao();
         Document existing = findByStudentAndType(doc.getStudentId(), doc.getDocType());
         if (existing != null) {
+            versionDao.saveVersion(existing.getId(), existing.getTitle(),
+                existing.getContent(), existing.getFilePath());
             return SQLHelper.executeUpdate(
                 "UPDATE documents SET title=?,content=?,file_path=?,status='submitted',submit_time=NOW() WHERE id=?",
                 doc.getTitle(), doc.getContent(), doc.getFilePath(), existing.getId());

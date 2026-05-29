@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat" %>
+<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "文档审核");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -39,11 +39,11 @@
       <tr><th>学生</th><th>课题</th><th>标题</th><th>提交时间</th><th>状态</th><th>分数</th><th>操作</th></tr>
       <% for (Document d : list) { %>
       <tr>
-        <td><%= d.getStudentName() %></td>
-        <td><%= d.getTopicTitle() %></td>
-        <td><%= d.getTitle() %></td>
+        <td><%= EscapeUtil.html(d.getStudentName()) %></td>
+        <td><%= EscapeUtil.html(d.getTopicTitle()) %></td>
+        <td><%= EscapeUtil.html(d.getTitle()) %></td>
         <td><%= d.getSubmitTime()!=null?sdf.format(d.getSubmitTime()):"—" %></td>
-        <td><span class="badge-status badge-<%= d.getStatus() %>"><%= d.getStatus() %></span></td>
+        <td><% request.setAttribute("status", d.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %></td>
         <td><%= d.getScore()!=null?d.getScore():"—" %></td>
         <td>
           <button class="btn btn-sm btn-outline-primary" onclick="viewDoc(<%= d.getId() %>,'<%= d.getStudentName() %>','<%= d.getTitle().replace("'","\\'") %>','<%= d.getContent()==null?"":d.getContent().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getFilePath()==null?"":d.getFilePath() %>','<%= d.getStatus() %>','<%= d.getScore()!=null?d.getScore():"" %>','<%= d.getFeedback()==null?"":d.getFeedback().replace("'","\\'").replace("\n","\\n").replace("\r","") %>')">查看/审核</button>

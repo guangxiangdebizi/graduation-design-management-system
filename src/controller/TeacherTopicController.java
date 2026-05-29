@@ -10,6 +10,8 @@ import javax.servlet.http.HttpSession;
 import bean.Topic;
 import bean.User;
 import dao.TopicDao;
+import util.OperationLogUtil;
+import util.WebUtil;
 
 @WebServlet("/teacher/topic.action")
 public class TeacherTopicController extends HttpServlet {
@@ -29,7 +31,8 @@ public class TeacherTopicController extends HttpServlet {
             t.setMaxStudents(Integer.parseInt(request.getParameter("maxStudents")));
             t.setStatus(request.getParameter("status"));
             dao.insert(t);
-            redirect(response, "topics.jsp?msg=add_ok");
+            OperationLogUtil.log(user.getId(), "ADD", "topic", "发布课题: " + t.getTitle());
+            WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=add_ok");
         } else if ("edit".equals(action)) {
             Topic t = new Topic();
             t.setId(Integer.parseInt(request.getParameter("id")));
@@ -39,16 +42,15 @@ public class TeacherTopicController extends HttpServlet {
             t.setMaxStudents(Integer.parseInt(request.getParameter("maxStudents")));
             t.setStatus(request.getParameter("status"));
             dao.update(t);
-            redirect(response, "topics.jsp?msg=edit_ok");
+            OperationLogUtil.log(user.getId(), "UPDATE", "topic", "编辑课题 id=" + t.getId());
+            WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=edit_ok");
         } else if ("delete".equals(action)) {
-            dao.delete(Integer.parseInt(request.getParameter("id")), user.getId());
-            redirect(response, "topics.jsp?msg=delete_ok");
+            int id = Integer.parseInt(request.getParameter("id"));
+            dao.delete(id, user.getId());
+            OperationLogUtil.log(user.getId(), "DELETE", "topic", "删除课题 id=" + id);
+            WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=delete_ok");
         } else {
-            redirect(response, "topics.jsp");
+            WebUtil.redirect(request, response, "/teacher/topics.jsp");
         }
-    }
-
-    private void redirect(HttpServletResponse response, String url) throws IOException {
-        response.sendRedirect(url);
     }
 }

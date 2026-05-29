@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat" %>
+<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "公告管理");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -21,7 +21,7 @@
   <% } else { for (Announcement a : list) { %>
     <div class="announce-item">
       <div class="d-flex justify-content-between">
-        <div class="title"><% if (a.getIsTop()==1) { %><span class="badge bg-danger me-1">置顶</span><% } %><%= a.getTitle() %></div>
+        <div class="title"><% if (a.getIsTop()==1) { %><span class="badge bg-danger me-1">置顶</span><% } %><%= EscapeUtil.html(a.getTitle()) %></div>
         <div>
           <button class="btn btn-sm btn-outline-primary" onclick="editAnn(<%= a.getId() %>,'<%= a.getTitle().replace("'","\\'") %>','<%= a.getContent().replace("'","\\'").replace("\n","\\n").replace("\r","") %>',<%= a.getIsTop() %>)">编辑</button>
           <form id="delAnn<%= a.getId() %>" action="../admin/announcement.action" method="post" style="display:inline">
@@ -31,8 +31,8 @@
           </form>
         </div>
       </div>
-      <div class="meta"><%= a.getPublisherName() %> · <%= sdf.format(a.getCreatedAt()) %></div>
-      <div class="content"><%= a.getContent().replace("\n","<br>") %></div>
+      <div class="meta"><%= EscapeUtil.html(a.getPublisherName()) %> · <%= sdf.format(a.getCreatedAt()) %></div>
+      <div class="content"><%= EscapeUtil.html(a.getContent()).replace("\n","<br>") %></div>
     </div>
   <% }} %>
 </div>

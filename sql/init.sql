@@ -4,6 +4,7 @@ USE graduation_design;
 
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS operation_logs;
+DROP TABLE IF EXISTS document_versions;
 DROP TABLE IF EXISTS defense_schedules;
 DROP TABLE IF EXISTS documents;
 DROP TABLE IF EXISTS topic_selections;
@@ -14,7 +15,7 @@ DROP TABLE IF EXISTS users;
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(64) NOT NULL,
+    password VARCHAR(128) NOT NULL,
     role ENUM('admin','teacher','student') NOT NULL,
     real_name VARCHAR(50) NOT NULL,
     student_no VARCHAR(20) DEFAULT NULL,
@@ -88,7 +89,19 @@ CREATE TABLE defense_schedules (
     score DECIMAL(5,2) DEFAULT NULL,
     comment TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_defense_student (student_id),
     FOREIGN KEY (student_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE document_versions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    document_id INT NOT NULL,
+    version_no INT NOT NULL,
+    title VARCHAR(200) DEFAULT NULL,
+    content TEXT,
+    file_path VARCHAR(500) DEFAULT NULL,
+    submit_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (document_id) REFERENCES documents(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE operation_logs (
@@ -141,10 +154,15 @@ INSERT INTO topic_selections (student_id, topic_id, status, apply_reason, review
 UPDATE topics SET selected_count = 1 WHERE id IN (1, 2, 4);
 
 INSERT INTO documents (student_id, topic_id, doc_type, title, content, file_path, status, score, feedback, submit_time, review_time, reviewer_id) VALUES
-(4, 1, 'proposal', '毕业设计管理系统开题报告', '本课题旨在设计一套基于JSP+Servlet+MySQL的毕业设计管理系统...', '/uploads/student01/proposal.pdf', 'reviewed', 88.00, '开题报告结构清晰，研究目标明确。', '2026-03-15 10:00:00', '2026-03-18 14:00:00', 2),
-(4, 1, 'midterm', '毕业设计管理系统中期检查', '目前已完成用户模块、选题模块的开发...', '/uploads/student01/midterm.pdf', 'submitted', NULL, NULL, '2026-05-10 16:00:00', NULL, NULL),
-(5, 2, 'proposal', '图像识别系统开题报告', '本课题基于ResNet模型实现图像分类...', '/uploads/student02/proposal.pdf', 'reviewed', 92.00, '选题前沿，方案可行。', '2026-03-16 09:00:00', '2026-03-19 11:00:00', 2),
-(6, 4, 'proposal', '图书推荐系统开题报告', '采用UserCF协同过滤算法...', NULL, 'submitted', NULL, NULL, '2026-05-18 11:00:00', NULL, NULL);
+(4, 1, 'proposal', '毕业设计管理系统开题报告', '本课题旨在设计一套基于JSP+Servlet+MySQL的毕业设计管理系统...', 'uploads/4/proposal.pdf', 'reviewed', 88.00, '开题报告结构清晰，研究目标明确。', '2026-03-15 10:00:00', '2026-03-18 14:00:00', 2),
+(4, 1, 'midterm', '毕业设计管理系统中期检查', '目前已完成用户模块、选题模块的开发...', 'uploads/4/midterm.pdf', 'submitted', NULL, NULL, '2026-05-10 16:00:00', NULL, NULL),
+(5, 2, 'proposal', '图像识别系统开题报告', '本课题基于ResNet模型实现图像分类...', 'uploads/5/proposal.pdf', 'reviewed', 92.00, '选题前沿，方案可行。', '2026-03-16 09:00:00', '2026-03-19 11:00:00', 2),
+(6, 4, 'proposal', '图书推荐系统开题报告', '采用UserCF协同过滤算法...', 'uploads/6/proposal.pdf', 'submitted', NULL, NULL, '2026-05-18 11:00:00', NULL, NULL);
+
+INSERT INTO document_versions (document_id, version_no, title, content, file_path, submit_time) VALUES
+(1, 1, '毕业设计管理系统开题报告', '本课题旨在设计一套基于JSP+Servlet+MySQL的毕业设计管理系统...', 'uploads/4/proposal_v1.pdf', '2026-03-10 09:00:00'),
+(1, 2, '毕业设计管理系统开题报告', '本课题旨在设计一套基于JSP+Servlet+MySQL的毕业设计管理系统...', 'uploads/4/proposal.pdf', '2026-03-15 10:00:00'),
+(3, 1, '图像识别系统开题报告', '本课题基于ResNet模型实现图像分类...', 'uploads/5/proposal.pdf', '2026-03-16 09:00:00');
 
 INSERT INTO announcements (title, content, publisher_id, is_top) VALUES
 ('2026届毕业设计工作安排通知', '请各位同学于5月30日前完成选题，6月15日前提交开题报告。详细安排请查看教务处网站。', 1, 1),
@@ -154,3 +172,13 @@ INSERT INTO announcements (title, content, publisher_id, is_top) VALUES
 INSERT INTO operation_logs (user_id, action, target, detail) VALUES
 (1, 'LOGIN', 'admin', '管理员登录系统'),
 (2, 'APPROVE', 'topic_selection', '批准 student01 选题申请');
+
+INSERT INTO defense_schedules (student_id, defense_time, room, group_name, score, comment) VALUES
+(4, '2026-06-20 09:00:00', '教学楼A301', '第一组', NULL, '请携带答辩PPT'),
+(5, '2026-06-20 10:30:00', '教学楼A301', '第一组', NULL, '请携带答辩PPT'),
+(6, '2026-06-20 14:00:00', '教学楼A302', '第二组', NULL, '请准时参加');
+
+INSERT INTO messages (sender_id, receiver_id, title, content, is_read) VALUES
+(1, 4, '答辩注意事项', '请各同学提前准备答辩PPT，答辩时间20分钟，提问10分钟。', 0),
+(2, 4, '中期报告反馈', '你的中期报告已收到，整体进展良好，请继续完善文档模块。', 1),
+(4, 2, '关于终稿格式', '老师您好，请问终稿是否需要按照学校模板排版？', 0);

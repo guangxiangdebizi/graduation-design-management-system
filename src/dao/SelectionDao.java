@@ -5,16 +5,19 @@ import java.util.List;
 import bean.TopicSelection;
 import dbutil.SQLHelper;
 import util.DateUtil;
+import util.PageUtil;
 
 public class SelectionDao {
+    private static final String SELECT_SQL =
+        "SELECT s.id,s.student_id,s.topic_id,u.real_name,u.student_no,t.title,ut.real_name,s.status,"
+        + "s.apply_reason,s.review_comment,s.apply_time,s.review_time "
+        + "FROM topic_selections s "
+        + "JOIN users u ON s.student_id=u.id "
+        + "JOIN topics t ON s.topic_id=t.id "
+        + "JOIN users ut ON t.teacher_id=ut.id ";
+
     public List<TopicSelection> findByTeacher(int teacherId, String status) {
-        String sql = "SELECT s.id,s.student_id,s.topic_id,u.real_name,u.student_no,t.title,ut.real_name,s.status,"
-            + "s.apply_reason,s.review_comment,s.apply_time,s.review_time "
-            + "FROM topic_selections s "
-            + "JOIN users u ON s.student_id=u.id "
-            + "JOIN topics t ON s.topic_id=t.id "
-            + "JOIN users ut ON t.teacher_id=ut.id "
-            + "WHERE t.teacher_id=?";
+        String sql = SELECT_SQL + "WHERE t.teacher_id=?";
         List<Object[]> rows;
         if (status != null && status.length() > 0) {
             sql += " AND s.status=? ORDER BY s.apply_time DESC";
@@ -28,27 +31,21 @@ public class SelectionDao {
 
     public List<TopicSelection> findByStudent(int studentId) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT s.id,s.student_id,s.topic_id,u.real_name,u.student_no,t.title,ut.real_name,s.status,"
-            + "s.apply_reason,s.review_comment,s.apply_time,s.review_time "
-            + "FROM topic_selections s "
-            + "JOIN users u ON s.student_id=u.id "
-            + "JOIN topics t ON s.topic_id=t.id "
-            + "JOIN users ut ON t.teacher_id=ut.id "
-            + "WHERE s.student_id=? ORDER BY s.apply_time DESC",
-            studentId);
+            SELECT_SQL + "WHERE s.student_id=? ORDER BY s.apply_time DESC", studentId);
+        return mapList(rows);
+    }
+
+    public List<TopicSelection> findApprovedStudents(int page, int pageSize) {
+        int offset = PageUtil.offset(page, pageSize);
+        List<Object[]> rows = SQLHelper.queryList(
+            SELECT_SQL + "WHERE s.status='approved' ORDER BY s.apply_time DESC LIMIT ? OFFSET ?",
+            pageSize, offset);
         return mapList(rows);
     }
 
     public TopicSelection findApprovedByStudent(int studentId) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT s.id,s.student_id,s.topic_id,u.real_name,u.student_no,t.title,ut.real_name,s.status,"
-            + "s.apply_reason,s.review_comment,s.apply_time,s.review_time "
-            + "FROM topic_selections s "
-            + "JOIN users u ON s.student_id=u.id "
-            + "JOIN topics t ON s.topic_id=t.id "
-            + "JOIN users ut ON t.teacher_id=ut.id "
-            + "WHERE s.student_id=? AND s.status='approved' LIMIT 1",
-            studentId);
+            SELECT_SQL + "WHERE s.student_id=? AND s.status='approved' LIMIT 1", studentId);
         if (rows.isEmpty()) {
             return null;
         }
@@ -56,15 +53,7 @@ public class SelectionDao {
     }
 
     public TopicSelection findById(int id) {
-        List<Object[]> rows = SQLHelper.queryList(
-            "SELECT s.id,s.student_id,s.topic_id,u.real_name,u.student_no,t.title,ut.real_name,s.status,"
-            + "s.apply_reason,s.review_comment,s.apply_time,s.review_time "
-            + "FROM topic_selections s "
-            + "JOIN users u ON s.student_id=u.id "
-            + "JOIN topics t ON s.topic_id=t.id "
-            + "JOIN users ut ON t.teacher_id=ut.id "
-            + "WHERE s.id=?",
-            id);
+        List<Object[]> rows = SQLHelper.queryList(SELECT_SQL + "WHERE s.id=?", id);
         if (rows.isEmpty()) {
             return null;
         }
@@ -94,6 +83,11 @@ public class SelectionDao {
         if (topic == null || topic.getTeacherId() != teacherId) {
             return 0;
         }
+        if ("approved".equals(status)) {
+            if (topic.getSelectedCount() >= topic.getMaxStudents()) {
+                return -1;
+            }
+        }
         int r = SQLHelper.executeUpdate(
             "UPDATE topic_selections SET status=?,review_comment=?,review_time=NOW() WHERE id=?",
             status, comment, id);
@@ -101,6 +95,11 @@ public class SelectionDao {
             SQLHelper.executeUpdate(
                 "UPDATE topics SET selected_count=selected_count+1 WHERE id=?",
                 sel.getTopicId());
+            bean.Topic updated = topicDao.findById(sel.getTopicId());
+            if (updated != null && updated.getSelectedCount() >= updated.getMaxStudents()) {
+                SQLHelper.executeUpdate(
+                    "UPDATE topics SET status='closed' WHERE id=?", sel.getTopicId());
+            }
         }
         return r;
     }

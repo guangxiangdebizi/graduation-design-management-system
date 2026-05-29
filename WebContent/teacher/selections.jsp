@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat" %>
+<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "选题审批");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -28,18 +28,18 @@
       <tr><th>学生</th><th>学号</th><th>课题</th><th>申请理由</th><th>申请时间</th><th>状态</th><th>操作</th></tr>
       <% for (TopicSelection s : list) { %>
       <tr>
-        <td><%= s.getStudentName() %></td>
-        <td><%= s.getStudentNo() %></td>
-        <td><%= s.getTopicTitle() %></td>
-        <td><%= s.getApplyReason() %></td>
+        <td><%= EscapeUtil.html(s.getStudentName()) %></td>
+        <td><%= EscapeUtil.html(s.getStudentNo()) %></td>
+        <td><%= EscapeUtil.html(s.getTopicTitle()) %></td>
+        <td><%= EscapeUtil.html(s.getApplyReason()) %></td>
         <td><%= sdf.format(s.getApplyTime()) %></td>
-        <td><span class="badge-status badge-<%= s.getStatus() %>"><%= s.getStatus() %></span></td>
+        <td><% request.setAttribute("status", s.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %></td>
         <td>
           <% if ("pending".equals(s.getStatus())) { %>
-            <button class="btn btn-sm btn-success" onclick="reviewSel(<%= s.getId() %>,'approve','<%= s.getStudentName() %>')">批准</button>
-            <button class="btn btn-sm btn-danger" onclick="reviewSel(<%= s.getId() %>,'reject','<%= s.getStudentName() %>')">驳回</button>
+            <button class="btn btn-sm btn-success" onclick="reviewSel(<%= s.getId() %>,'approve','<%= EscapeUtil.attr(s.getStudentName()) %>')">批准</button>
+            <button class="btn btn-sm btn-danger" onclick="reviewSel(<%= s.getId() %>,'reject','<%= EscapeUtil.attr(s.getStudentName()) %>')">驳回</button>
           <% } else { %>
-            <%= s.getReviewComment()==null?"—":s.getReviewComment() %>
+            <%= s.getReviewComment()==null?"—":EscapeUtil.html(s.getReviewComment()) %>
           <% } %>
         </td>
       </tr>

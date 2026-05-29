@@ -7,11 +7,12 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import bean.Document;
-import bean.TopicSelection;
 import bean.User;
+import bean.Topic;
 import dao.SelectionDao;
-import dao.DocumentDao;
+import dao.TopicDao;
+import util.OperationLogUtil;
+import util.WebUtil;
 
 @WebServlet("/student/topic.action")
 public class StudentTopicController extends HttpServlet {
@@ -25,19 +26,24 @@ public class StudentTopicController extends HttpServlet {
 
         if ("apply".equals(action)) {
             if (dao.hasPendingOrApproved(user.getId())) {
-                redirect(response, "topics.jsp?msg=already_applied");
+                WebUtil.redirect(request, response, "/student/topics.jsp?msg=already_applied");
                 return;
             }
             int topicId = Integer.parseInt(request.getParameter("topicId"));
+            TopicDao topicDao = new TopicDao();
+            Topic topic = topicDao.findById(topicId);
+            if (topic == null || !"open".equals(topic.getStatus())
+                    || topic.getSelectedCount() >= topic.getMaxStudents()) {
+                WebUtil.redirect(request, response, "/student/topics.jsp?msg=quota_full");
+                return;
+            }
             String reason = request.getParameter("applyReason");
             dao.apply(user.getId(), topicId, reason);
-            redirect(response, "my-selection.jsp?msg=apply_ok");
+            OperationLogUtil.log(user.getId(), "APPLY", "topic_selection",
+                "申请选题 topicId=" + topicId);
+            WebUtil.redirect(request, response, "/student/my-selection.jsp?msg=apply_ok");
         } else {
-            redirect(response, "topics.jsp");
+            WebUtil.redirect(request, response, "/student/topics.jsp");
         }
-    }
-
-    private void redirect(HttpServletResponse response, String url) throws IOException {
-        response.sendRedirect(url);
     }
 }

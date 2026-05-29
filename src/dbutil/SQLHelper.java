@@ -1,5 +1,7 @@
 package dbutil;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -8,19 +10,50 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 public class SQLHelper {
-    private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
-    private static final String URL = "jdbc:mysql://127.0.0.1:3306/graduation_design?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci";
-    private static final String DB_USER = "root";
-    private static final String DB_PWD = "12345";
+    private static final String DEFAULT_DRIVER = "com.mysql.cj.jdbc.Driver";
+    private static final String DEFAULT_URL =
+        "jdbc:mysql://127.0.0.1:3306/graduation_design?useSSL=false&allowPublicKeyRetrieval=true"
+        + "&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci";
+    private static final String DEFAULT_USER = "root";
+    private static final String DEFAULT_PWD = "12345";
+
+    private static final String DRIVER;
+    private static final String URL;
+    private static final String DB_USER;
+    private static final String DB_PWD;
 
     static {
+        Properties props = loadProperties();
+        DRIVER = props.getProperty("jdbc.driver", DEFAULT_DRIVER);
+        URL = props.getProperty("jdbc.url", DEFAULT_URL);
+        DB_USER = props.getProperty("jdbc.username", DEFAULT_USER);
+        DB_PWD = props.getProperty("jdbc.password", DEFAULT_PWD);
         try {
             Class.forName(DRIVER);
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }
+    }
+
+    private static Properties loadProperties() {
+        Properties props = new Properties();
+        InputStream in = SQLHelper.class.getClassLoader().getResourceAsStream("jdbc.properties");
+        if (in != null) {
+            try {
+                props.load(in);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    in.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        return props;
     }
 
     public static Connection getConnection() throws SQLException {

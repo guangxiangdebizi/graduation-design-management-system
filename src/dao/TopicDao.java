@@ -32,7 +32,8 @@ public class TopicDao {
 
     public List<Topic> findOpenTopics(String keyword) {
         String sql = "SELECT t.id,t.title,t.description,t.teacher_id,u.real_name,t.max_students,t.selected_count,t.status,t.created_at "
-            + "FROM topics t JOIN users u ON t.teacher_id=u.id WHERE t.status='open'";
+            + "FROM topics t JOIN users u ON t.teacher_id=u.id "
+            + "WHERE t.status='open' AND t.selected_count < t.max_students";
         List<Object[]> rows;
         if (keyword != null && keyword.trim().length() > 0) {
             sql += " AND (t.title LIKE ? OR t.description LIKE ?) ORDER BY t.created_at DESC";
