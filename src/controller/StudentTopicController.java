@@ -13,9 +13,23 @@ import dao.SelectionDao;
 import dao.TopicDao;
 import util.OperationLogUtil;
 import util.WebUtil;
+import java.util.List;
 
 @WebServlet("/student/topic.action")
 public class StudentTopicController extends HttpServlet {
+
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        String keyword = request.getParameter("keyword");
+        String college = request.getParameter("college");
+        TopicDao dao = new TopicDao();
+        List<Topic> topics = dao.findOpenTopics(keyword, college);
+        request.setAttribute("topics", topics);
+        request.setAttribute("keyword", keyword);
+        request.setAttribute("collegeFilter", college);
+        request.getRequestDispatcher("/student/topics.jsp").forward(request, response);
+    }
+
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         request.setCharacterEncoding("UTF-8");
@@ -25,25 +39,26 @@ public class StudentTopicController extends HttpServlet {
         SelectionDao dao = new SelectionDao();
 
         if ("apply".equals(action)) {
-            if (dao.hasPendingOrApproved(user.getId())) {
-                WebUtil.redirect(request, response, "/student/topics.jsp?msg=already_applied");
-                return;
-            }
             int topicId = Integer.parseInt(request.getParameter("topicId"));
-            TopicDao topicDao = new TopicDao();
-            Topic topic = topicDao.findById(topicId);
-            if (topic == null || !"open".equals(topic.getStatus())
-                    || topic.getSelectedCount() >= topic.getMaxStudents()) {
-                WebUtil.redirect(request, response, "/student/topics.jsp?msg=quota_full");
+            String reason = request.getParameter("applyReason");
+            int result = dao.apply(user.getId(), topicId, reason);
+            if (result == -1) {
+                WebUtil.redirect(request, response, "/student/topic.action?msg=already_applied");
                 return;
             }
-            String reason = request.getParameter("applyReason");
-            dao.apply(user.getId(), topicId, reason);
+            if (result == -2) {
+                WebUtil.redirect(request, response, "/student/topic.action?msg=quota_full");
+                return;
+            }
+            if (result <= 0) {
+                WebUtil.redirect(request, response, "/student/topic.action?msg=error");
+                return;
+            }
             OperationLogUtil.log(user.getId(), "APPLY", "topic_selection",
                 "申请选题 topicId=" + topicId);
             WebUtil.redirect(request, response, "/student/my-selection.jsp?msg=apply_ok");
         } else {
-            WebUtil.redirect(request, response, "/student/topics.jsp");
+            WebUtil.redirect(request, response, "/student/topic.action");
         }
     }
 }

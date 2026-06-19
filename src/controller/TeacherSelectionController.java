@@ -28,11 +28,19 @@ public class TeacherSelectionController extends HttpServlet {
             String status = "approve".equals(action) ? "approved" : "rejected";
             String comment = request.getParameter("reviewComment");
             int result = dao.review(id, user.getId(), status, comment);
-            if (result == -1) {
-                WebUtil.redirect(request, response, "/teacher/selections.jsp?msg=quota_full");
-                return;
-            }
-            bean.TopicSelection sel = dao.findById(id);
+            if (result == -1) {
+                WebUtil.redirect(request, response, "/teacher/selections.jsp?msg=quota_full");
+                return;
+            }
+            if (result == -2) {
+                WebUtil.redirect(request, response, "/teacher/selections.jsp?msg=student_has_topic");
+                return;
+            }
+            if (result <= 0) {
+                WebUtil.redirect(request, response, "/teacher/selections.jsp?msg=error");
+                return;
+            }
+            bean.TopicSelection sel = dao.findById(id);
             if (sel != null) {
                 MessageNotifyUtil.send(sel.getStudentId(), "选题审批结果",
                     "您的选题申请已" + ("approved".equals(status) ? "通过" : "被拒绝"));

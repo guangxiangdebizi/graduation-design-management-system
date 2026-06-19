@@ -42,7 +42,7 @@
 
   }
 
-  Message viewing = viewId > 0 ? msgDao.findById(viewId) : null;
+  Message viewing = viewId > 0 ? msgDao.findByIdForUser(viewId, loginUser.getId()) : null;
 
   if (viewing != null && viewing.getReceiverId() == loginUser.getId() && viewing.getIsRead() == 0) {
 

@@ -34,4 +34,43 @@ public class EscapeUtil {
     public static String attr(String input) {
         return html(input);
     }
+
+    public static String js(String input) {
+        if (input == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(input.length() + 16);
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            switch (c) {
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\'':
+                    sb.append("\\'");
+                    break;
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '<':
+                    sb.append("\\u003c");
+                    break;
+                case '>':
+                    sb.append("\\u003e");
+                    break;
+                case '&':
+                    sb.append("\\u0026");
+                    break;
+                default:
+                    sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
 }

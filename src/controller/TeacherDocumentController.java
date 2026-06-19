@@ -28,11 +28,27 @@ public class TeacherDocumentController extends HttpServlet {
             int id = Integer.parseInt(request.getParameter("id"));
             String status = "review".equals(action) ? "reviewed" : "rejected";
             String scoreStr = request.getParameter("score");
-            BigDecimal score = scoreStr == null || scoreStr.trim().isEmpty()
-                ? null : new BigDecimal(scoreStr);
+            BigDecimal score;
+            try {
+                score = scoreStr == null || scoreStr.trim().isEmpty()
+                    ? null : new BigDecimal(scoreStr);
+            } catch (NumberFormatException ex) {
+                WebUtil.redirect(request, response, "/teacher/documents.jsp?msg=invalid_score");
+                return;
+            }
+            if ("review".equals(action) && (score == null
+                    || score.compareTo(BigDecimal.ZERO) < 0
+                    || score.compareTo(new BigDecimal("100")) > 0)) {
+                WebUtil.redirect(request, response, "/teacher/documents.jsp?msg=invalid_score");
+                return;
+            }
             String feedback = request.getParameter("feedback");
             bean.Document doc = dao.findById(id);
-            dao.review(id, user.getId(), status, score, feedback);
+            int result = dao.review(id, user.getId(), status, score, feedback);
+            if (result <= 0 || doc == null) {
+                WebUtil.redirect(request, response, "/teacher/documents.jsp?msg=error");
+                return;
+            }
             if (doc != null) {
                 MessageNotifyUtil.send(doc.getStudentId(), "文档审核结果",
                     "您的" + doc.getDocType() + "文档已被" + ("reviewed".equals(status) ? "审核通过" : "退回"));

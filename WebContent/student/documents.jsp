@@ -14,12 +14,6 @@
 
   DocumentVersionDao versionDao = new DocumentVersionDao();
 
-  TopicSelection approved = selDao.findApprovedByStudent(loginUser.getId());
-
-  String activeType = request.getParameter("type");
-
-  if (activeType == null) activeType = "proposal";
-
   java.util.Map<String,String> typeNames = new java.util.LinkedHashMap<String,String>();
 
   typeNames.put("proposal", "开题报告");
@@ -28,9 +22,15 @@
 
   typeNames.put("final", "终稿");
 
+  TopicSelection approved = selDao.findApprovedByStudent(loginUser.getId());
+
+  String activeType = request.getParameter("type");
+
+  if (activeType == null || !typeNames.containsKey(activeType)) activeType = "proposal";
+
   Document currentDoc = approved != null ? docDao.findByStudentAndType(loginUser.getId(), activeType) : null;
 
-  List<DocumentVersion> versions = currentDoc != null ? versionDao.findByDocument(currentDoc.getId()) : Collections.emptyList();
+  List<DocumentVersion> versions = currentDoc != null ? versionDao.findByDocument(currentDoc.getId()) : new ArrayList<DocumentVersion>();
 
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
@@ -110,7 +110,7 @@
 
       <label class="form-label">文档内容</label>
 
-      <textarea name="content" class="form-control" rows="8" placeholder="请输入文档正文内容..." required><% if (currentDoc!=null && currentDoc.getContent()!=null) { %><%= currentDoc.getContent().replace("&","&amp;").replace("<","&lt;").replace(">","&gt;") %><% } %></textarea>
+      <textarea name="content" class="form-control" rows="8" placeholder="请输入文档正文内容..." required><% if (currentDoc!=null && currentDoc.getContent()!=null) { %><%= EscapeUtil.html(currentDoc.getContent()) %><% } %></textarea>
 
     </div>
 

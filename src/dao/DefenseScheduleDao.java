@@ -61,6 +61,12 @@ public class DefenseScheduleDao {
         return val != null && ((Number) val).intValue() > 0;
     }
 
+    public boolean existsByStudentExceptId(int studentId, int id) {
+        Object val = SQLHelper.queryScalar(
+            "SELECT COUNT(*) FROM defense_schedules WHERE student_id=? AND id<>?", studentId, id);
+        return val != null && ((Number) val).intValue() > 0;
+    }
+
     private List<DefenseSchedule> mapList(List<Object[]> rows) {
         List<DefenseSchedule> list = new ArrayList<DefenseSchedule>();
         for (Object[] row : rows) {

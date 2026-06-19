@@ -12,7 +12,7 @@ public class StatsDao {
         Object approved = SQLHelper.queryScalar(
             "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='approved'");
         Object pending = SQLHelper.queryScalar(
-            "SELECT COUNT(*) FROM topic_selections WHERE status='pending'");
+            "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='pending'");
         int approvedCount = approved == null ? 0 : ((Number) approved).intValue();
         int pendingCount = pending == null ? 0 : ((Number) pending).intValue();
         stats.put("已选题", approvedCount);
@@ -37,7 +37,7 @@ public class StatsDao {
             + "WHEN score>=70 THEN '70-79' "
             + "WHEN score>=60 THEN '60-69' "
             + "ELSE '60以下' END AS grade_range, COUNT(*) "
-            + "FROM documents WHERE score IS NOT NULL GROUP BY grade_range "
+            + "FROM documents WHERE status='reviewed' AND score IS NOT NULL GROUP BY grade_range "
             + "ORDER BY FIELD(grade_range,'90-100','80-89','70-79','60-69','60以下')");
         return rows == null ? new ArrayList<Object[]>() : rows;
     }

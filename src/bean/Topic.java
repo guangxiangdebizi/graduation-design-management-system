@@ -8,6 +8,8 @@ public class Topic {
     private String description;
     private int teacherId;
     private String teacherName;
+    private String college;      // 学院代码
+    private String collegeName;  // 学院名称（展示用）
     private int maxStudents;
     private int selectedCount;
     private String status;
@@ -23,6 +25,10 @@ public class Topic {
     public void setTeacherId(int teacherId) { this.teacherId = teacherId; }
     public String getTeacherName() { return teacherName; }
     public void setTeacherName(String teacherName) { this.teacherName = teacherName; }
+    public String getCollege() { return college; }
+    public void setCollege(String college) { this.college = college; }
+    public String getCollegeName() { return collegeName; }
+    public void setCollegeName(String collegeName) { this.collegeName = collegeName; }
     public int getMaxStudents() { return maxStudents; }
     public void setMaxStudents(int maxStudents) { this.maxStudents = maxStudents; }
     public int getSelectedCount() { return selectedCount; }

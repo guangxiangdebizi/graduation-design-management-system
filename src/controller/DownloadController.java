@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URLEncoder;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -41,24 +42,27 @@ public class DownloadController extends HttpServlet {
         }
 
         String realBase = getServletContext().getRealPath("/");
-        File file = new File(realBase, path.replace("/", File.separator));
-        if (!file.exists() || !file.isFile()) {
+        File uploadBase = new File(realBase, "uploads").getCanonicalFile();
+        File file = new File(realBase, path.replace("/", File.separator)).getCanonicalFile();
+        if (!file.getPath().startsWith(uploadBase.getPath() + File.separator)
+                || !file.exists() || !file.isFile()) {
             response.sendError(404, "file not found");
             return;
         }
 
         response.setContentType("application/octet-stream");
+        String filename = URLEncoder.encode(file.getName(), "UTF-8").replace("+", "%20");
         response.setHeader("Content-Disposition",
-            "attachment; filename=\"" + file.getName() + "\"");
-        FileInputStream in = new FileInputStream(file);
-        OutputStream out = response.getOutputStream();
-        byte[] buf = new byte[4096];
-        int len;
-        while ((len = in.read(buf)) != -1) {
-            out.write(buf, 0, len);
+            "attachment; filename=\"" + filename + "\"; filename*=UTF-8''" + filename);
+        try (FileInputStream in = new FileInputStream(file);
+                OutputStream out = response.getOutputStream()) {
+            byte[] buf = new byte[4096];
+            int len;
+            while ((len = in.read(buf)) != -1) {
+                out.write(buf, 0, len);
+            }
+            out.flush();
         }
-        in.close();
-        out.flush();
     }
 
     private boolean canAccess(User user, String path) {

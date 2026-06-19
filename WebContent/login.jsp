@@ -9,10 +9,26 @@
   <link href="css/app.css" rel="stylesheet">
 </head>
 <body>
+<%
+  String error = request.getParameter("error");
+  String errorMsg = "";
+  if ("1".equals(error)) {
+    errorMsg = "用户名或密码错误";
+  } else if ("locked".equals(error)) {
+    errorMsg = "账户已被锁定，请稍后再试";
+  } else if ("empty".equals(error)) {
+    errorMsg = "请输入用户名和密码";
+  }
+%>
 <div class="login-page">
   <div class="login-card">
     <h1>毕业设计管理系统</h1>
     <p class="subtitle">Graduation Design Management System</p>
+    <% if (!errorMsg.isEmpty()) { %>
+    <div class="alert alert-danger py-2 mb-3" role="alert">
+      <%= errorMsg %>
+    </div>
+    <% } %>
     <form action="login.action" method="post">
       <div class="mb-3">
         <label class="form-label">用户名</label>

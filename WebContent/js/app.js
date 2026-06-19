@@ -60,6 +60,14 @@ function injectCsrfToken() {
     input.name = '_csrf';
     input.value = token;
     form.appendChild(input);
+    if ((form.enctype || '').toLowerCase() === 'multipart/form-data') {
+      var action = form.getAttribute('action') || window.location.href;
+      var url = new URL(action, window.location.href);
+      if (!url.searchParams.has('_csrf')) {
+        url.searchParams.set('_csrf', token);
+        form.setAttribute('action', url.pathname + url.search + url.hash);
+      }
+    }
   });
 }
 
@@ -68,7 +76,10 @@ function initPageMessages() {
   var msg = params.get('msg');
   var path = window.location.pathname || '';
   var errorKeys = ['error', 'quota_full', 'import_empty', 'import_error', 'csrf_error',
-    'upload_invalid', 'rejected', 'already_applied', 'no_topic', 'exists'];
+    'upload_invalid', 'rejected', 'already_applied', 'no_topic', 'exists',
+    'delete_failed', 'delete_self', 'forbidden', 'student_has_topic',
+    'stage_locked', 'document_locked', 'invalid_score', 'invalid_quota',
+    'edit_self_role', 'last_admin', 'defense_ineligible'];
   var messages = {
     'add_ok': '添加成功',
     'edit_ok': '修改成功',
@@ -82,7 +93,18 @@ function initPageMessages() {
     'reviewed': '文档审核完成',
     'send_ok': '消息发送成功',
     'exists': '该学生已有答辩安排',
+    'delete_failed': '删除失败：该数据可能已被选题、文档、消息或日志引用',
+    'delete_self': '不能删除当前登录账号',
+    'forbidden': '无权执行该操作',
     'quota_full': '课题名额已满，无法批准',
+    'student_has_topic': '该学生已有其他已通过课题，不能重复批准',
+    'stage_locked': '请先完成并通过上一阶段文档',
+    'document_locked': '该文档正在审核或已通过，不能重复覆盖',
+    'invalid_score': '分数必须填写且在 0-100 之间',
+    'invalid_quota': '课题名额不能小于当前已选人数',
+    'edit_self_role': '不能停用当前账号或修改当前管理员角色',
+    'last_admin': '系统必须至少保留一个启用的管理员账号',
+    'defense_ineligible': '该学生尚未完成终稿审核，或答辩数据不合法',
     'import_empty': '请选择要导入的 Excel 文件',
     'import_error': '导入失败，请检查文件格式',
     'csrf_error': '安全验证失败，请刷新页面后重试',

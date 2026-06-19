@@ -5,51 +5,63 @@ import java.util.List;
 import bean.Topic;
 import dbutil.SQLHelper;
 import util.DateUtil;
+import util.CollegeUtil;
 
 public class TopicDao {
-    public List<Topic> findAll(String keyword) {
-        String sql = "SELECT t.id,t.title,t.description,t.teacher_id,u.real_name,t.max_students,t.selected_count,t.status,t.created_at "
-            + "FROM topics t JOIN users u ON t.teacher_id=u.id WHERE 1=1";
-        List<Object[]> rows;
-        if (keyword != null && keyword.trim().length() > 0) {
-            sql += " AND (t.title LIKE ? OR t.description LIKE ?) ORDER BY t.created_at DESC";
+    private static final String SELECT_COLS =
+        "t.id,t.title,t.description,t.teacher_id,u.real_name,t.college,t.max_students,t.selected_count,t.status,t.created_at";
+
+    public List<Topic> findAll(String keyword, String college) {
+        String sql = "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id WHERE 1=1";
+        List<Object> params = new ArrayList<>();
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            sql += " AND (t.title LIKE ? OR t.description LIKE ?)";
             String kw = "%" + keyword.trim() + "%";
-            rows = SQLHelper.queryList(sql, kw, kw);
-        } else {
-            sql += " ORDER BY t.created_at DESC";
-            rows = SQLHelper.queryList(sql);
+            params.add(kw);
+            params.add(kw);
         }
+        if (college != null && !college.isEmpty()) {
+            sql += " AND t.college=?";
+            params.add(college);
+        }
+        sql += " ORDER BY t.created_at DESC";
+        List<Object[]> rows = params.isEmpty() ?
+            SQLHelper.queryList(sql) :
+            SQLHelper.queryList(sql, params.toArray());
         return mapList(rows);
     }
 
     public List<Topic> findByTeacher(int teacherId) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT t.id,t.title,t.description,t.teacher_id,u.real_name,t.max_students,t.selected_count,t.status,t.created_at "
-            + "FROM topics t JOIN users u ON t.teacher_id=u.id WHERE t.teacher_id=? ORDER BY t.created_at DESC",
+            "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id WHERE t.teacher_id=? ORDER BY t.created_at DESC",
             teacherId);
         return mapList(rows);
     }
 
-    public List<Topic> findOpenTopics(String keyword) {
-        String sql = "SELECT t.id,t.title,t.description,t.teacher_id,u.real_name,t.max_students,t.selected_count,t.status,t.created_at "
-            + "FROM topics t JOIN users u ON t.teacher_id=u.id "
+    public List<Topic> findOpenTopics(String keyword, String college) {
+        String sql = "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id "
             + "WHERE t.status='open' AND t.selected_count < t.max_students";
-        List<Object[]> rows;
-        if (keyword != null && keyword.trim().length() > 0) {
-            sql += " AND (t.title LIKE ? OR t.description LIKE ?) ORDER BY t.created_at DESC";
+        List<Object> params = new ArrayList<>();
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            sql += " AND (t.title LIKE ? OR t.description LIKE ?)";
             String kw = "%" + keyword.trim() + "%";
-            rows = SQLHelper.queryList(sql, kw, kw);
-        } else {
-            sql += " ORDER BY t.created_at DESC";
-            rows = SQLHelper.queryList(sql);
+            params.add(kw);
+            params.add(kw);
         }
+        if (college != null && !college.isEmpty()) {
+            sql += " AND t.college=?";
+            params.add(college);
+        }
+        sql += " ORDER BY t.created_at DESC";
+        List<Object[]> rows = params.isEmpty() ?
+            SQLHelper.queryList(sql) :
+            SQLHelper.queryList(sql, params.toArray());
         return mapList(rows);
     }
 
     public Topic findById(int id) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT t.id,t.title,t.description,t.teacher_id,u.real_name,t.max_students,t.selected_count,t.status,t.created_at "
-            + "FROM topics t JOIN users u ON t.teacher_id=u.id WHERE t.id=?",
+            "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id WHERE t.id=?",
             id);
         if (rows.isEmpty()) {
             return null;
@@ -59,16 +71,16 @@ public class TopicDao {
 
     public int insert(Topic topic) {
         return SQLHelper.executeInsert(
-            "INSERT INTO topics(title,description,teacher_id,max_students,status) VALUES(?,?,?,?,?)",
+            "INSERT INTO topics(title,description,teacher_id,college,max_students,status) VALUES(?,?,?,?,?,?)",
             topic.getTitle(), topic.getDescription(), topic.getTeacherId(),
-            topic.getMaxStudents(), topic.getStatus());
+            topic.getCollege(), topic.getMaxStudents(), topic.getStatus());
     }
 
     public int update(Topic topic) {
         return SQLHelper.executeUpdate(
-            "UPDATE topics SET title=?,description=?,max_students=?,status=? WHERE id=? AND teacher_id=?",
-            topic.getTitle(), topic.getDescription(), topic.getMaxStudents(),
-            topic.getStatus(), topic.getId(), topic.getTeacherId());
+            "UPDATE topics SET title=?,description=?,college=?,max_students=?,status=? WHERE id=? AND teacher_id=?",
+            topic.getTitle(), topic.getDescription(), topic.getCollege(),
+            topic.getMaxStudents(), topic.getStatus(), topic.getId(), topic.getTeacherId());
     }
 
     public int delete(int id, int teacherId) {
@@ -80,8 +92,13 @@ public class TopicDao {
         return val == null ? 0 : ((Number) val).intValue();
     }
 
+    public int countByCollege(String college) {
+        Object val = SQLHelper.queryScalar("SELECT COUNT(*) FROM topics WHERE college=?", college);
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
     private List<Topic> mapList(List<Object[]> rows) {
-        List<Topic> list = new ArrayList<Topic>();
+        List<Topic> list = new ArrayList<>();
         for (Object[] row : rows) {
             list.add(mapRow(row));
         }
@@ -95,10 +112,16 @@ public class TopicDao {
         t.setDescription((String) row[2]);
         t.setTeacherId(((Number) row[3]).intValue());
         t.setTeacherName((String) row[4]);
-        t.setMaxStudents(((Number) row[5]).intValue());
-        t.setSelectedCount(((Number) row[6]).intValue());
-        t.setStatus((String) row[7]);
-        t.setCreatedAt(DateUtil.toDate(row[8]));
+        t.setCollege((String) row[5]);
+        t.setMaxStudents(((Number) row[6]).intValue());
+        t.setSelectedCount(((Number) row[7]).intValue());
+        t.setStatus((String) row[8]);
+        t.setCreatedAt(DateUtil.toDate(row[9]));
+
+        // 翻译学院名称
+        if (t.getCollege() != null) {
+            t.setCollegeName(CollegeUtil.getCollegeName(t.getCollege()));
+        }
         return t;
     }
 }

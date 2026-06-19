@@ -3,7 +3,6 @@ package dbutil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -11,30 +10,20 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import javax.sql.DataSource;
+import com.alibaba.druid.pool.DruidDataSourceFactory;
 
 public class SQLHelper {
-    private static final String DEFAULT_DRIVER = "com.mysql.cj.jdbc.Driver";
-    private static final String DEFAULT_URL =
-        "jdbc:mysql://127.0.0.1:3306/graduation_design?useSSL=false&allowPublicKeyRetrieval=true"
-        + "&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci";
-    private static final String DEFAULT_USER = "root";
-    private static final String DEFAULT_PWD = "12345";
-
-    private static final String DRIVER;
-    private static final String URL;
-    private static final String DB_USER;
-    private static final String DB_PWD;
+    private static final DataSource dataSource;
 
     static {
-        Properties props = loadProperties();
-        DRIVER = props.getProperty("jdbc.driver", DEFAULT_DRIVER);
-        URL = props.getProperty("jdbc.url", DEFAULT_URL);
-        DB_USER = props.getProperty("jdbc.username", DEFAULT_USER);
-        DB_PWD = props.getProperty("jdbc.password", DEFAULT_PWD);
         try {
-            Class.forName(DRIVER);
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+            Properties props = loadProperties();
+            dataSource = DruidDataSourceFactory.createDataSource(props);
+            System.out.println("[SQLHelper] Druid 连接池初始化成功");
+        } catch (Exception e) {
+            System.err.println("[SQLHelper] Druid 连接池初始化失败: " + e.getMessage());
+            throw new RuntimeException("数据库连接池初始化失败", e);
         }
     }
 
@@ -45,7 +34,7 @@ public class SQLHelper {
             try {
                 props.load(in);
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("[SQLHelper] 加载 jdbc.properties 失败");
             } finally {
                 try {
                     in.close();
@@ -57,7 +46,7 @@ public class SQLHelper {
     }
 
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(URL, DB_USER, DB_PWD);
+        return dataSource.getConnection();
     }
 
     public static List<Object[]> queryList(String sql, Object... params) {
@@ -79,6 +68,7 @@ public class SQLHelper {
                 list.add(row);
             }
         } catch (Exception ex) {
+            System.err.println("[SQLHelper] SQL 查询失败: " + sql);
             ex.printStackTrace();
         } finally {
             closeQuietly(rs, ps, conn);
@@ -95,6 +85,7 @@ public class SQLHelper {
             bindParams(ps, params);
             return ps.executeUpdate();
         } catch (Exception ex) {
+            System.err.println("[SQLHelper] SQL 更新失败: " + sql);
             ex.printStackTrace();
             return 0;
         } finally {
@@ -115,6 +106,7 @@ public class SQLHelper {
                 return rs.getObject(1);
             }
         } catch (Exception ex) {
+            System.err.println("[SQLHelper] SQL 标量查询失败: " + sql);
             ex.printStackTrace();
         } finally {
             closeQuietly(rs, ps, conn);
@@ -136,6 +128,7 @@ public class SQLHelper {
                 return rs.getInt(1);
             }
         } catch (Exception ex) {
+            System.err.println("[SQLHelper] SQL 插入失败: " + sql);
             ex.printStackTrace();
         } finally {
             closeQuietly(rs, ps, conn);
@@ -151,22 +144,13 @@ public class SQLHelper {
 
     private static void closeQuietly(ResultSet rs, PreparedStatement ps, Connection conn) {
         try {
-            if (rs != null) {
-                rs.close();
-            }
-        } catch (SQLException ignored) {
-        }
+            if (rs != null) rs.close();
+        } catch (SQLException ignored) {}
         try {
-            if (ps != null) {
-                ps.close();
-            }
-        } catch (SQLException ignored) {
-        }
+            if (ps != null) ps.close();
+        } catch (SQLException ignored) {}
         try {
-            if (conn != null) {
-                conn.close();
-            }
-        } catch (SQLException ignored) {
-        }
+            if (conn != null) conn.close();
+        } catch (SQLException ignored) {}
     }
 }

@@ -1,7 +1,9 @@
-<%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%
-  request.setAttribute("pageTitle", "数据统计");
-%>
+<%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
+<%@ page import="bean.User" %>
+<%
+  request.setAttribute("pageTitle", "数据统计");
+  User loginUser = (User) session.getAttribute("loginUser");
+%>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <div class="app-layout">

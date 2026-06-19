@@ -1,5 +1,9 @@
 package dao;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import bean.TopicSelection;
@@ -68,40 +72,181 @@ public class SelectionDao {
     }
 
     public int apply(int studentId, int topicId, String reason) {
-        return SQLHelper.executeInsert(
-            "INSERT INTO topic_selections(student_id,topic_id,status,apply_reason) VALUES(?,?,?,?)",
-            studentId, topicId, "pending", reason);
+        Connection conn = null;
+        try {
+            conn = SQLHelper.getConnection();
+            conn.setAutoCommit(false);
+
+            // Serialize all applications for one student.
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT role,status FROM users WHERE id=? FOR UPDATE")) {
+                ps.setInt(1, studentId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next() || !"student".equals(rs.getString(1)) || rs.getInt(2) != 1) {
+                        conn.rollback();
+                        return 0;
+                    }
+                }
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT 1 FROM topic_selections "
+                    + "WHERE student_id=? AND status IN ('pending','approved') LIMIT 1")) {
+                ps.setInt(1, studentId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        conn.rollback();
+                        return -1;
+                    }
+                }
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT status,max_students,selected_count FROM topics WHERE id=? FOR UPDATE")) {
+                ps.setInt(1, topicId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next() || !"open".equals(rs.getString(1))
+                            || rs.getInt(3) >= rs.getInt(2)) {
+                        conn.rollback();
+                        return -2;
+                    }
+                }
+            }
+
+            int id;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO topic_selections(student_id,topic_id,status,apply_reason) "
+                    + "VALUES(?,?,'pending',?)", Statement.RETURN_GENERATED_KEYS)) {
+                ps.setInt(1, studentId);
+                ps.setInt(2, topicId);
+                ps.setString(3, reason);
+                ps.executeUpdate();
+                try (ResultSet rs = ps.getGeneratedKeys()) {
+                    id = rs.next() ? rs.getInt(1) : 0;
+                }
+            }
+            conn.commit();
+            return id;
+        } catch (Exception ex) {
+            rollbackQuietly(conn);
+            ex.printStackTrace();
+            return 0;
+        } finally {
+            closeQuietly(conn);
+        }
     }
 
     public int review(int id, int teacherId, String status, String comment) {
-        TopicSelection sel = findById(id);
-        if (sel == null) {
+        if (!"approved".equals(status) && !"rejected".equals(status)) {
             return 0;
         }
-        TopicDao topicDao = new TopicDao();
-        bean.Topic topic = topicDao.findById(sel.getTopicId());
-        if (topic == null || topic.getTeacherId() != teacherId) {
+        Connection conn = null;
+        try {
+            conn = SQLHelper.getConnection();
+            conn.setAutoCommit(false);
+
+            int studentId;
+            int topicId;
+            String currentStatus;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT s.student_id,s.topic_id,s.status "
+                    + "FROM topic_selections s JOIN topics t ON s.topic_id=t.id "
+                    + "WHERE s.id=? AND t.teacher_id=? FOR UPDATE")) {
+                ps.setInt(1, id);
+                ps.setInt(2, teacherId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        conn.rollback();
+                        return 0;
+                    }
+                    studentId = rs.getInt(1);
+                    topicId = rs.getInt(2);
+                    currentStatus = rs.getString(3);
+                }
+            }
+            if (!"pending".equals(currentStatus)) {
+                conn.rollback();
+                return 0;
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id FROM users WHERE id=? FOR UPDATE")) {
+                ps.setInt(1, studentId);
+                ps.executeQuery().close();
+            }
+
+            int maxStudents;
+            int selectedCount;
+            String topicStatus;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT max_students,selected_count,status FROM topics WHERE id=? FOR UPDATE")) {
+                ps.setInt(1, topicId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        conn.rollback();
+                        return 0;
+                    }
+                    maxStudents = rs.getInt(1);
+                    selectedCount = rs.getInt(2);
+                    topicStatus = rs.getString(3);
+                }
+            }
+
+            if ("approved".equals(status)) {
+                if (!"open".equals(topicStatus)) {
+                    conn.rollback();
+                    return -1;
+                }
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT 1 FROM topic_selections "
+                        + "WHERE student_id=? AND status='approved' AND id<>? LIMIT 1")) {
+                    ps.setInt(1, studentId);
+                    ps.setInt(2, id);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            conn.rollback();
+                            return -2;
+                        }
+                    }
+                }
+                if (selectedCount >= maxStudents) {
+                    conn.rollback();
+                    return -1;
+                }
+            }
+
+            int updated;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE topic_selections SET status=?,review_comment=?,review_time=NOW() "
+                    + "WHERE id=? AND status='pending'")) {
+                ps.setString(1, status);
+                ps.setString(2, comment);
+                ps.setInt(3, id);
+                updated = ps.executeUpdate();
+            }
+            if (updated != 1) {
+                conn.rollback();
+                return 0;
+            }
+
+            if ("approved".equals(status)) {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE topics SET selected_count=selected_count+1,"
+                        + "status=CASE WHEN selected_count+1>=max_students THEN 'closed' ELSE status END "
+                        + "WHERE id=?")) {
+                    ps.setInt(1, topicId);
+                    ps.executeUpdate();
+                }
+            }
+            conn.commit();
+            return 1;
+        } catch (Exception ex) {
+            rollbackQuietly(conn);
+            ex.printStackTrace();
             return 0;
+        } finally {
+            closeQuietly(conn);
         }
-        if ("approved".equals(status)) {
-            if (topic.getSelectedCount() >= topic.getMaxStudents()) {
-                return -1;
-            }
-        }
-        int r = SQLHelper.executeUpdate(
-            "UPDATE topic_selections SET status=?,review_comment=?,review_time=NOW() WHERE id=?",
-            status, comment, id);
-        if (r > 0 && "approved".equals(status)) {
-            SQLHelper.executeUpdate(
-                "UPDATE topics SET selected_count=selected_count+1 WHERE id=?",
-                sel.getTopicId());
-            bean.Topic updated = topicDao.findById(sel.getTopicId());
-            if (updated != null && updated.getSelectedCount() >= updated.getMaxStudents()) {
-                SQLHelper.executeUpdate(
-                    "UPDATE topics SET status='closed' WHERE id=?", sel.getTopicId());
-            }
-        }
-        return r;
     }
 
     public int countPendingByTeacher(int teacherId) {
@@ -141,5 +286,24 @@ public class SelectionDao {
         s.setApplyTime(DateUtil.toDate(row[10]));
         s.setReviewTime(DateUtil.toDate(row[11]));
         return s;
+    }
+
+    private void rollbackQuietly(Connection conn) {
+        if (conn != null) {
+            try {
+                conn.rollback();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void closeQuietly(Connection conn) {
+        if (conn != null) {
+            try {
+                conn.setAutoCommit(true);
+                conn.close();
+            } catch (Exception ignored) {
+            }
+        }
     }
 }

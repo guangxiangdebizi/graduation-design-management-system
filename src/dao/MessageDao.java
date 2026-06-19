@@ -43,7 +43,14 @@ public class MessageDao {
         return rows.isEmpty() ? null : mapRow(rows.get(0));
     }
 
-    public int countUnread(int receiverId) {
+    public Message findByIdForUser(int id, int userId) {
+        List<Object[]> rows = SQLHelper.queryList(
+            BASE_SQL + "WHERE m.id=? AND (m.sender_id=? OR m.receiver_id=?)",
+            id, userId, userId);
+        return rows.isEmpty() ? null : mapRow(rows.get(0));
+    }
+
+    public int countUnread(int receiverId) {
         Object val = SQLHelper.queryScalar(
             "SELECT COUNT(*) FROM messages WHERE receiver_id=? AND is_read=0", receiverId);
         return val == null ? 0 : ((Number) val).intValue();

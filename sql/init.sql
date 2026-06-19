@@ -18,8 +18,11 @@ CREATE TABLE users (
     password VARCHAR(128) NOT NULL,
     role ENUM('admin','teacher','student') NOT NULL,
     real_name VARCHAR(50) NOT NULL,
-    student_no VARCHAR(20) DEFAULT NULL,
-    department VARCHAR(100) DEFAULT NULL,
+    student_no VARCHAR(20) DEFAULT NULL UNIQUE,
+    college VARCHAR(50) DEFAULT NULL COMMENT '学院代码: cs=计算机学院, sw=软件学院, ee=电气学院, ai=人工智能学部, ba=经管学院, arts=文科学部, science=理学部',
+    major VARCHAR(50) DEFAULT NULL COMMENT '专业代码',
+    class_name VARCHAR(50) DEFAULT NULL COMMENT '班级',
+    department VARCHAR(100) DEFAULT NULL COMMENT '保留字段，兼容旧数据',
     email VARCHAR(100) DEFAULT NULL,
     phone VARCHAR(20) DEFAULT NULL,
     status TINYINT DEFAULT 1,
@@ -31,6 +34,7 @@ CREATE TABLE topics (
     title VARCHAR(200) NOT NULL,
     description TEXT,
     teacher_id INT NOT NULL,
+    college VARCHAR(50) DEFAULT NULL COMMENT '课题所属学院',
     max_students INT DEFAULT 1,
     selected_count INT DEFAULT 0,
     status ENUM('open','closed') DEFAULT 'open',
@@ -47,8 +51,12 @@ CREATE TABLE topic_selections (
     review_comment TEXT,
     apply_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     review_time DATETIME DEFAULT NULL,
+    active_guard TINYINT GENERATED ALWAYS AS (
+        CASE WHEN status IN ('pending','approved') THEN 1 ELSE NULL END
+    ) STORED,
     FOREIGN KEY (student_id) REFERENCES users(id),
-    FOREIGN KEY (topic_id) REFERENCES topics(id)
+    FOREIGN KEY (topic_id) REFERENCES topics(id),
+    UNIQUE KEY uk_student_active_selection (student_id, active_guard)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE documents (
@@ -67,7 +75,9 @@ CREATE TABLE documents (
     reviewer_id INT DEFAULT NULL,
     FOREIGN KEY (student_id) REFERENCES users(id),
     FOREIGN KEY (topic_id) REFERENCES topics(id),
-    FOREIGN KEY (reviewer_id) REFERENCES users(id)
+    FOREIGN KEY (reviewer_id) REFERENCES users(id),
+    UNIQUE KEY uk_student_doc_type (student_id, doc_type),
+    CHECK (score IS NULL OR (score >= 0 AND score <= 100))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE announcements (
@@ -90,7 +100,8 @@ CREATE TABLE defense_schedules (
     comment TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_defense_student (student_id),
-    FOREIGN KEY (student_id) REFERENCES users(id)
+    FOREIGN KEY (student_id) REFERENCES users(id),
+    CHECK (score IS NULL OR (score >= 0 AND score <= 100))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE document_versions (
@@ -101,7 +112,8 @@ CREATE TABLE document_versions (
     content TEXT,
     file_path VARCHAR(500) DEFAULT NULL,
     submit_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (document_id) REFERENCES documents(id)
+    FOREIGN KEY (document_id) REFERENCES documents(id),
+    UNIQUE KEY uk_document_version (document_id, version_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE operation_logs (
@@ -127,29 +139,34 @@ CREATE TABLE messages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 密码: admin123 / 123456 (MD5)
-INSERT INTO users (username, password, role, real_name, student_no, department, email, phone) VALUES
-('admin', '0192023a7bbd73250516f069df18b500', 'admin', '系统管理员', NULL, '教务处', 'admin@school.edu', '13800000001'),
-('teacher01', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '张教授', NULL, '计算机学院', 'zhang@school.edu', '13800000002'),
-('teacher02', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '李副教授', NULL, '软件学院', 'li@school.edu', '13800000003'),
-('student01', 'e10adc3949ba59abbe56e057f20f883e', 'student', '王小明', '2022001001', '计算机学院', 'wang@stu.edu', '13900000001'),
-('student02', 'e10adc3949ba59abbe56e057f20f883e', 'student', '刘小红', '2022001002', '计算机学院', 'liu@stu.edu', '13900000002'),
-('student03', 'e10adc3949ba59abbe56e057f20f883e', 'student', '陈小刚', '2022001003', '软件学院', 'chen@stu.edu', '13900000003'),
-('student04', 'e10adc3949ba59abbe56e057f20f883e', 'student', '赵小芳', '2022001004', '软件学院', 'zhao@stu.edu', '13900000004'),
-('student05', 'e10adc3949ba59abbe56e057f20f883e', 'student', '孙小亮', '2022001005', '计算机学院', 'sun@stu.edu', '13900000005');
+INSERT INTO users (username, password, role, real_name, student_no, college, major, class_name, department, email, phone) VALUES
+('admin', '0192023a7bbd73250516f069df18b500', 'admin', '系统管理员', NULL, NULL, NULL, NULL, '教务处', 'admin@school.edu', '13800000001'),
+('teacher01', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '张教授', NULL, 'cs', 'cs', NULL, '计算机学院', 'zhang@school.edu', '13800000002'),
+('teacher02', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '李副教授', NULL, 'ee', 'ee', NULL, '电气学院', 'li@school.edu', '13800000003'),
+('student01', 'e10adc3949ba59abbe56e057f20f883e', 'student', '王小明', '2022001001', 'cs', 'cs', '计算机科学与技术2022级1班', '计算机学院', 'wang@stu.edu', '13900000001'),
+('student02', 'e10adc3949ba59abbe56e057f20f883e', 'student', '刘小红', '2022001002', 'cs', 'cy', '软件工程2022级1班', '计算机学院', 'liu@stu.edu', '13900000002'),
+('student03', 'e10adc3949ba59abbe56e057f20f883e', 'student', '陈小刚', '2022001003', 'sw', 'sw', '软件工程2022级2班', '软件学院', 'chen@stu.edu', '13900000003'),
+('student04', 'e10adc3949ba59abbe56e057f20f883e', 'student', '赵小芳', '2022001004', 'ee', 'ee', '电气工程及其自动化2022级1班', '电气学院', 'zhao@stu.edu', '13900000004'),
+('student05', 'e10adc3949ba59abbe56e057f20f883e', 'student', '孙小亮', '2022001005', 'ai', 'ai', '人工智能2022级1班', '人工智能学部', 'sun@stu.edu', '13900000005'),
+('student06', 'e10adc3949ba59abbe56e057f20f883e', 'student', '周小丽', '2022001006', 'ba', 'ba', '工商管理2022级1班', '经管学院', 'zhou@stu.edu', '13900000006'),
+('student07', 'e10adc3949ba59abbe56e057f20f883e', 'student', '吴小强', '2022001007', 'arts', 'chinese', '汉语言文学2022级1班', '文科学部', 'wu@stu.edu', '13900000007'),
+('student08', 'e10adc3949ba59abbe56e057f20f883e', 'student', '郑小华', '2022001008', 'science', 'math', '数学与应用数学2022级1班', '理学部', 'zheng@stu.edu', '13900000008');
 
-INSERT INTO topics (title, description, teacher_id, max_students, selected_count, status) VALUES
-('基于JSP的毕业设计管理系统', '设计并实现一套完整的毕业设计全流程管理系统，包含选题、文档提交与审核等功能。', 2, 2, 1, 'open'),
-('基于深度学习的图像识别系统', '使用卷积神经网络实现常见物体识别，并提供Web展示界面。', 2, 1, 1, 'open'),
-('校园二手交易平台', '面向在校学生的C2C交易平台，支持商品发布、搜索与在线沟通。', 2, 2, 0, 'open'),
-('智能图书推荐系统', '基于协同过滤算法为用户推荐图书，分析用户借阅行为。', 3, 2, 1, 'open'),
-('在线考试系统的设计与实现', '支持题库管理、组卷、在线答题与自动阅卷。', 3, 1, 0, 'open');
+INSERT INTO topics (title, description, teacher_id, college, max_students, selected_count, status) VALUES
+('基于JSP的毕业设计管理系统', '设计并实现一套完整的毕业设计全流程管理系统，包含选题、文档提交与审核等功能。', 2, 'cs', 3, 1, 'open'),
+('基于深度学习的图像识别系统', '使用卷积神经网络实现常见物体识别，并提供Web展示界面。', 2, 'cs', 2, 1, 'open'),
+('校园二手交易平台', '面向在校学生的C2C交易平台，支持商品发布、搜索与在线沟通。', 2, 'cs', 2, 0, 'open'),
+('智能图书推荐系统', '基于协同过滤算法为用户推荐图书，分析用户借阅行为。', 3, 'ee', 2, 1, 'open'),
+('电气设备远程监控系统', '设计并实现基于物联网的电气设备远程监控与故障诊断系统。', 3, 'ee', 2, 0, 'open'),
+('智能客服机器人设计与实现', '基于自然语言处理技术实现智能客服对话系统。', 3, 'ai', 2, 0, 'open'),
+('企业财务管理系统', '面向中小企业的财务收支管理与报表分析系统。', 3, 'ba', 2, 0, 'open');
 
 INSERT INTO topic_selections (student_id, topic_id, status, apply_reason, review_comment, apply_time, review_time) VALUES
 (4, 1, 'approved', '对Web开发有浓厚兴趣，希望完成一个完整的管理系统。', '基础扎实，同意选题。', '2026-03-01 10:00:00', '2026-03-02 09:00:00'),
 (5, 2, 'approved', '有深度学习课程基础，想实践CNN项目。', '已修完机器学习，批准。', '2026-03-01 11:00:00', '2026-03-02 10:00:00'),
-(6, 4, 'approved', '对推荐算法感兴趣。', '同意。', '2026-03-03 09:00:00', '2026-03-03 14:00:00'),
-(7, 3, 'pending', '希望锻炼全栈开发能力。', NULL, '2026-05-20 15:00:00', NULL),
-(8, 1, 'pending', '第二志愿申请该课题。', NULL, '2026-05-21 10:00:00', NULL);
+(6, 1, 'pending', '希望锻炼全栈开发能力。', NULL, '2026-05-20 15:00:00', NULL),
+(7, 4, 'approved', '对电气控制感兴趣。', '同意选题。', '2026-03-03 09:00:00', '2026-03-03 14:00:00'),
+(8, 3, 'pending', '想做一个实用的电商项目。', NULL, '2026-05-21 10:00:00', NULL);
 
 UPDATE topics SET selected_count = 1 WHERE id IN (1, 2, 4);
 
@@ -157,7 +174,7 @@ INSERT INTO documents (student_id, topic_id, doc_type, title, content, file_path
 (4, 1, 'proposal', '毕业设计管理系统开题报告', '本课题旨在设计一套基于JSP+Servlet+MySQL的毕业设计管理系统...', 'uploads/4/proposal.pdf', 'reviewed', 88.00, '开题报告结构清晰，研究目标明确。', '2026-03-15 10:00:00', '2026-03-18 14:00:00', 2),
 (4, 1, 'midterm', '毕业设计管理系统中期检查', '目前已完成用户模块、选题模块的开发...', 'uploads/4/midterm.pdf', 'submitted', NULL, NULL, '2026-05-10 16:00:00', NULL, NULL),
 (5, 2, 'proposal', '图像识别系统开题报告', '本课题基于ResNet模型实现图像分类...', 'uploads/5/proposal.pdf', 'reviewed', 92.00, '选题前沿，方案可行。', '2026-03-16 09:00:00', '2026-03-19 11:00:00', 2),
-(6, 4, 'proposal', '图书推荐系统开题报告', '采用UserCF协同过滤算法...', 'uploads/6/proposal.pdf', 'submitted', NULL, NULL, '2026-05-18 11:00:00', NULL, NULL);
+(7, 4, 'proposal', '图书推荐系统开题报告', '采用UserCF协同过滤算法...', 'uploads/7/proposal.pdf', 'submitted', NULL, NULL, '2026-05-18 11:00:00', NULL, NULL);
 
 INSERT INTO document_versions (document_id, version_no, title, content, file_path, submit_time) VALUES
 (1, 1, '毕业设计管理系统开题报告', '本课题旨在设计一套基于JSP+Servlet+MySQL的毕业设计管理系统...', 'uploads/4/proposal_v1.pdf', '2026-03-10 09:00:00'),
@@ -176,7 +193,7 @@ INSERT INTO operation_logs (user_id, action, target, detail) VALUES
 INSERT INTO defense_schedules (student_id, defense_time, room, group_name, score, comment) VALUES
 (4, '2026-06-20 09:00:00', '教学楼A301', '第一组', NULL, '请携带答辩PPT'),
 (5, '2026-06-20 10:30:00', '教学楼A301', '第一组', NULL, '请携带答辩PPT'),
-(6, '2026-06-20 14:00:00', '教学楼A302', '第二组', NULL, '请准时参加');
+(7, '2026-06-20 14:00:00', '教学楼A302', '第二组', NULL, '请准时参加');
 
 INSERT INTO messages (sender_id, receiver_id, title, content, is_read) VALUES
 (1, 4, '答辩注意事项', '请各同学提前准备答辩PPT，答辩时间20分钟，提问10分钟。', 0),
