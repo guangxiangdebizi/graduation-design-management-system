@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import dbutil.SQLHelper;
+import util.DictionaryUtil;
 
 public class StatsDao {
     public Map<String, Integer> selectionStats(int totalStudents) {
@@ -23,9 +24,9 @@ public class StatsDao {
 
     public Map<String, Integer> docPassStats() {
         Map<String, Integer> stats = new LinkedHashMap<String, Integer>();
-        stats.put("开题报告", countReviewed("proposal"));
-        stats.put("中期检查", countReviewed("midterm"));
-        stats.put("终稿", countReviewed("final"));
+        for (Map.Entry<String, String> e : DictionaryUtil.items("document_type").entrySet()) {
+            stats.put(e.getValue(), countReviewed(e.getKey()));
+        }
         return stats;
     }
 

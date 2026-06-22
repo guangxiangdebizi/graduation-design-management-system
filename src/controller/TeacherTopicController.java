@@ -10,6 +10,8 @@ import javax.servlet.http.HttpSession;
 import bean.Topic;
 import bean.User;
 import dao.TopicDao;
+import util.CollegeUtil;
+import util.DictionaryUtil;
 import util.OperationLogUtil;
 import util.WebUtil;
 import java.util.List;
@@ -24,6 +26,8 @@ public class TeacherTopicController extends HttpServlet {
         TopicDao dao = new TopicDao();
         List<Topic> topics = dao.findByTeacher(user.getId());
         request.setAttribute("topics", topics);
+        request.setAttribute("collegeOptions", CollegeUtil.getColleges());
+        request.setAttribute("topicStatusOptions", DictionaryUtil.items("topic_status"));
         request.getRequestDispatcher("/teacher/topics.jsp").forward(request, response);
     }
 
@@ -90,6 +94,6 @@ public class TeacherTopicController extends HttpServlet {
     }
 
     private boolean isValidStatus(String status) {
-        return "open".equals(status) || "closed".equals(status);
+        return DictionaryUtil.contains("topic_status", status);
     }
 }

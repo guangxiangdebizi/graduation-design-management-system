@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.CollegeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.StatusUtil" %>
 <%
   request.setAttribute("pageTitle", "我的课题");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -9,6 +9,10 @@
     response.sendRedirect(request.getContextPath() + "/teacher/topic.action");
     return;
   }
+  Map<String, String> collegeOptions = (Map<String, String>) request.getAttribute("collegeOptions");
+  Map<String, String> topicStatusOptions = (Map<String, String>) request.getAttribute("topicStatusOptions");
+  if (collegeOptions == null) collegeOptions = new LinkedHashMap<String, String>();
+  if (topicStatusOptions == null) topicStatusOptions = new LinkedHashMap<String, String>();
 
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
@@ -47,7 +51,7 @@
         <br>
         名额: <%= t.getSelectedCount() %>/<%= t.getMaxStudents() %>
         &nbsp;|&nbsp;
-        <span class="badge-status badge-<%= t.getStatus() %>"><%= "open".equals(t.getStatus())?"开放":"关闭" %></span>
+        <span class="badge-status badge-<%= t.getStatus() %>"><%= StatusUtil.label(t.getStatus()) %></span>
         &nbsp;|&nbsp; <%= t.getCreatedAt() != null ? sdf.format(t.getCreatedAt()) : "" %>
       </div>
       <div class="mt-2">
@@ -74,14 +78,18 @@
           <div class="col-6"><label class="form-label">所属学院 *</label>
             <select name="college" id="addCollege" class="form-select form-select-sm" required>
               <option value="">请选择学院</option>
-              <% for (Map.Entry<String, String> e : CollegeUtil.COLLEGES.entrySet()) { %>
+              <% for (Map.Entry<String, String> e : collegeOptions.entrySet()) { %>
               <option value="<%= e.getKey() %>"><%= e.getValue() %></option>
               <% } %>
             </select>
           </div>
           <div class="col-6"><label class="form-label">最大人数 *</label><input name="maxStudents" type="number" value="1" min="1" max="5" class="form-control form-control-sm" required></div>
         </div>
-        <div class="mb-2"><label class="form-label">状态</label><select name="status" class="form-select form-select-sm"><option value="open">开放选题</option><option value="closed">关闭选题</option></select></div>
+        <div class="mb-2"><label class="form-label">状态</label><select name="status" class="form-select form-select-sm">
+          <% for (Map.Entry<String, String> e : topicStatusOptions.entrySet()) { %>
+          <option value="<%= e.getKey() %>"><%= e.getValue() %></option>
+          <% } %>
+        </select></div>
       </div>
       <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">发布</button></div>
     </form>
@@ -101,14 +109,18 @@
           <div class="col-6"><label class="form-label">所属学院 *</label>
             <select name="college" id="editCollege" class="form-select form-select-sm" required>
               <option value="">请选择学院</option>
-              <% for (Map.Entry<String, String> e : CollegeUtil.COLLEGES.entrySet()) { %>
+              <% for (Map.Entry<String, String> e : collegeOptions.entrySet()) { %>
               <option value="<%= e.getKey() %>"><%= e.getValue() %></option>
               <% } %>
             </select>
           </div>
           <div class="col-6"><label class="form-label">最大人数 *</label><input name="maxStudents" id="editMax" type="number" min="1" max="5" class="form-control form-control-sm" required></div>
         </div>
-        <div class="mb-2"><label class="form-label">状态</label><select name="status" id="editStatus" class="form-select form-select-sm"><option value="open">开放选题</option><option value="closed">关闭选题</option></select></div>
+        <div class="mb-2"><label class="form-label">状态</label><select name="status" id="editStatus" class="form-select form-select-sm">
+          <% for (Map.Entry<String, String> e : topicStatusOptions.entrySet()) { %>
+          <option value="<%= e.getKey() %>"><%= e.getValue() %></option>
+          <% } %>
+        </select></div>
       </div>
       <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">保存</button></div>
     </form>

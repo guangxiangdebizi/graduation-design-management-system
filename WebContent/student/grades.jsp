@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.PageUtil" %>
+<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.DictionaryUtil" %>
 <%
   request.setAttribute("pageTitle", "我的成绩");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -8,10 +8,7 @@
   List<Document> docs = docDao.findByStudent(loginUser.getId());
   DefenseSchedule defense = defDao.findByStudent(loginUser.getId());
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-  java.util.Map<String,String> typeNames = new java.util.LinkedHashMap<String,String>();
-  typeNames.put("proposal", "开题报告");
-  typeNames.put("midterm", "中期检查");
-  typeNames.put("final", "终稿");
+  java.util.Map<String,String> typeNames = DictionaryUtil.items("document_type");
   java.util.Map<String, Document> docMap = new java.util.HashMap<String, Document>();
   for (Document d : docs) { docMap.put(d.getDocType(), d); }
 %>

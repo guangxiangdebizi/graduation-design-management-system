@@ -3,8 +3,6 @@ package util;
 import javax.servlet.http.HttpSession;
 
 public class LoginAttemptUtil {
-    private static final int MAX_ATTEMPTS = 5;
-    private static final long LOCK_MS = 15 * 60 * 1000L;
     private static final String ATTEMPT_PREFIX = "login_attempts_";
     private static final String LOCK_PREFIX = "login_lock_";
 
@@ -32,8 +30,10 @@ public class LoginAttemptUtil {
         Integer attempts = (Integer) session.getAttribute(key);
         int count = attempts == null ? 1 : attempts + 1;
         session.setAttribute(key, count);
-        if (count >= MAX_ATTEMPTS) {
-            session.setAttribute(LOCK_PREFIX + username, System.currentTimeMillis() + LOCK_MS);
+        int maxAttempts = SystemConfigUtil.getInt("login.max_attempts", 5);
+        long lockMs = SystemConfigUtil.getLong("login.lock_minutes", 15L) * 60L * 1000L;
+        if (count >= maxAttempts) {
+            session.setAttribute(LOCK_PREFIX + username, System.currentTimeMillis() + lockMs);
         }
     }
 

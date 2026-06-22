@@ -1,6 +1,6 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
 <%@ page import="bean.*,java.util.*" %>
-<%@ page import="util.EscapeUtil,util.CollegeUtil" %>
+<%@ page import="util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "浏览课题");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -16,6 +16,8 @@
   if (keyword == null) keyword = "";
   if (collegeFilter == null) collegeFilter = "";
   boolean hasApplied = hasAppliedAttr.booleanValue();
+  Map<String, String> collegeOptions = (Map<String, String>) request.getAttribute("collegeOptions");
+  if (collegeOptions == null) collegeOptions = new LinkedHashMap<String, String>();
 
   // 消息提示
   String msg = request.getParameter("msg");
@@ -42,7 +44,7 @@
     <div class="col-md-3">
       <select name="college" class="form-select form-select-sm">
         <option value="">全部学院</option>
-        <% for (Map.Entry<String, String> e : CollegeUtil.COLLEGES.entrySet()) { %>
+        <% for (Map.Entry<String, String> e : collegeOptions.entrySet()) { %>
         <option value="<%= e.getKey() %>" <%= e.getKey().equals(collegeFilter) ? "selected" : "" %>><%= e.getValue() %></option>
         <% } %>
       </select>

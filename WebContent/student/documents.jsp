@@ -15,6 +15,8 @@
   Document currentDoc = (Document) request.getAttribute("currentDocument");
   List<DocumentVersion> versions =
       (List<DocumentVersion>) request.getAttribute("documentVersions");
+  String uploadAccept = (String) request.getAttribute("uploadAccept");
+  if (uploadAccept == null) uploadAccept = ".pdf,.doc,.docx,.zip,.rar";
   if (typeNames == null || versions == null) {
     response.sendRedirect(request.getContextPath() + "/student/document.action");
     return;
@@ -106,7 +108,7 @@
 
       <label class="form-label">上传附件</label>
 
-      <input type="file" name="file" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.zip,.rar">
+      <input type="file" name="file" class="form-control form-control-sm" accept="<%= EscapeUtil.attr(uploadAccept) %>">
 
       <% if (currentDoc!=null && currentDoc.getFilePath()!=null && currentDoc.getFilePath().length()>0) { %>
 

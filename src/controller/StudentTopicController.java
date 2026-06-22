@@ -11,6 +11,7 @@ import bean.User;
 import bean.Topic;
 import dao.SelectionDao;
 import dao.TopicDao;
+import util.CollegeUtil;
 import util.OperationLogUtil;
 import util.WebUtil;
 import java.util.List;
@@ -28,6 +29,7 @@ public class StudentTopicController extends HttpServlet {
         request.setAttribute("topics", topics);
         request.setAttribute("keyword", keyword);
         request.setAttribute("collegeFilter", college);
+        request.setAttribute("collegeOptions", CollegeUtil.getColleges());
         request.setAttribute("hasApplied",
             new SelectionDao().hasPendingOrApproved(user.getId()));
         request.getRequestDispatcher("/student/topics.jsp").forward(request, response);

@@ -9,8 +9,11 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import bean.User;
 import dao.UserDao;
+import util.CollegeUtil;
+import util.DictionaryUtil;
 import util.OperationLogUtil;
 import util.PageUtil;
+import util.SystemConfigUtil;
 import util.WebUtil;
 import java.util.List;
 
@@ -34,6 +37,14 @@ public class AdminUserController extends HttpServlet {
         request.setAttribute("pageSize", pageSize);
         request.setAttribute("roleFilter", role);
         request.setAttribute("collegeFilter", college);
+        request.setAttribute("roleOptions", DictionaryUtil.items("role"));
+        request.setAttribute("userStatusOptions", DictionaryUtil.items("user_status"));
+        request.setAttribute("collegeOptions", CollegeUtil.getColleges());
+        request.setAttribute("majorGroups", CollegeUtil.getMajorGroups());
+        request.setAttribute("usernamePattern",
+            SystemConfigUtil.getString("validation.username_regex", "^[a-zA-Z0-9_]{3,20}$"));
+        request.setAttribute("passwordMinLength",
+            SystemConfigUtil.getInt("validation.password_min_length", 6));
         request.getRequestDispatcher("/admin/users.jsp").forward(request, response);
     }
 

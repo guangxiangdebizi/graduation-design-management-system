@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.StatusUtil" %>
 <%
   request.setAttribute("pageTitle", "文档审核");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -25,8 +25,8 @@
 </ul>
 
 <div class="mb-3">
-  <a href="document.action?type=<%= docType %>&status=submitted" class="btn btn-sm <%= "submitted".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">待审核</a>
-  <a href="document.action?type=<%= docType %>&status=reviewed" class="btn btn-sm <%= "reviewed".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已审核</a>
+  <a href="document.action?type=<%= docType %>&status=submitted" class="btn btn-sm <%= "submitted".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>"><%= StatusUtil.label("submitted") %></a>
+  <a href="document.action?type=<%= docType %>&status=reviewed" class="btn btn-sm <%= "reviewed".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>"><%= StatusUtil.label("reviewed") %></a>
   <a href="document.action?type=<%= docType %>&status=all" class="btn btn-sm <%= "all".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">全部</a>
 </div>
 

@@ -2,7 +2,6 @@ package controller;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.servlet.ServletException;
@@ -13,6 +12,7 @@ import javax.servlet.http.HttpServletResponse;
 import bean.Document;
 import bean.User;
 import dao.DocumentDao;
+import util.DictionaryUtil;
 import util.MessageNotifyUtil;
 import util.OperationLogUtil;
 import util.WebUtil;
@@ -92,17 +92,10 @@ public class TeacherDocumentController extends HttpServlet {
     }
 
     private String normalizeDocType(String docType) {
-        if ("midterm".equals(docType) || "final".equals(docType)) {
-            return docType;
-        }
-        return "proposal";
+        return DictionaryUtil.contains("document_type", docType) ? docType : "proposal";
     }
 
     private Map<String, String> documentTypeNames() {
-        Map<String, String> names = new LinkedHashMap<String, String>();
-        names.put("proposal", "开题报告");
-        names.put("midterm", "中期检查");
-        names.put("final", "终稿");
-        return names;
+        return DictionaryUtil.items("document_type");
     }
 }

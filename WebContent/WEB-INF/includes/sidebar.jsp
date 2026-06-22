@@ -1,4 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
+<%@ page import="util.DictionaryUtil" %>
 <%
   String ctx = request.getContextPath();
   String sidebarCurrentPage = request.getRequestURI();
@@ -47,7 +48,7 @@
     </div>
     <div class="user-info">
       <strong><%= loginUser.getRealName() %></strong>
-      <span class="text-muted">(<%= "admin".equals(userRole)?"管理员":("teacher".equals(userRole)?"教师":"学生") %>)</span>
+      <span class="text-muted">(<%= DictionaryUtil.label("role", userRole) %>)</span>
       &nbsp;|&nbsp;
       <a href="<%= ctx %>/logout.action" class="text-decoration-none">退出</a>
     </div>

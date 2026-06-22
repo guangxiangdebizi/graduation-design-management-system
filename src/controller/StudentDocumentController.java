@@ -3,12 +3,8 @@ package controller;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.WebServlet;
@@ -23,16 +19,15 @@ import bean.User;
 import dao.DocumentDao;
 import dao.DocumentVersionDao;
 import dao.SelectionDao;
+import util.DictionaryUtil;
 import util.FileUploadUtil;
 import util.OperationLogUtil;
+import util.SystemConfigUtil;
 import util.WebUtil;
 
 @WebServlet("/student/document.action")
-@MultipartConfig(maxFileSize = 10485760, maxRequestSize = 20971520)
+@MultipartConfig
 public class StudentDocumentController extends HttpServlet {
-    private static final Set<String> DOC_TYPES =
-        new HashSet<String>(Arrays.asList("proposal", "midterm", "final"));
-
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         User user = (User) request.getSession().getAttribute("loginUser");
@@ -51,6 +46,9 @@ public class StudentDocumentController extends HttpServlet {
         request.setAttribute("documentVersions", versions);
         request.setAttribute("activeType", docType);
         request.setAttribute("typeNames", documentTypeNames());
+        request.setAttribute("uploadAccept",
+            "." + SystemConfigUtil.getString("upload.allowed_extensions", "pdf,doc,docx,zip,rar")
+                .replace(",", ",."));
         request.getRequestDispatcher("/student/documents.jsp").forward(request, response);
     }
 
@@ -65,7 +63,7 @@ public class StudentDocumentController extends HttpServlet {
         }
 
         String docType = request.getParameter("docType");
-        if (!DOC_TYPES.contains(docType)) {
+        if (!DictionaryUtil.contains("document_type", docType)) {
             redirectToList(request, response, "error", "proposal");
             return;
         }
@@ -127,15 +125,11 @@ public class StudentDocumentController extends HttpServlet {
     }
 
     private String normalizeDocType(String docType) {
-        return DOC_TYPES.contains(docType) ? docType : "proposal";
+        return DictionaryUtil.contains("document_type", docType) ? docType : "proposal";
     }
 
     private Map<String, String> documentTypeNames() {
-        Map<String, String> names = new LinkedHashMap<String, String>();
-        names.put("proposal", "开题报告");
-        names.put("midterm", "中期检查");
-        names.put("final", "终稿");
-        return names;
+        return DictionaryUtil.items("document_type");
     }
 
     private void deleteUploadedFile(String relativePath) {
