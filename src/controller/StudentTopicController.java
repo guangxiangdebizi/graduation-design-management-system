@@ -22,11 +22,14 @@ public class StudentTopicController extends HttpServlet {
             throws ServletException, IOException {
         String keyword = request.getParameter("keyword");
         String college = request.getParameter("college");
+        User user = (User) request.getSession().getAttribute("loginUser");
         TopicDao dao = new TopicDao();
         List<Topic> topics = dao.findOpenTopics(keyword, college);
         request.setAttribute("topics", topics);
         request.setAttribute("keyword", keyword);
         request.setAttribute("collegeFilter", college);
+        request.setAttribute("hasApplied",
+            new SelectionDao().hasPendingOrApproved(user.getId()));
         request.getRequestDispatcher("/student/topics.jsp").forward(request, response);
     }
 

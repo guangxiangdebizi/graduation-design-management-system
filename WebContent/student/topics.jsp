@@ -1,27 +1,21 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*" %>
+<%@ page import="bean.*,java.util.*" %>
 <%@ page import="util.EscapeUtil,util.CollegeUtil" %>
 <%
   request.setAttribute("pageTitle", "浏览课题");
   User loginUser = (User) session.getAttribute("loginUser");
 
-  // 获取筛选参数和课题列表（如果是从Controller传入的）
   List<Topic> topics = (List<Topic>) request.getAttribute("topics");
   String keyword = (String) request.getAttribute("keyword");
   String collegeFilter = (String) request.getAttribute("collegeFilter");
-
-  if (topics == null) {
-    // 首次加载
-    keyword = request.getParameter("keyword");
-    collegeFilter = request.getParameter("college");
-    TopicDao topicDao = new TopicDao();
-    topics = topicDao.findOpenTopics(keyword, collegeFilter);
+  Boolean hasAppliedAttr = (Boolean) request.getAttribute("hasApplied");
+  if (topics == null || hasAppliedAttr == null) {
+    response.sendRedirect(request.getContextPath() + "/student/topic.action");
+    return;
   }
   if (keyword == null) keyword = "";
   if (collegeFilter == null) collegeFilter = "";
-
-  SelectionDao selDao = new SelectionDao();
-  boolean hasApplied = selDao.hasPendingOrApproved(loginUser.getId());
+  boolean hasApplied = hasAppliedAttr.booleanValue();
 
   // 消息提示
   String msg = request.getParameter("msg");

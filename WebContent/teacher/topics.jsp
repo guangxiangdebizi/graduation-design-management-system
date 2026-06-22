@@ -1,14 +1,13 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.CollegeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.CollegeUtil" %>
 <%
   request.setAttribute("pageTitle", "我的课题");
   User loginUser = (User) session.getAttribute("loginUser");
 
-  // 获取课题列表
   List<Topic> topics = (List<Topic>) request.getAttribute("topics");
   if (topics == null) {
-    TopicDao dao = new TopicDao();
-    topics = dao.findByTeacher(loginUser.getId());
+    response.sendRedirect(request.getContextPath() + "/teacher/topic.action");
+    return;
   }
 
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");

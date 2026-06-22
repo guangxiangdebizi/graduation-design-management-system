@@ -1,12 +1,14 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "选题审批");
   User loginUser = (User) session.getAttribute("loginUser");
-  String statusFilter = request.getParameter("status");
-  if (statusFilter == null) statusFilter = "pending";
-  SelectionDao dao = new SelectionDao();
-  List<TopicSelection> list = dao.findByTeacher(loginUser.getId(), "all".equals(statusFilter) ? null : statusFilter);
+  String statusFilter = (String) request.getAttribute("statusFilter");
+  List<TopicSelection> list = (List<TopicSelection>) request.getAttribute("selections");
+  if (list == null) {
+    response.sendRedirect(request.getContextPath() + "/teacher/selection.action");
+    return;
+  }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
@@ -14,10 +16,10 @@
 <%@ include file="/WEB-INF/includes/sidebar.jsp" %>
 
 <div class="mb-3">
-  <a href="?status=pending" class="btn btn-sm <%= "pending".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">待审批</a>
-  <a href="?status=approved" class="btn btn-sm <%= "approved".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已通过</a>
-  <a href="?status=rejected" class="btn btn-sm <%= "rejected".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已驳回</a>
-  <a href="?status=all" class="btn btn-sm <%= "all".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">全部</a>
+  <a href="selection.action?status=pending" class="btn btn-sm <%= "pending".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">待审批</a>
+  <a href="selection.action?status=approved" class="btn btn-sm <%= "approved".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已通过</a>
+  <a href="selection.action?status=rejected" class="btn btn-sm <%= "rejected".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已驳回</a>
+  <a href="selection.action?status=all" class="btn btn-sm <%= "all".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">全部</a>
 </div>
 
 <div class="content-card">

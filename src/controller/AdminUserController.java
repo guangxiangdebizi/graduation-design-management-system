@@ -47,19 +47,19 @@ public class AdminUserController extends HttpServlet {
         if ("add".equals(action)) {
             String username = request.getParameter("username");
             if (dao.existsByUsername(username)) {
-                WebUtil.redirect(request, response, "/admin/users.jsp?msg=username_exists");
+                WebUtil.redirect(request, response, "/admin/user.action?msg=username_exists");
                 return;
             }
             User u = buildUser(request);
             u.setStatus(1);
             dao.insert(u);
             OperationLogUtil.log(loginUser.getId(), "ADD", "user", "新增用户 " + u.getUsername());
-            WebUtil.redirect(request, response, "/admin/users.jsp?msg=add_ok");
+            WebUtil.redirect(request, response, "/admin/user.action?msg=add_ok");
         } else if ("edit".equals(action)) {
             int editId = Integer.parseInt(request.getParameter("id"));
             String username = request.getParameter("username");
             if (dao.existsByUsernameExcludeId(username, editId)) {
-                WebUtil.redirect(request, response, "/admin/users.jsp?msg=username_exists");
+                WebUtil.redirect(request, response, "/admin/user.action?msg=username_exists");
                 return;
             }
             User u = buildUser(request);
@@ -67,40 +67,40 @@ public class AdminUserController extends HttpServlet {
             u.setStatus(Integer.parseInt(request.getParameter("status")));
             User current = dao.findById(editId);
             if (current == null) {
-                WebUtil.redirect(request, response, "/admin/users.jsp?msg=error");
+                WebUtil.redirect(request, response, "/admin/user.action?msg=error");
                 return;
             }
             if (editId == loginUser.getId()
                     && (!"admin".equals(u.getRole()) || u.getStatus() != 1)) {
-                WebUtil.redirect(request, response, "/admin/users.jsp?msg=edit_self_role");
+                WebUtil.redirect(request, response, "/admin/user.action?msg=edit_self_role");
                 return;
             }
             if ("admin".equals(current.getRole())
                     && (!"admin".equals(u.getRole()) || u.getStatus() != 1)
                     && dao.countActiveAdmins() <= 1) {
-                WebUtil.redirect(request, response, "/admin/users.jsp?msg=last_admin");
+                WebUtil.redirect(request, response, "/admin/user.action?msg=last_admin");
                 return;
             }
             String pwd = request.getParameter("password");
             u.setPassword(pwd == null || pwd.trim().isEmpty() ? null : pwd);
             dao.update(u);
             OperationLogUtil.log(loginUser.getId(), "UPDATE", "user", "编辑用户 id=" + u.getId());
-            WebUtil.redirect(request, response, "/admin/users.jsp?msg=edit_ok");
+            WebUtil.redirect(request, response, "/admin/user.action?msg=edit_ok");
         } else if ("delete".equals(action)) {
             int id = Integer.parseInt(request.getParameter("id"));
             if (id == loginUser.getId()) {
-                WebUtil.redirect(request, response, "/admin/users.jsp?msg=delete_self");
+                WebUtil.redirect(request, response, "/admin/user.action?msg=delete_self");
                 return;
             }
             int result = dao.delete(id);
             if (result <= 0) {
-                WebUtil.redirect(request, response, "/admin/users.jsp?msg=delete_failed");
+                WebUtil.redirect(request, response, "/admin/user.action?msg=delete_failed");
                 return;
             }
             OperationLogUtil.log(loginUser.getId(), "DELETE", "user", "删除用户 id=" + id);
-            WebUtil.redirect(request, response, "/admin/users.jsp?msg=delete_ok");
+            WebUtil.redirect(request, response, "/admin/user.action?msg=delete_ok");
         } else {
-            WebUtil.redirect(request, response, "/admin/users.jsp");
+            WebUtil.redirect(request, response, "/admin/user.action");
         }
     }
 

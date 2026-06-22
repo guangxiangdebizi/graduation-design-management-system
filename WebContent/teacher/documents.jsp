@@ -1,19 +1,18 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
   request.setAttribute("pageTitle", "文档审核");
   User loginUser = (User) session.getAttribute("loginUser");
-  String docType = request.getParameter("type");
-  if (docType == null) docType = "proposal";
-  String statusFilter = request.getParameter("status");
-  if (statusFilter == null) statusFilter = "submitted";
-  DocumentDao dao = new DocumentDao();
-  List<Document> list = dao.findByTeacher(loginUser.getId(), docType, "all".equals(statusFilter) ? null : statusFilter);
+  String docType = (String) request.getAttribute("docType");
+  String statusFilter = (String) request.getAttribute("statusFilter");
+  List<Document> list = (List<Document>) request.getAttribute("documents");
+  java.util.Map<String,String> typeNames =
+      (java.util.Map<String,String>) request.getAttribute("typeNames");
+  if (list == null || typeNames == null) {
+    response.sendRedirect(request.getContextPath() + "/teacher/document.action");
+    return;
+  }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-  java.util.Map<String,String> typeNames = new java.util.LinkedHashMap<String,String>();
-  typeNames.put("proposal", "开题报告");
-  typeNames.put("midterm", "中期检查");
-  typeNames.put("final", "终稿");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <div class="app-layout">
@@ -21,14 +20,14 @@
 
 <ul class="nav nav-tabs nav-tabs-modern">
   <% for (java.util.Map.Entry<String,String> e : typeNames.entrySet()) { %>
-    <li class="nav-item"><a class="nav-link <%= docType.equals(e.getKey())?"active":"" %>" href="?type=<%= e.getKey() %>&status=<%= statusFilter %>"><%= e.getValue() %></a></li>
+    <li class="nav-item"><a class="nav-link <%= docType.equals(e.getKey())?"active":"" %>" href="document.action?type=<%= e.getKey() %>&status=<%= statusFilter %>"><%= e.getValue() %></a></li>
   <% } %>
 </ul>
 
 <div class="mb-3">
-  <a href="?type=<%= docType %>&status=submitted" class="btn btn-sm <%= "submitted".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">待审核</a>
-  <a href="?type=<%= docType %>&status=reviewed" class="btn btn-sm <%= "reviewed".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已审核</a>
-  <a href="?type=<%= docType %>&status=all" class="btn btn-sm <%= "all".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">全部</a>
+  <a href="document.action?type=<%= docType %>&status=submitted" class="btn btn-sm <%= "submitted".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">待审核</a>
+  <a href="document.action?type=<%= docType %>&status=reviewed" class="btn btn-sm <%= "reviewed".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已审核</a>
+  <a href="document.action?type=<%= docType %>&status=all" class="btn btn-sm <%= "all".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">全部</a>
 </div>
 
 <div class="content-card">

@@ -117,7 +117,7 @@
             <td><%= EscapeUtil.html(s.getStudentName()) %></td>
             <td><%= EscapeUtil.html(s.getTopicTitle()) %></td>
             <td><%= sdf.format(s.getApplyTime()) %></td>
-            <td><a href="teacher/selections.jsp" class="btn btn-sm btn-outline-primary">去审批</a></td>
+            <td><a href="teacher/selection.action" class="btn btn-sm btn-outline-primary">去审批</a></td>
           </tr>
           <% } %>
         </table>
@@ -160,7 +160,7 @@
     <div class="content-card">
       <h5>我的选题</h5>
       <% if (mySelections.isEmpty()) { %>
-        <div class="empty-state"><p>您还没有申请选题</p><a href="student/topics.jsp" class="btn btn-primary btn-sm">去浏览课题</a></div>
+        <div class="empty-state"><p>您还没有申请选题</p><a href="student/topic.action" class="btn btn-primary btn-sm">去浏览课题</a></div>
       <% } else { %>
         <table class="table-modern">
           <tr><th>课题</th><th>指导教师</th><th>状态</th></tr>

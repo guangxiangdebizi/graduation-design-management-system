@@ -45,11 +45,11 @@ public class TeacherTopicController extends HttpServlet {
             t.setStatus(request.getParameter("status"));
             if (t.getMaxStudents() < 1 || !isValidStatus(t.getStatus())
                     || dao.insert(t) <= 0) {
-                WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=error");
+                WebUtil.redirect(request, response, "/teacher/topic.action?msg=error");
                 return;
             }
             OperationLogUtil.log(user.getId(), "ADD", "topic", "发布课题: " + t.getTitle());
-            WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=add_ok");
+            WebUtil.redirect(request, response, "/teacher/topic.action?msg=add_ok");
         } else if ("edit".equals(action)) {
             Topic t = new Topic();
             t.setId(Integer.parseInt(request.getParameter("id")));
@@ -63,29 +63,29 @@ public class TeacherTopicController extends HttpServlet {
             if (current == null || current.getTeacherId() != user.getId()
                     || t.getMaxStudents() < current.getSelectedCount()
                     || !isValidStatus(t.getStatus())) {
-                WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=invalid_quota");
+                WebUtil.redirect(request, response, "/teacher/topic.action?msg=invalid_quota");
                 return;
             }
             if (current.getSelectedCount() >= t.getMaxStudents()) {
                 t.setStatus("closed");
             }
             if (dao.update(t) <= 0) {
-                WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=error");
+                WebUtil.redirect(request, response, "/teacher/topic.action?msg=error");
                 return;
             }
             OperationLogUtil.log(user.getId(), "UPDATE", "topic", "编辑课题 id=" + t.getId());
-            WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=edit_ok");
+            WebUtil.redirect(request, response, "/teacher/topic.action?msg=edit_ok");
         } else if ("delete".equals(action)) {
             int id = Integer.parseInt(request.getParameter("id"));
             int result = dao.delete(id, user.getId());
             if (result <= 0) {
-                WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=delete_failed");
+                WebUtil.redirect(request, response, "/teacher/topic.action?msg=delete_failed");
                 return;
             }
             OperationLogUtil.log(user.getId(), "DELETE", "topic", "删除课题 id=" + id);
-            WebUtil.redirect(request, response, "/teacher/topics.jsp?msg=delete_ok");
+            WebUtil.redirect(request, response, "/teacher/topic.action?msg=delete_ok");
         } else {
-            WebUtil.redirect(request, response, "/teacher/topics.jsp");
+            WebUtil.redirect(request, response, "/teacher/topic.action");
         }
     }
 

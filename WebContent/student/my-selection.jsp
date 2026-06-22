@@ -16,7 +16,7 @@
     <div class="empty-state">
       <div class="icon">&#128221;</div>
       <p>您还没有申请任何课题</p>
-      <a href="topics.jsp" class="btn btn-primary btn-sm">去浏览课题</a>
+      <a href="topic.action" class="btn btn-primary btn-sm">去浏览课题</a>
     </div>
   <% } else { %>
     <table class="table-modern">

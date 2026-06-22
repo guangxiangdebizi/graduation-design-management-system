@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,util.PageUtil,util.EscapeUtil,util.CollegeUtil" %>
+<%@ page import="bean.*,java.util.*,util.EscapeUtil,util.CollegeUtil" %>
 <%
   request.setAttribute("pageTitle", "用户管理");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -14,11 +14,8 @@
 
   int currentPage, pageSize, total;
   if (users == null) {
-    UserDao dao = new UserDao();
-    currentPage = PageUtil.getPage(request);
-    pageSize = PageUtil.getPageSize(request);
-    users = dao.findAllPaged(roleFilter, collegeFilter, currentPage, pageSize);
-    total = dao.countAll(roleFilter, collegeFilter);
+    response.sendRedirect(request.getContextPath() + "/admin/user.action");
+    return;
   } else {
     currentPage = pageAttr != null ? pageAttr : 1;
     pageSize = pageSizeAttr != null ? pageSizeAttr : 20;
