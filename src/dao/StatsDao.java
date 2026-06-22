@@ -12,26 +12,35 @@ public class StatsDao {
         return selectionStats(totalStudents, null, null);
     }
 
+    public int approvedSelectionCount(String college, String major) {
+        boolean scoped = hasScope(college, major);
+        Object val = scoped
+            ? SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT s.student_id) FROM topic_selections s "
+                + "JOIN topics t ON s.topic_id=t.id "
+                + "JOIN users u ON s.student_id=u.id "
+                + "WHERE s.status='approved' "
+                + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+                college, major, college, major)
+            : SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='approved'");
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
     public Map<String, Integer> selectionStats(int totalStudents, String college, String major) {
         Map<String, Integer> stats = new LinkedHashMap<String, Integer>();
         boolean scoped = hasScope(college, major);
-        Object approved = scoped
-            ? SQLHelper.queryScalar(
-                "SELECT COUNT(DISTINCT s.student_id) FROM topic_selections s "
-                + "JOIN users u ON s.student_id=u.id "
-                + "WHERE s.status='approved' AND u.college=? AND u.major=?",
-                college, major)
-            : SQLHelper.queryScalar(
-                "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='approved'");
         Object pending = scoped
             ? SQLHelper.queryScalar(
                 "SELECT COUNT(DISTINCT s.student_id) FROM topic_selections s "
+                + "JOIN topics t ON s.topic_id=t.id "
                 + "JOIN users u ON s.student_id=u.id "
-                + "WHERE s.status='pending' AND u.college=? AND u.major=?",
-                college, major)
+                + "WHERE s.status='pending' "
+                + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+                college, major, college, major)
             : SQLHelper.queryScalar(
                 "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='pending'");
-        int approvedCount = approved == null ? 0 : ((Number) approved).intValue();
+        int approvedCount = approvedSelectionCount(college, major);
         int pendingCount = pending == null ? 0 : ((Number) pending).intValue();
         stats.put("已选题", approvedCount);
         stats.put("待审批", pendingCount);
@@ -51,6 +60,51 @@ public class StatsDao {
         return stats;
     }
 
+    public Map<String, Integer> defenseStats(int approvedStudents) {
+        return defenseStats(approvedStudents, null, null);
+    }
+
+    public Map<String, Integer> defenseStats(int approvedStudents, String college, String major) {
+        Map<String, Integer> stats = new LinkedHashMap<String, Integer>();
+        boolean scoped = hasScope(college, major);
+        Object scored = scoped
+            ? SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT d.student_id) "
+                + "FROM defense_schedules d "
+                + "JOIN users u ON d.student_id=u.id "
+                + "JOIN topic_selections s ON s.student_id=u.id AND s.status='approved' "
+                + "JOIN topics t ON s.topic_id=t.id "
+                + "WHERE d.score IS NOT NULL "
+                + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+                college, major, college, major)
+            : SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT d.student_id) "
+                + "FROM defense_schedules d "
+                + "JOIN topic_selections s ON s.student_id=d.student_id AND s.status='approved' "
+                + "WHERE d.score IS NOT NULL");
+        Object pending = scoped
+            ? SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT d.student_id) "
+                + "FROM defense_schedules d "
+                + "JOIN users u ON d.student_id=u.id "
+                + "JOIN topic_selections s ON s.student_id=u.id AND s.status='approved' "
+                + "JOIN topics t ON s.topic_id=t.id "
+                + "WHERE d.score IS NULL "
+                + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+                college, major, college, major)
+            : SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT d.student_id) "
+                + "FROM defense_schedules d "
+                + "JOIN topic_selections s ON s.student_id=d.student_id AND s.status='approved' "
+                + "WHERE d.score IS NULL");
+        int scoredCount = scored == null ? 0 : ((Number) scored).intValue();
+        int pendingCount = pending == null ? 0 : ((Number) pending).intValue();
+        stats.put("已评分", scoredCount);
+        stats.put("待评分", pendingCount);
+        stats.put("未安排", Math.max(0, approvedStudents - scoredCount - pendingCount));
+        return stats;
+    }
+
     public List<Object[]> scoreDistribution() {
         return scoreDistribution(null, null);
     }
@@ -66,16 +120,17 @@ public class StatsDao {
             + "ELSE '60以下' END AS grade_range, COUNT(*) "
             + "FROM documents d ";
         if (scoped) {
-            sql += "JOIN users u ON d.student_id=u.id ";
+            sql += "JOIN topics t ON d.topic_id=t.id "
+                + "JOIN users u ON d.student_id=u.id ";
         }
         sql += "WHERE d.status='reviewed' AND d.score IS NOT NULL ";
         if (scoped) {
-            sql += "AND u.college=? AND u.major=? ";
+            sql += "AND t.college=? AND t.major=? AND u.college=? AND u.major=? ";
         }
         sql += "GROUP BY grade_range "
             + "ORDER BY FIELD(grade_range,'90-100','80-89','70-79','60-69','60以下')";
         List<Object[]> rows = scoped
-            ? SQLHelper.queryList(sql, college, major)
+            ? SQLHelper.queryList(sql, college, major, college, major)
             : SQLHelper.queryList(sql);
         return rows == null ? new ArrayList<Object[]>() : rows;
     }
@@ -88,9 +143,12 @@ public class StatsDao {
         boolean scoped = hasScope(college, major);
         Object val = scoped
             ? SQLHelper.queryScalar(
-                "SELECT COUNT(*) FROM documents d JOIN users u ON d.student_id=u.id "
-                + "WHERE d.doc_type=? AND d.status='reviewed' AND u.college=? AND u.major=?",
-                docType, college, major)
+                "SELECT COUNT(*) FROM documents d "
+                + "JOIN topics t ON d.topic_id=t.id "
+                + "JOIN users u ON d.student_id=u.id "
+                + "WHERE d.doc_type=? AND d.status='reviewed' "
+                + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+                docType, college, major, college, major)
             : SQLHelper.queryScalar(
                 "SELECT COUNT(*) FROM documents WHERE doc_type=? AND status='reviewed'", docType);
         return val == null ? 0 : ((Number) val).intValue();

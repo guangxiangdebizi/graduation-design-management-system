@@ -23,7 +23,7 @@
 </div>
 
 <div class="row g-3">
-  <div class="col-md-4">
+  <div class="col-lg-3 col-md-6">
     <div class="content-card">
       <h6>本专业选题情况</h6>
       <div id="chartSelection" style="height:280px;position:relative">
@@ -32,7 +32,7 @@
       </div>
     </div>
   </div>
-  <div class="col-md-4">
+  <div class="col-lg-3 col-md-6">
     <div class="content-card">
       <h6>本专业文档通过数</h6>
       <div id="chartDocPass" style="height:280px;position:relative">
@@ -41,12 +41,21 @@
       </div>
     </div>
   </div>
-  <div class="col-md-4">
+  <div class="col-lg-3 col-md-6">
     <div class="content-card">
-      <h6>本专业成绩分布</h6>
+      <h6>本专业文档成绩分布</h6>
       <div id="chartScores" style="height:280px;position:relative">
         <div id="chartScoresLoading" class="text-center py-5 text-muted">加载中...</div>
         <div id="chartScoresError" class="text-center py-5 text-danger d-none">图表加载失败</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-md-6">
+    <div class="content-card">
+      <h6>本专业答辩安排</h6>
+      <div id="chartDefense" style="height:280px;position:relative">
+        <div id="chartDefenseLoading" class="text-center py-5 text-muted">加载中...</div>
+        <div id="chartDefenseError" class="text-center py-5 text-danger d-none">图表加载失败</div>
       </div>
     </div>
   </div>
@@ -94,15 +103,22 @@
         yAxis: { type: 'value', minInterval: 1 },
         series: [{ type: 'bar', data: data.scores.values, itemStyle: { color: '#10b981' } }]
       });
+
+      var defenseData = [];
+      for (var k3 in data.defense) { defenseData.push({ name: k3, value: data.defense[k3] }); }
+      hideLoading('chartDefense');
+      echarts.init(document.getElementById('chartDefense')).setOption(pieOpt(defenseData));
     }).catch(function() {
       showError('chartSelection');
       showError('chartDocPass');
       showError('chartScores');
+      showError('chartDefense');
     });
   } catch (e) {
     showError('chartSelection');
     showError('chartDocPass');
     showError('chartScores');
+    showError('chartDefense');
   }
 })();
 </script>

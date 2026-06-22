@@ -282,9 +282,11 @@ public class SelectionDao {
     public int countApprovedStudents(String college, String major) {
         Object val = SQLHelper.queryScalar(
             "SELECT COUNT(*) FROM topic_selections s "
+            + "JOIN topics t ON s.topic_id=t.id "
             + "JOIN users u ON s.student_id=u.id "
-            + "WHERE s.status='approved' AND u.college=? AND u.major=?",
-            college, major);
+            + "WHERE s.status='approved' "
+            + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+            college, major, college, major);
         return val == null ? 0 : ((Number) val).intValue();
     }
 

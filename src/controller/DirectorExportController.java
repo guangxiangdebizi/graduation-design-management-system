@@ -41,9 +41,12 @@ public class DirectorExportController extends HttpServlet {
             + "JOIN topics t ON s.topic_id=t.id "
             + "JOIN users ut ON t.teacher_id=ut.id "
             + "LEFT JOIN defense_schedules ds ON ds.student_id=u.id "
-            + "WHERE u.role='student' AND u.college=? AND u.major=? "
+            + "WHERE u.role='student' "
+            + "AND t.college=? AND t.major=? AND u.college=? AND u.major=? "
             + "ORDER BY u.student_no");
         List<Object> params = new ArrayList<Object>();
+        params.add(scope.getCollege());
+        params.add(scope.getMajor());
         params.add(scope.getCollege());
         params.add(scope.getMajor());
         List<Object[]> rows = SQLHelper.queryList(sql.toString(), params.toArray());

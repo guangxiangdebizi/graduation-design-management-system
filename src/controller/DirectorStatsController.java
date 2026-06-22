@@ -35,15 +35,19 @@ public class DirectorStatsController extends HttpServlet {
 
         StatsDao statsDao = new StatsDao();
         int studentCount = new UserDao().countAll(criteria);
+        int approvedCount = statsDao.approvedSelectionCount(scope.getCollege(), scope.getMajor());
         Map<String, Integer> selection = statsDao.selectionStats(
             studentCount, scope.getCollege(), scope.getMajor());
         Map<String, Integer> docPass = statsDao.docPassStats(scope.getCollege(), scope.getMajor());
+        Map<String, Integer> defense = statsDao.defenseStats(
+            approvedCount, scope.getCollege(), scope.getMajor());
         List<Object[]> scores = statsDao.scoreDistribution(scope.getCollege(), scope.getMajor());
 
         PrintWriter out = response.getWriter();
         out.print("{");
         out.print("\"selection\":" + mapToJson(selection) + ",");
         out.print("\"docPass\":" + mapToJson(docPass) + ",");
+        out.print("\"defense\":" + mapToJson(defense) + ",");
         out.print("\"scores\":{\"labels\":" + labelsJson(scores) + ",\"values\":" + valuesJson(scores) + "}");
         out.print("}");
         out.flush();
