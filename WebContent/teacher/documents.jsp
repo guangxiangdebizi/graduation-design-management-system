@@ -12,6 +12,16 @@
     response.sendRedirect(request.getContextPath() + "/teacher/document.action");
     return;
   }
+  String emptyText;
+  if ("submitted".equals(statusFilter)) {
+    emptyText = "暂无待审文档";
+  } else if ("reviewed".equals(statusFilter)) {
+    emptyText = "暂无已评阅文档";
+  } else if ("rejected".equals(statusFilter)) {
+    emptyText = "暂无已退回文档";
+  } else {
+    emptyText = "暂无文档记录";
+  }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
@@ -27,12 +37,13 @@
 <div class="mb-3">
   <a href="document.action?type=<%= docType %>&status=submitted" class="btn btn-sm <%= "submitted".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>"><%= StatusUtil.label("submitted") %></a>
   <a href="document.action?type=<%= docType %>&status=reviewed" class="btn btn-sm <%= "reviewed".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>"><%= StatusUtil.label("reviewed") %></a>
+  <a href="document.action?type=<%= docType %>&status=rejected" class="btn btn-sm <%= "rejected".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>"><%= StatusUtil.label("rejected") %></a>
   <a href="document.action?type=<%= docType %>&status=all" class="btn btn-sm <%= "all".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">全部</a>
 </div>
 
 <div class="content-card">
   <% if (list.isEmpty()) { %>
-    <div class="empty-state"><div class="icon">&#128196;</div><p>暂无待审文档</p></div>
+    <div class="empty-state"><div class="icon">&#128196;</div><p><%= EscapeUtil.html(emptyText) %></p></div>
   <% } else { %>
     <table class="table-modern">
       <tr><th>学生</th><th>课题</th><th>标题</th><th>提交时间</th><th>状态</th><th>分数</th><th>操作</th></tr>
