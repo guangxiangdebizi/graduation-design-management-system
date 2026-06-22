@@ -228,10 +228,21 @@
     List<Document> myDocs = docDao.findByStudent(loginUser.getId());
     List<Announcement> announcements = annDao.findVisible(loginUser.getCollege(), loginUser.getMajor());
     DefenseSchedule defense = defDao.findByStudent(loginUser.getId());
+    String selectionStatusText = "未选题";
+    if (approved != null) {
+      selectionStatusText = "已通过";
+    } else if (!mySelections.isEmpty()) {
+      String latestStatus = mySelections.get(0).getStatus();
+      if ("pending".equals(latestStatus)) {
+        selectionStatusText = "待审核";
+      } else if ("rejected".equals(latestStatus)) {
+        selectionStatusText = "已驳回";
+      }
+    }
     SimpleDateFormat defSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <div class="stat-cards">
-  <div class="stat-card"><span class="icon">&#128221;</span><div class="label">选题状态</div><div class="value" style="font-size:1.2rem;"><%= approved != null ? "已通过" : "未选题" %></div></div>
+  <div class="stat-card"><span class="icon">&#128221;</span><div class="label">选题状态</div><div class="value" style="font-size:1.2rem;"><%= selectionStatusText %></div></div>
   <div class="stat-card"><span class="icon">&#128196;</span><div class="label">已提交文档</div><div class="value"><%= myDocs.size() %></div></div>
   <div class="stat-card"><span class="icon">&#128227;</span><div class="label">系统公告</div><div class="value"><%= announcements.size() %></div></div>
 </div>

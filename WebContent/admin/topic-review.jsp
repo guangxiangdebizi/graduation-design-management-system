@@ -23,6 +23,14 @@
   if (collegeOptions == null) collegeOptions = new LinkedHashMap<String,String>();
   if (majorGroups == null) majorGroups = new LinkedHashMap<String, Map<String, String>>();
   if (topicStatusOptions == null) topicStatusOptions = new LinkedHashMap<String,String>();
+  String emptyText;
+  if ("pending".equals(statusFilter)) {
+    emptyText = "暂无待审核课题";
+  } else if ("all".equals(statusFilter) || statusFilter.length() == 0) {
+    emptyText = "暂无课题";
+  } else {
+    emptyText = "暂无" + StatusUtil.label(statusFilter) + "课题";
+  }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
@@ -55,7 +63,7 @@
   <table class="table-modern">
     <tr><th>课题</th><th>教师</th><th>学院/专业</th><th>名额</th><th>状态</th><th>审核信息</th><th>操作</th></tr>
     <% if (topics.isEmpty()) { %>
-      <tr><td colspan="7" class="text-center text-muted py-4">暂无课题</td></tr>
+      <tr><td colspan="7" class="text-center text-muted py-4"><%= EscapeUtil.html(emptyText) %></td></tr>
     <% } else { for (Topic t : topics) { %>
       <tr>
         <td><strong><%= EscapeUtil.html(t.getTitle()) %></strong><br><span class="text-muted small"><%= EscapeUtil.html(t.getDescription()) %></span></td>

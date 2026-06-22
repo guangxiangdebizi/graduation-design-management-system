@@ -1,6 +1,6 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
 
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.PageUtil" %>
+<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.PageUtil,util.MessageContactUtil" %>
 
 <%
 
@@ -10,8 +10,6 @@
 
   MessageDao msgDao = new MessageDao();
 
-  UserDao userDao = new UserDao();
-
   String tab = request.getParameter("tab");
 
   if (tab == null) tab = "inbox";
@@ -19,6 +17,13 @@
   int viewId = 0;
 
   try { viewId = Integer.parseInt(request.getParameter("view")); } catch (Exception ignored) {}
+
+  if (viewId > 0) {
+    Message preView = msgDao.findByIdForUser(viewId, loginUser.getId());
+    if (preView != null && preView.getReceiverId() == loginUser.getId() && preView.getIsRead() == 0) {
+      msgDao.markRead(preView.getId(), loginUser.getId());
+    }
+  }
 
   int currentPageNum = PageUtil.getPage(request);
   int pageSize = PageUtil.getPageSize(request);
@@ -43,15 +48,7 @@
 
   Message viewing = viewId > 0 ? msgDao.findByIdForUser(viewId, loginUser.getId()) : null;
 
-  if (viewing != null && viewing.getReceiverId() == loginUser.getId() && viewing.getIsRead() == 0) {
-
-    msgDao.markRead(viewing.getId(), loginUser.getId());
-
-    viewing.setIsRead(1);
-
-  }
-
-  List<User> contacts = userDao.findAll((UserSearchCriteria) null);
+  List<User> contacts = MessageContactUtil.contactsFor(loginUser);
 
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 

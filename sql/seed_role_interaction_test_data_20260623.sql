@@ -33,7 +33,11 @@ INSERT INTO users(username, password, role, real_name, student_no, college, majo
 ('student84', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试驳回选题学生', '2022001084', 'ai', 'cs', '计算机科学与技术2022级交互测试班', '人工智能学部', 'student84@stu.edu', '13900001084', 1),
 ('student85', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试人工智能完整流程学生', '2022001085', 'ai', 'ai', '人工智能2022级交互测试班', '人工智能学部', 'student85@stu.edu', '13900001085', 1),
 ('student86', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试电力无课题学生', '2022001086', 'ee', 'power', '电力系统2022级交互测试班', '电气工程学部', 'student86@stu.edu', '13900001086', 1),
-('student87', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试历史无课题学生', '2022001087', 'arts', 'history', '历史学2022级交互测试班', '文科学部', 'student87@stu.edu', '13900001087', 1)
+('student87', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试历史无课题学生', '2022001087', 'arts', 'history', '历史学2022级交互测试班', '文科学部', 'student87@stu.edu', '13900001087', 1),
+('student88', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试教师审批动作学生', '2022001088', 'ai', 'cs', '计算机科学与技术2022级交互测试班', '人工智能学部', 'student88@stu.edu', '13900001088', 1),
+('student89', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试文档审核动作学生', '2022001089', 'ai', 'cs', '计算机科学与技术2022级交互测试班', '人工智能学部', 'student89@stu.edu', '13900001089', 1),
+('student90', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试消息联动学生', '2022001090', 'ai', 'cs', '计算机科学与技术2022级交互测试班', '人工智能学部', 'student90@stu.edu', '13900001090', 1),
+('student91', 'e10adc3949ba59abbe56e057f20f883e', 'student', '测试学生申请动作学生', '2022001091', 'ai', 'cs', '计算机科学与技术2022级交互测试班', '人工智能学部', 'student91@stu.edu', '13900001091', 1)
 ON DUPLICATE KEY UPDATE
 password=VALUES(password), role=VALUES(role), real_name=VALUES(real_name), college=VALUES(college),
 major=VALUES(major), class_name=VALUES(class_name), department=VALUES(department),
@@ -72,6 +76,30 @@ FROM users u JOIN users d ON d.username='director_ai_ai'
 WHERE u.username='teacher_test_ai'
   AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.title='交互测试：人工智能专业完整流程课题' AND t.teacher_id=u.id);
 
+INSERT INTO topics(title, description, teacher_id, college, major, max_students, selected_count, status, review_comment, reviewer_id, review_time)
+SELECT '交互测试：教师审批动作课题',
+       '专门用于真实前端动作测试：教师批准待审选题，不影响基础样例账号状态。',
+       u.id, 'ai', 'cs', 3, 0, 'open', '动作测试课题，准予开放。', d.id, '2026-03-18 09:30:00'
+FROM users u JOIN users d ON d.username='director_ai_cs'
+WHERE u.username='teacher_test_cs'
+  AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.title='交互测试：教师审批动作课题' AND t.teacher_id=u.id);
+
+INSERT INTO topics(title, description, teacher_id, college, major, max_students, selected_count, status, review_comment, reviewer_id, review_time)
+SELECT '交互测试：文档审核动作课题',
+       '专门用于真实前端动作测试：教师审核学生提交文档，不影响基础样例账号状态。',
+       u.id, 'ai', 'cs', 3, 0, 'open', '动作测试课题，准予开放。', d.id, '2026-03-18 09:40:00'
+FROM users u JOIN users d ON d.username='director_ai_cs'
+WHERE u.username='teacher_test_cs'
+  AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.title='交互测试：文档审核动作课题' AND t.teacher_id=u.id);
+
+INSERT INTO topics(title, description, teacher_id, college, major, max_students, selected_count, status, review_comment, reviewer_id, review_time)
+SELECT '交互测试：消息联动课题',
+       '专门用于真实前端动作测试：学生与指导教师互发站内消息。',
+       u.id, 'ai', 'cs', 3, 0, 'open', '动作测试课题，准予开放。', d.id, '2026-03-18 09:50:00'
+FROM users u JOIN users d ON d.username='director_ai_cs'
+WHERE u.username='teacher_test_cs'
+  AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.title='交互测试：消息联动课题' AND t.teacher_id=u.id);
+
 -- 5. 选题申请。
 INSERT INTO topic_selections(student_id, topic_id, status, apply_reason, review_comment, apply_time, review_time)
 SELECT s.id, t.id, 'approved', '用于完整流程测试，已通过选题。', '同意选题，进入文档阶段。', '2026-03-20 09:00:00', '2026-03-20 15:00:00'
@@ -97,6 +125,24 @@ FROM users s JOIN topics t ON t.title='交互测试：人工智能专业完整�
 WHERE s.username='student85'
   AND NOT EXISTS (SELECT 1 FROM topic_selections old WHERE old.student_id=s.id AND old.status IN ('pending','approved'));
 
+INSERT INTO topic_selections(student_id, topic_id, status, apply_reason, review_comment, apply_time, review_time)
+SELECT s.id, t.id, 'pending', '动作测试：等待教师在前端批准该选题。', NULL, '2026-03-24 09:00:00', NULL
+FROM users s JOIN topics t ON t.title='交互测试：教师审批动作课题'
+WHERE s.username='student88'
+  AND NOT EXISTS (SELECT 1 FROM topic_selections old WHERE old.student_id=s.id AND old.status IN ('pending','approved'));
+
+INSERT INTO topic_selections(student_id, topic_id, status, apply_reason, review_comment, apply_time, review_time)
+SELECT s.id, t.id, 'approved', '动作测试：已通过选题，用于文档审核。', '同意选题，进入文档审核动作测试。', '2026-03-24 09:10:00', '2026-03-24 15:00:00'
+FROM users s JOIN topics t ON t.title='交互测试：文档审核动作课题'
+WHERE s.username='student89'
+  AND NOT EXISTS (SELECT 1 FROM topic_selections old WHERE old.student_id=s.id AND old.status IN ('pending','approved'));
+
+INSERT INTO topic_selections(student_id, topic_id, status, apply_reason, review_comment, apply_time, review_time)
+SELECT s.id, t.id, 'approved', '动作测试：已通过选题，用于学生和教师互发消息。', '同意选题，进入消息动作测试。', '2026-03-24 09:20:00', '2026-03-24 15:10:00'
+FROM users s JOIN topics t ON t.title='交互测试：消息联动课题'
+WHERE s.username='student90'
+  AND NOT EXISTS (SELECT 1 FROM topic_selections old WHERE old.student_id=s.id AND old.status IN ('pending','approved'));
+
 -- 6. 文档、版本和答辩。
 INSERT INTO documents(student_id, topic_id, doc_type, title, content, file_path, status, score, feedback, submit_time, review_time, reviewer_id)
 SELECT s.id, t.id, 'proposal', '交互测试计算机完整流程开题报告', '验证开题报告已评阅状态。', CONCAT('uploads/', s.id, '/proposal.pdf'), 'reviewed', 87.00, '开题通过。', '2026-03-28 09:00:00', '2026-03-29 09:00:00', t.teacher_id
@@ -116,10 +162,16 @@ FROM users s JOIN topic_selections sel ON sel.student_id=s.id AND sel.status='ap
 WHERE s.username='student85'
   AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.student_id=s.id AND d.doc_type='proposal');
 
+INSERT INTO documents(student_id, topic_id, doc_type, title, content, file_path, status, score, feedback, submit_time, review_time, reviewer_id)
+SELECT s.id, t.id, 'proposal', '交互测试文档审核动作开题报告', '动作测试：等待教师在前端通过并评分。', CONCAT('uploads/', s.id, '/proposal.pdf'), 'submitted', NULL, NULL, '2026-03-28 11:00:00', NULL, NULL
+FROM users s JOIN topic_selections sel ON sel.student_id=s.id AND sel.status='approved' JOIN topics t ON t.id=sel.topic_id
+WHERE s.username='student89'
+  AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.student_id=s.id AND d.doc_type='proposal');
+
 INSERT INTO document_versions(document_id, version_no, title, content, file_path, submit_time)
 SELECT d.id, 1, d.title, d.content, REPLACE(d.file_path, '.pdf', '_v1.pdf'), DATE_SUB(d.submit_time, INTERVAL 1 DAY)
 FROM documents d JOIN users s ON s.id=d.student_id
-WHERE s.username IN ('student81','student85')
+WHERE s.username IN ('student81','student85','student89')
   AND NOT EXISTS (SELECT 1 FROM document_versions v WHERE v.document_id=d.id AND v.version_no=1);
 
 INSERT INTO defense_schedules(student_id, defense_time, room, group_name, score, comment)
@@ -153,6 +205,35 @@ SELECT s.id, t.id, '交互测试选题咨询', '老师您好，我的选题还�
 FROM users s JOIN users t ON s.username='student82' AND t.username='teacher_test_cs'
 WHERE NOT EXISTS (SELECT 1 FROM messages m WHERE m.sender_id=s.id AND m.receiver_id=t.id AND m.title='交互测试选题咨询');
 
+INSERT INTO messages(sender_id, receiver_id, title, content, is_read)
+SELECT t.id, s.id, '交互测试消息动作待读', '用于验证学生打开消息详情后已读状态变化。', 0
+FROM users t JOIN users s ON t.username='teacher_test_cs' AND s.username='student90'
+WHERE NOT EXISTS (SELECT 1 FROM messages m WHERE m.sender_id=t.id AND m.receiver_id=s.id AND m.title='交互测试消息动作待读');
+
+-- 8. 动作测试账号恢复到可重复交互的基准状态。
+UPDATE topic_selections s JOIN users u ON u.id=s.student_id
+SET s.status='pending', s.review_comment=NULL, s.review_time=NULL
+WHERE u.username='student88';
+
+UPDATE documents d JOIN users u ON u.id=d.student_id
+SET d.status='submitted', d.score=NULL, d.feedback=NULL, d.review_time=NULL, d.reviewer_id=NULL
+WHERE u.username='student89' AND d.doc_type='proposal';
+
+UPDATE messages m JOIN users r ON r.id=m.receiver_id
+SET m.is_read=0
+WHERE r.username='student90' AND m.title='交互测试消息动作待读';
+
+DELETE m FROM messages m
+LEFT JOIN users s ON s.id=m.sender_id
+LEFT JOIN users r ON r.id=m.receiver_id
+WHERE m.title LIKE 'action-test-%'
+   OR (m.title IN ('选题审批结果','文档审核结果')
+       AND r.username IN ('student88','student89'));
+
+DELETE sel FROM topic_selections sel
+JOIN users u ON u.id=sel.student_id
+WHERE u.username='student91';
+
 INSERT INTO operation_logs(user_id, action, target, detail)
 SELECT u.id, 'SEED_ROLE_INTERACTION', 'demo_data', '补充四类角色前端交互测试数据'
 FROM users u WHERE u.username='admin'
@@ -170,13 +251,14 @@ SET selected_count = (
 UPDATE topics
 SET status = CASE
     WHEN status = 'pending' THEN 'pending'
+    WHEN status = 'rejected' THEN 'rejected'
     WHEN selected_count >= max_students THEN 'closed'
     ELSE 'open'
 END;
 
 SELECT
-  (SELECT COUNT(*) FROM users WHERE username IN ('admin_audit','admin_ops','director_ee_power','director_arts_history','teacher_test_cs','teacher_test_ai','teacher_empty_cs','student81','student82','student83','student84','student85','student86','student87')) AS test_users,
+  (SELECT COUNT(*) FROM users WHERE username IN ('admin_audit','admin_ops','director_ee_power','director_arts_history','teacher_test_cs','teacher_test_ai','teacher_empty_cs','student81','student82','student83','student84','student85','student86','student87','student88','student89','student90','student91')) AS test_users,
   (SELECT COUNT(*) FROM topics WHERE title LIKE '交互测试：%') AS test_topics,
-  (SELECT COUNT(*) FROM topic_selections s JOIN users u ON s.student_id=u.id WHERE u.username BETWEEN 'student81' AND 'student87') AS test_selections,
-  (SELECT COUNT(*) FROM documents d JOIN users u ON d.student_id=u.id WHERE u.username IN ('student81','student85')) AS test_documents,
+  (SELECT COUNT(*) FROM topic_selections s JOIN users u ON s.student_id=u.id WHERE u.username BETWEEN 'student81' AND 'student90') AS test_selections,
+  (SELECT COUNT(*) FROM documents d JOIN users u ON d.student_id=u.id WHERE u.username IN ('student81','student85','student89')) AS test_documents,
   (SELECT COUNT(*) FROM defense_schedules d JOIN users u ON d.student_id=u.id WHERE u.username IN ('student81','student85')) AS test_defenses;
