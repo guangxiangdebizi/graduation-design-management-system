@@ -9,11 +9,28 @@ import util.DictionaryUtil;
 
 public class StatsDao {
     public Map<String, Integer> selectionStats(int totalStudents) {
+        return selectionStats(totalStudents, null, null);
+    }
+
+    public Map<String, Integer> selectionStats(int totalStudents, String college, String major) {
         Map<String, Integer> stats = new LinkedHashMap<String, Integer>();
-        Object approved = SQLHelper.queryScalar(
-            "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='approved'");
-        Object pending = SQLHelper.queryScalar(
-            "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='pending'");
+        boolean scoped = hasScope(college, major);
+        Object approved = scoped
+            ? SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT s.student_id) FROM topic_selections s "
+                + "JOIN users u ON s.student_id=u.id "
+                + "WHERE s.status='approved' AND u.college=? AND u.major=?",
+                college, major)
+            : SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='approved'");
+        Object pending = scoped
+            ? SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT s.student_id) FROM topic_selections s "
+                + "JOIN users u ON s.student_id=u.id "
+                + "WHERE s.status='pending' AND u.college=? AND u.major=?",
+                college, major)
+            : SQLHelper.queryScalar(
+                "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='pending'");
         int approvedCount = approved == null ? 0 : ((Number) approved).intValue();
         int pendingCount = pending == null ? 0 : ((Number) pending).intValue();
         stats.put("已选题", approvedCount);
@@ -23,29 +40,64 @@ public class StatsDao {
     }
 
     public Map<String, Integer> docPassStats() {
+        return docPassStats(null, null);
+    }
+
+    public Map<String, Integer> docPassStats(String college, String major) {
         Map<String, Integer> stats = new LinkedHashMap<String, Integer>();
         for (Map.Entry<String, String> e : DictionaryUtil.items("document_type").entrySet()) {
-            stats.put(e.getValue(), countReviewed(e.getKey()));
+            stats.put(e.getValue(), countReviewed(e.getKey(), college, major));
         }
         return stats;
     }
 
     public List<Object[]> scoreDistribution() {
-        List<Object[]> rows = SQLHelper.queryList(
+        return scoreDistribution(null, null);
+    }
+
+    public List<Object[]> scoreDistribution(String college, String major) {
+        boolean scoped = hasScope(college, major);
+        String sql =
             "SELECT CASE "
             + "WHEN score>=90 THEN '90-100' "
             + "WHEN score>=80 THEN '80-89' "
             + "WHEN score>=70 THEN '70-79' "
             + "WHEN score>=60 THEN '60-69' "
             + "ELSE '60以下' END AS grade_range, COUNT(*) "
-            + "FROM documents WHERE status='reviewed' AND score IS NOT NULL GROUP BY grade_range "
-            + "ORDER BY FIELD(grade_range,'90-100','80-89','70-79','60-69','60以下')");
+            + "FROM documents d ";
+        if (scoped) {
+            sql += "JOIN users u ON d.student_id=u.id ";
+        }
+        sql += "WHERE d.status='reviewed' AND d.score IS NOT NULL ";
+        if (scoped) {
+            sql += "AND u.college=? AND u.major=? ";
+        }
+        sql += "GROUP BY grade_range "
+            + "ORDER BY FIELD(grade_range,'90-100','80-89','70-79','60-69','60以下')";
+        List<Object[]> rows = scoped
+            ? SQLHelper.queryList(sql, college, major)
+            : SQLHelper.queryList(sql);
         return rows == null ? new ArrayList<Object[]>() : rows;
     }
 
     private int countReviewed(String docType) {
-        Object val = SQLHelper.queryScalar(
-            "SELECT COUNT(*) FROM documents WHERE doc_type=? AND status='reviewed'", docType);
+        return countReviewed(docType, null, null);
+    }
+
+    private int countReviewed(String docType, String college, String major) {
+        boolean scoped = hasScope(college, major);
+        Object val = scoped
+            ? SQLHelper.queryScalar(
+                "SELECT COUNT(*) FROM documents d JOIN users u ON d.student_id=u.id "
+                + "WHERE d.doc_type=? AND d.status='reviewed' AND u.college=? AND u.major=?",
+                docType, college, major)
+            : SQLHelper.queryScalar(
+                "SELECT COUNT(*) FROM documents WHERE doc_type=? AND status='reviewed'", docType);
         return val == null ? 0 : ((Number) val).intValue();
+    }
+
+    private boolean hasScope(String college, String major) {
+        return college != null && !college.trim().isEmpty()
+            && major != null && !major.trim().isEmpty();
     }
 }

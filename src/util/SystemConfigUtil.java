@@ -45,4 +45,38 @@ public class SystemConfigUtil {
         }
         return set;
     }
+
+    public static boolean isEnabled(String key) {
+        String value = getString(key, "0");
+        return isTruthy(value);
+    }
+
+    public static boolean isEnabled(String key, boolean defaultValue) {
+        String value = getString(key, defaultValue ? "1" : "0");
+        return isTruthy(value);
+    }
+
+    private static boolean isTruthy(String value) {
+        return "1".equals(value) || "true".equalsIgnoreCase(value)
+            || "on".equalsIgnoreCase(value) || "yes".equalsIgnoreCase(value);
+    }
+
+    public static int update(String key, String value) {
+        return SQLHelper.executeUpdate(
+            "UPDATE system_configs SET config_value=? WHERE config_key=?", value, key);
+    }
+
+    public static int upsert(String key, String value, String description) {
+        return SQLHelper.executeUpdate(
+            "INSERT INTO system_configs(config_key,config_value,description) VALUES(?,?,?) "
+            + "ON DUPLICATE KEY UPDATE config_value=VALUES(config_value),description=VALUES(description)",
+            key, value, description);
+    }
+
+    public static int insertDefault(String key, String value, String description) {
+        return SQLHelper.executeUpdate(
+            "INSERT INTO system_configs(config_key,config_value,description) VALUES(?,?,?) "
+            + "ON DUPLICATE KEY UPDATE description=VALUES(description)",
+            key, value, description);
+    }
 }

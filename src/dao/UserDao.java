@@ -1,8 +1,12 @@
 package dao;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import bean.User;
+import bean.UserSearchCriteria;
 import dbutil.SQLHelper;
 import util.PasswordUtil;
 import util.DateUtil;
@@ -41,16 +45,16 @@ public class UserDao {
     }
 
     public List<User> findAll(String role, String college) {
+        UserSearchCriteria criteria = new UserSearchCriteria();
+        criteria.setRole(role);
+        criteria.setCollege(college);
+        return findAll(criteria);
+    }
+
+    public List<User> findAll(UserSearchCriteria criteria) {
         StringBuilder sql = new StringBuilder("SELECT " + SELECT_COLS + " FROM users WHERE 1=1");
-        List<Object> params = new ArrayList<>();
-        if (role != null && !role.isEmpty()) {
-            sql.append(" AND role=?");
-            params.add(role);
-        }
-        if (college != null && !college.isEmpty()) {
-            sql.append(" AND college=?");
-            params.add(college);
-        }
+        List<Object> params = new ArrayList<Object>();
+        appendCriteria(sql, params, criteria);
         sql.append(" ORDER BY id");
         List<Object[]> rows = params.isEmpty() ?
             SQLHelper.queryList(sql.toString()) :
@@ -67,16 +71,16 @@ public class UserDao {
     }
 
     public List<User> findAllPaged(String role, String college, int page, int pageSize) {
+        UserSearchCriteria criteria = new UserSearchCriteria();
+        criteria.setRole(role);
+        criteria.setCollege(college);
+        return findAllPaged(criteria, page, pageSize);
+    }
+
+    public List<User> findAllPaged(UserSearchCriteria criteria, int page, int pageSize) {
         StringBuilder sql = new StringBuilder("SELECT " + SELECT_COLS + " FROM users WHERE 1=1");
-        List<Object> params = new ArrayList<>();
-        if (role != null && !role.isEmpty()) {
-            sql.append(" AND role=?");
-            params.add(role);
-        }
-        if (college != null && !college.isEmpty()) {
-            sql.append(" AND college=?");
-            params.add(college);
-        }
+        List<Object> params = new ArrayList<Object>();
+        appendCriteria(sql, params, criteria);
         sql.append(" ORDER BY id LIMIT ? OFFSET ?");
         params.add(pageSize);
         params.add(PageUtil.offset(page, pageSize));
@@ -89,16 +93,16 @@ public class UserDao {
     }
 
     public int countAll(String role, String college) {
+        UserSearchCriteria criteria = new UserSearchCriteria();
+        criteria.setRole(role);
+        criteria.setCollege(college);
+        return countAll(criteria);
+    }
+
+    public int countAll(UserSearchCriteria criteria) {
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM users WHERE 1=1");
-        List<Object> params = new ArrayList<>();
-        if (role != null && !role.isEmpty()) {
-            sql.append(" AND role=?");
-            params.add(role);
-        }
-        if (college != null && !college.isEmpty()) {
-            sql.append(" AND college=?");
-            params.add(college);
-        }
+        List<Object> params = new ArrayList<Object>();
+        appendCriteria(sql, params, criteria);
         Object val = params.isEmpty() ?
             SQLHelper.queryScalar(sql.toString()) :
             SQLHelper.queryScalar(sql.toString(), params.toArray());
@@ -141,6 +145,26 @@ public class UserDao {
         return PasswordUtil.matches(password, user.getPassword());
     }
 
+    public boolean validatePassword(int userId, String password) {
+        User user = findById(userId);
+        if (user == null || user.getStatus() != 1) {
+            return false;
+        }
+        return PasswordUtil.matches(password, user.getPassword());
+    }
+
+    public int updateProfile(int id, String email, String phone) {
+        return SQLHelper.executeUpdate(
+            "UPDATE users SET email=?,phone=? WHERE id=?",
+            email, phone, id);
+    }
+
+    public int updatePassword(int id, String password) {
+        return SQLHelper.executeUpdate(
+            "UPDATE users SET password=? WHERE id=?",
+            PasswordUtil.hash(password), id);
+    }
+
     public int countByRole(String role) {
         Object val = SQLHelper.queryScalar("SELECT COUNT(*) FROM users WHERE role=?", role);
         return val == null ? 0 : ((Number) val).intValue();
@@ -161,6 +185,97 @@ public class UserDao {
         Object val = SQLHelper.queryScalar(
             "SELECT 1 FROM users WHERE username=? AND id<>?", username, excludeId);
         return val != null;
+    }
+
+    public boolean existsByStudentNoExcludeId(String studentNo, int excludeId) {
+        if (studentNo == null || studentNo.trim().isEmpty()) {
+            return false;
+        }
+        Object val = SQLHelper.queryScalar(
+            "SELECT 1 FROM users WHERE student_no=? AND id<>?", studentNo, excludeId);
+        return val != null;
+    }
+
+    public List<Integer> findStudentIdsForReset(UserSearchCriteria criteria) {
+        if (criteria != null && criteria.getRole() != null
+                && !"student".equals(criteria.getRole())) {
+            return Collections.emptyList();
+        }
+        StringBuilder sql = new StringBuilder("SELECT id FROM users WHERE role='student'");
+        List<Object> params = new ArrayList<Object>();
+        appendCriteriaExceptRole(sql, params, criteria);
+        sql.append(" ORDER BY id");
+        List<Object[]> rows = params.isEmpty() ?
+            SQLHelper.queryList(sql.toString()) :
+            SQLHelper.queryList(sql.toString(), params.toArray());
+        List<Integer> ids = new ArrayList<Integer>();
+        for (Object[] row : rows) {
+            ids.add(((Number) row[0]).intValue());
+        }
+        return ids;
+    }
+
+    public int resetStudentPasswords(List<Integer> ids, String newPassword) {
+        if (ids == null || ids.isEmpty() || newPassword == null || newPassword.isEmpty()) {
+            return 0;
+        }
+        Set<Integer> uniqueIds = new LinkedHashSet<Integer>(ids);
+        StringBuilder sql = new StringBuilder("UPDATE users SET password=? WHERE role='student' AND id IN (");
+        List<Object> params = new ArrayList<Object>();
+        params.add(PasswordUtil.hash(newPassword));
+        int i = 0;
+        for (Integer id : uniqueIds) {
+            if (id == null) {
+                continue;
+            }
+            if (i++ > 0) {
+                sql.append(",");
+            }
+            sql.append("?");
+            params.add(id);
+        }
+        if (params.size() == 1) {
+            return 0;
+        }
+        sql.append(")");
+        return SQLHelper.executeUpdate(sql.toString(), params.toArray());
+    }
+
+    private void appendCriteria(StringBuilder sql, List<Object> params, UserSearchCriteria criteria) {
+        if (criteria == null) {
+            return;
+        }
+        if (criteria.getRole() != null) {
+            sql.append(" AND role=?");
+            params.add(criteria.getRole());
+        }
+        appendCriteriaExceptRole(sql, params, criteria);
+    }
+
+    private void appendCriteriaExceptRole(StringBuilder sql, List<Object> params, UserSearchCriteria criteria) {
+        if (criteria == null) {
+            return;
+        }
+        if (criteria.getCollege() != null) {
+            sql.append(" AND college=?");
+            params.add(criteria.getCollege());
+        }
+        if (criteria.getMajor() != null) {
+            sql.append(" AND major=?");
+            params.add(criteria.getMajor());
+        }
+        if (criteria.getClassName() != null) {
+            sql.append(" AND class_name LIKE ?");
+            params.add("%" + criteria.getClassName() + "%");
+        }
+        if (criteria.getStudentNo() != null) {
+            sql.append(" AND student_no LIKE ?");
+            params.add("%" + criteria.getStudentNo() + "%");
+        }
+        if (criteria.getRealName() != null) {
+            sql.append(" AND real_name LIKE ?");
+            params.add("%" + criteria.getRealName() + "%");
+        }
     }
 
     private User mapRow(Object[] row) {

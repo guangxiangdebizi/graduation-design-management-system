@@ -1,8 +1,6 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.User" %>
 <%
   request.setAttribute("pageTitle", "数据统计");
-  User loginUser = (User) session.getAttribute("loginUser");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
@@ -11,7 +9,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div></div>
-  <a href="../admin/export.action" class="btn btn-success btn-sm">导出成绩 Excel</a>
+  <a href="../admin/export.action" class="btn btn-success btn-sm">导出成绩 Excel</a>
 </div>
 
 <div class="row g-3">
@@ -56,7 +54,7 @@
     if (el) el.classList.remove('d-none');
   }
   try {
-    fetch('../admin/stats.action').then(function(r) {
+    fetch('../admin/stats.action').then(function(r) {
       if (!r.ok) throw new Error('fetch failed');
       return r.json();
     }).then(function(data) {

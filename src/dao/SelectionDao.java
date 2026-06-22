@@ -10,6 +10,7 @@ import bean.TopicSelection;
 import dbutil.SQLHelper;
 import util.DateUtil;
 import util.PageUtil;
+import util.SystemSwitchUtil;
 
 public class SelectionDao {
     private static final String SELECT_SQL =
@@ -78,15 +79,24 @@ public class SelectionDao {
             conn.setAutoCommit(false);
 
             // Serialize all applications for one student.
+            String studentCollege;
+            String studentMajor;
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT role,status FROM users WHERE id=? FOR UPDATE")) {
+                    "SELECT role,status,college,major FROM users WHERE id=? FOR UPDATE")) {
                 ps.setInt(1, studentId);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next() || !"student".equals(rs.getString(1)) || rs.getInt(2) != 1) {
                         conn.rollback();
                         return 0;
                     }
+                    studentCollege = rs.getString(3);
+                    studentMajor = rs.getString(4);
                 }
+            }
+
+            if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION)) {
+                conn.rollback();
+                return -3;
             }
 
             try (PreparedStatement ps = conn.prepareStatement(
@@ -102,13 +112,19 @@ public class SelectionDao {
             }
 
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT status,max_students,selected_count FROM topics WHERE id=? FOR UPDATE")) {
+                    "SELECT status,max_students,selected_count,college,major FROM topics WHERE id=? FOR UPDATE")) {
                 ps.setInt(1, topicId);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next() || !"open".equals(rs.getString(1))
                             || rs.getInt(3) >= rs.getInt(2)) {
                         conn.rollback();
                         return -2;
+                    }
+                    String topicCollege = rs.getString(4);
+                    String topicMajor = rs.getString(5);
+                    if (!same(studentCollege, topicCollege) || !same(studentMajor, topicMajor)) {
+                        conn.rollback();
+                        return -4;
                     }
                 }
             }
@@ -263,6 +279,15 @@ public class SelectionDao {
         return val == null ? 0 : ((Number) val).intValue();
     }
 
+    public int countApprovedStudents(String college, String major) {
+        Object val = SQLHelper.queryScalar(
+            "SELECT COUNT(*) FROM topic_selections s "
+            + "JOIN users u ON s.student_id=u.id "
+            + "WHERE s.status='approved' AND u.college=? AND u.major=?",
+            college, major);
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
     private List<TopicSelection> mapList(List<Object[]> rows) {
         List<TopicSelection> list = new ArrayList<TopicSelection>();
         for (Object[] row : rows) {
@@ -305,5 +330,12 @@ public class SelectionDao {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    private boolean same(String left, String right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.equals(right);
     }
 }

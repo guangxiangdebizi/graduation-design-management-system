@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS operation_logs;
 DROP TABLE IF EXISTS document_versions;
 DROP TABLE IF EXISTS defense_schedules;
+DROP TABLE IF EXISTS file_templates;
 DROP TABLE IF EXISTS documents;
 DROP TABLE IF EXISTS topic_selections;
 DROP TABLE IF EXISTS announcements;
@@ -55,10 +56,10 @@ CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(128) NOT NULL,
-    role ENUM('admin','teacher','student') NOT NULL,
+    role ENUM('admin','director','teacher','student') NOT NULL,
     real_name VARCHAR(50) NOT NULL,
     student_no VARCHAR(20) DEFAULT NULL UNIQUE,
-    college VARCHAR(50) DEFAULT NULL COMMENT '学院代码: cs=计算机学院, sw=软件学院, ee=电气学院, ai=人工智能学部, ba=经管学院, arts=文科学部, science=理学部',
+    college VARCHAR(50) DEFAULT NULL COMMENT '学院/学部代码',
     major VARCHAR(50) DEFAULT NULL COMMENT '专业代码',
     class_name VARCHAR(50) DEFAULT NULL COMMENT '班级',
     department VARCHAR(100) DEFAULT NULL COMMENT '保留字段，兼容旧数据',
@@ -74,9 +75,13 @@ CREATE TABLE topics (
     description TEXT,
     teacher_id INT NOT NULL,
     college VARCHAR(50) DEFAULT NULL COMMENT '课题所属学院',
+    major VARCHAR(50) DEFAULT NULL COMMENT '课题所属专业',
     max_students INT DEFAULT 1,
     selected_count INT DEFAULT 0,
-    status ENUM('open','closed') DEFAULT 'open',
+    status ENUM('pending','open','closed','rejected') DEFAULT 'pending',
+    review_comment TEXT DEFAULT NULL,
+    reviewer_id INT DEFAULT NULL,
+    review_time DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (teacher_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -125,6 +130,9 @@ CREATE TABLE announcements (
     content TEXT NOT NULL,
     publisher_id INT NOT NULL,
     is_top TINYINT DEFAULT 0,
+    scope_type ENUM('global','college','major') DEFAULT 'global',
+    college VARCHAR(50) DEFAULT NULL,
+    major VARCHAR(50) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (publisher_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -177,44 +185,60 @@ CREATE TABLE messages (
     FOREIGN KEY (receiver_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE file_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    template_name VARCHAR(200) NOT NULL,
+    doc_type VARCHAR(50) DEFAULT NULL,
+    description TEXT,
+    file_path VARCHAR(500) NOT NULL,
+    original_filename VARCHAR(255) DEFAULT NULL,
+    file_size BIGINT DEFAULT 0,
+    uploader_id INT NOT NULL,
+    status TINYINT DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (uploader_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO colleges(code, name, sort_order, status) VALUES
-('cs', '计算机学院', 10, 1),
-('sw', '软件学院', 20, 1),
-('ee', '电气学院', 30, 1),
-('ai', '人工智能学部', 40, 1),
-('ba', '经管学院', 50, 1),
-('arts', '文科学部', 60, 1),
-('science', '理学部', 70, 1);
+('ai', '人工智能学部', 10, 1),
+('ba', '经管学院', 20, 1),
+('arts', '文科学部', 30, 1),
+('ee', '电气工程学部', 40, 1),
+('mech_energy', '能源与机械动力学院', 50, 1),
+('env_chem', '环境与化学工程学院', 60, 1);
 
 INSERT INTO majors(college_code, major_code, major_name, sort_order, status) VALUES
-('cs', 'cs', '计算机科学与技术', 10, 1),
-('cs', 'cy', '软件工程', 20, 1),
-('cs', 'is', '信息安全', 30, 1),
-('cs', 'ai', '人工智能', 40, 1),
-('sw', 'sw', '软件工程', 10, 1),
-('sw', 'bigdata', '数据科学与大数据技术', 20, 1),
+('ai', 'cs', '计算机科学与技术', 10, 1),
+('ai', 'se', '软件工程', 20, 1),
+('ai', 'ds', '数据科学与大数据技术', 30, 1),
+('ai', 'ai', '人工智能', 40, 1),
 ('ee', 'ee', '电气工程及其自动化', 10, 1),
 ('ee', 'auto', '自动化', 20, 1),
 ('ee', 'eie', '电子信息工程', 30, 1),
-('ai', 'ai', '人工智能', 10, 1),
-('ai', 'robot', '机器人工程', 20, 1),
 ('ba', 'ba', '工商管理', 10, 1),
 ('ba', 'acc', '会计学', 20, 1),
 ('ba', 'ec', '电子商务', 30, 1),
 ('arts', 'chinese', '汉语言文学', 10, 1),
 ('arts', 'eng', '英语', 20, 1),
 ('arts', 'law', '法学', 30, 1),
-('science', 'math', '数学与应用数学', 10, 1),
-('science', 'phys', '物理学', 20, 1);
+('mech_energy', 'energy', '能源与动力工程', 10, 1),
+('mech_energy', 'mech', '机械设计制造及其自动化', 20, 1),
+('mech_energy', 'vehicle', '车辆工程', 30, 1),
+('env_chem', 'env', '环境工程', 10, 1),
+('env_chem', 'chem', '应用化学', 20, 1),
+('env_chem', 'material', '材料科学与工程', 30, 1);
 
 INSERT INTO dictionary_items(dict_type, item_code, item_label, sort_order, status) VALUES
 ('role', 'admin', '管理员', 10, 1),
+('role', 'director', '系主任', 15, 1),
 ('role', 'teacher', '教师', 20, 1),
 ('role', 'student', '学生', 30, 1),
 ('user_status', '1', '正常', 10, 1),
 ('user_status', '0', '禁用', 20, 1),
+('topic_status', 'pending', '待审核', 5, 1),
 ('topic_status', 'open', '开放选题', 10, 1),
 ('topic_status', 'closed', '关闭选题', 20, 1),
+('topic_status', 'rejected', '已驳回', 30, 1),
 ('document_type', 'proposal', '开题报告', 10, 1),
 ('document_type', 'midterm', '中期检查', 20, 1),
 ('document_type', 'final', '终稿', 30, 1),
@@ -246,30 +270,42 @@ INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('validation.password_min_length', '6', '密码最小长度'),
 ('validation.student_no_regex', '^[0-9]{5,20}$', '学号校验正则'),
 ('validation.phone_regex', '^1[3-9]\\d{9}$', '手机号校验正则'),
-('validation.email_regex', '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$', '邮箱校验正则');
+('validation.email_regex', '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$', '邮箱校验正则'),
+('switch.topic_submit', '1', '教师出题开关'),
+('switch.selection', '1', '学生选题开关'),
+('switch.selection_round1', '1', '第一轮选题开关'),
+('switch.selection_round2', '0', '第二轮选题开关'),
+('switch.upload_proposal', '1', '开题报告上传开关'),
+('switch.upload_midterm', '1', '中期报告上传开关'),
+('switch.upload_final', '1', '终稿上传开关');
 
 -- 密码: admin123 / 123456 (MD5)
 INSERT INTO users (username, password, role, real_name, student_no, college, major, class_name, department, email, phone) VALUES
 ('admin', '0192023a7bbd73250516f069df18b500', 'admin', '系统管理员', NULL, NULL, NULL, NULL, '教务处', 'admin@school.edu', '13800000001'),
-('teacher01', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '张教授', NULL, 'cs', 'cs', NULL, '计算机学院', 'zhang@school.edu', '13800000002'),
-('teacher02', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '李副教授', NULL, 'ee', 'ee', NULL, '电气学院', 'li@school.edu', '13800000003'),
-('student01', 'e10adc3949ba59abbe56e057f20f883e', 'student', '王小明', '2022001001', 'cs', 'cs', '计算机科学与技术2022级1班', '计算机学院', 'wang@stu.edu', '13900000001'),
-('student02', 'e10adc3949ba59abbe56e057f20f883e', 'student', '刘小红', '2022001002', 'cs', 'cy', '软件工程2022级1班', '计算机学院', 'liu@stu.edu', '13900000002'),
-('student03', 'e10adc3949ba59abbe56e057f20f883e', 'student', '陈小刚', '2022001003', 'sw', 'sw', '软件工程2022级2班', '软件学院', 'chen@stu.edu', '13900000003'),
-('student04', 'e10adc3949ba59abbe56e057f20f883e', 'student', '赵小芳', '2022001004', 'ee', 'ee', '电气工程及其自动化2022级1班', '电气学院', 'zhao@stu.edu', '13900000004'),
+('teacher01', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '张教授', NULL, 'ai', 'cs', NULL, '人工智能学部', 'zhang@school.edu', '13800000002'),
+('teacher02', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '李副教授', NULL, 'ee', 'ee', NULL, '电气工程学部', 'li@school.edu', '13800000003'),
+('student01', 'e10adc3949ba59abbe56e057f20f883e', 'student', '王小明', '2022001001', 'ai', 'cs', '计算机科学与技术2022级1班', '人工智能学部', 'wang@stu.edu', '13900000001'),
+('student02', 'e10adc3949ba59abbe56e057f20f883e', 'student', '刘小红', '2022001002', 'ai', 'se', '软件工程2022级1班', '人工智能学部', 'liu@stu.edu', '13900000002'),
+('student03', 'e10adc3949ba59abbe56e057f20f883e', 'student', '陈小刚', '2022001003', 'ai', 'se', '软件工程2022级2班', '人工智能学部', 'chen@stu.edu', '13900000003'),
+('student04', 'e10adc3949ba59abbe56e057f20f883e', 'student', '赵小芳', '2022001004', 'ee', 'ee', '电气工程及其自动化2022级1班', '电气工程学部', 'zhao@stu.edu', '13900000004'),
 ('student05', 'e10adc3949ba59abbe56e057f20f883e', 'student', '孙小亮', '2022001005', 'ai', 'ai', '人工智能2022级1班', '人工智能学部', 'sun@stu.edu', '13900000005'),
 ('student06', 'e10adc3949ba59abbe56e057f20f883e', 'student', '周小丽', '2022001006', 'ba', 'ba', '工商管理2022级1班', '经管学院', 'zhou@stu.edu', '13900000006'),
 ('student07', 'e10adc3949ba59abbe56e057f20f883e', 'student', '吴小强', '2022001007', 'arts', 'chinese', '汉语言文学2022级1班', '文科学部', 'wu@stu.edu', '13900000007'),
-('student08', 'e10adc3949ba59abbe56e057f20f883e', 'student', '郑小华', '2022001008', 'science', 'math', '数学与应用数学2022级1班', '理学部', 'zheng@stu.edu', '13900000008');
+('student08', 'e10adc3949ba59abbe56e057f20f883e', 'student', '郑小华', '2022001008', 'mech_energy', 'mech', '机械设计制造及其自动化2022级1班', '能源与机械动力学院', 'zheng@stu.edu', '13900000008'),
+('director_ai_cs', 'e10adc3949ba59abbe56e057f20f883e', 'director', '计算机科学与技术系主任', NULL, 'ai', 'cs', NULL, '人工智能学部', 'director_ai_cs@school.edu', '13800000011'),
+('director_ai_se', 'e10adc3949ba59abbe56e057f20f883e', 'director', '软件工程系主任', NULL, 'ai', 'se', NULL, '人工智能学部', 'director_ai_se@school.edu', '13800000012'),
+('director_ai_ds', 'e10adc3949ba59abbe56e057f20f883e', 'director', '数据科学与大数据技术系主任', NULL, 'ai', 'ds', NULL, '人工智能学部', 'director_ai_ds@school.edu', '13800000013'),
+('director_ai_ai', 'e10adc3949ba59abbe56e057f20f883e', 'director', '人工智能系主任', NULL, 'ai', 'ai', NULL, '人工智能学部', 'director_ai_ai@school.edu', '13800000014'),
+('director01', 'e10adc3949ba59abbe56e057f20f883e', 'director', '人工智能学部系主任', NULL, 'ai', 'ai', NULL, '人工智能学部', 'director@school.edu', '13800000009');
 
-INSERT INTO topics (title, description, teacher_id, college, max_students, selected_count, status) VALUES
-('基于JSP的毕业设计管理系统', '设计并实现一套完整的毕业设计全流程管理系统，包含选题、文档提交与审核等功能。', 2, 'cs', 3, 1, 'open'),
-('基于深度学习的图像识别系统', '使用卷积神经网络实现常见物体识别，并提供Web展示界面。', 2, 'cs', 2, 1, 'open'),
-('校园二手交易平台', '面向在校学生的C2C交易平台，支持商品发布、搜索与在线沟通。', 2, 'cs', 2, 0, 'open'),
-('智能图书推荐系统', '基于协同过滤算法为用户推荐图书，分析用户借阅行为。', 3, 'ee', 2, 1, 'open'),
-('电气设备远程监控系统', '设计并实现基于物联网的电气设备远程监控与故障诊断系统。', 3, 'ee', 2, 0, 'open'),
-('智能客服机器人设计与实现', '基于自然语言处理技术实现智能客服对话系统。', 3, 'ai', 2, 0, 'open'),
-('企业财务管理系统', '面向中小企业的财务收支管理与报表分析系统。', 3, 'ba', 2, 0, 'open');
+INSERT INTO topics (title, description, teacher_id, college, major, max_students, selected_count, status) VALUES
+('基于JSP的毕业设计管理系统', '设计并实现一套完整的毕业设计全流程管理系统，包含选题、文档提交与审核等功能。', 2, 'ai', 'cs', 3, 1, 'open'),
+('基于深度学习的图像识别系统', '使用卷积神经网络实现常见物体识别，并提供Web展示界面。', 2, 'ai', 'ai', 2, 1, 'open'),
+('校园二手交易平台', '面向在校学生的C2C交易平台，支持商品发布、搜索与在线沟通。', 2, 'ai', 'se', 2, 0, 'open'),
+('智能图书推荐系统', '基于协同过滤算法为用户推荐图书，分析用户借阅行为。', 3, 'ee', 'ee', 2, 1, 'open'),
+('电气设备远程监控系统', '设计并实现基于物联网的电气设备远程监控与故障诊断系统。', 3, 'ee', 'auto', 2, 0, 'open'),
+('智能客服机器人设计与实现', '基于自然语言处理技术实现智能客服对话系统。', 2, 'ai', 'ai', 2, 0, 'open'),
+('企业财务管理系统', '面向中小企业的财务收支管理与报表分析系统。', 3, 'ba', 'ba', 2, 0, 'open');
 
 INSERT INTO topic_selections (student_id, topic_id, status, apply_reason, review_comment, apply_time, review_time) VALUES
 (4, 1, 'approved', '对Web开发有浓厚兴趣，希望完成一个完整的管理系统。', '基础扎实，同意选题。', '2026-03-01 10:00:00', '2026-03-02 09:00:00'),
@@ -291,10 +327,10 @@ INSERT INTO document_versions (document_id, version_no, title, content, file_pat
 (1, 2, '毕业设计管理系统开题报告', '本课题旨在设计一套基于JSP+Servlet+MySQL的毕业设计管理系统...', 'uploads/4/proposal.pdf', '2026-03-15 10:00:00'),
 (3, 1, '图像识别系统开题报告', '本课题基于ResNet模型实现图像分类...', 'uploads/5/proposal.pdf', '2026-03-16 09:00:00');
 
-INSERT INTO announcements (title, content, publisher_id, is_top) VALUES
-('2026届毕业设计工作安排通知', '请各位同学于5月30日前完成选题，6月15日前提交开题报告。详细安排请查看教务处网站。', 1, 1),
-('中期检查时间节点提醒', '中期检查时间为5月1日-5月20日，请各指导教师督促学生按时提交中期报告。', 1, 0),
-('答辩安排（即将开放）', '答辩具体安排将在6月底发布，请同学们关注系统公告。', 1, 0);
+INSERT INTO announcements (title, content, publisher_id, is_top, scope_type, college, major) VALUES
+('2026届毕业设计工作安排通知', '请各位同学于5月30日前完成选题，6月15日前提交开题报告。详细安排请查看教务处网站。', 1, 1, 'global', NULL, NULL),
+('中期检查时间节点提醒', '中期检查时间为5月1日-5月20日，请各指导教师督促学生按时提交中期报告。', 1, 0, 'global', NULL, NULL),
+('答辩安排（即将开放）', '答辩具体安排将在6月底发布，请同学们关注系统公告。', 1, 0, 'global', NULL, NULL);
 
 INSERT INTO operation_logs (user_id, action, target, detail) VALUES
 (1, 'LOGIN', 'admin', '管理员登录系统'),

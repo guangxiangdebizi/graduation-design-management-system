@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.StatusUtil" %>
+<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.StatusUtil,util.ScopeUtil" %>
 <%
   request.setAttribute("pageTitle", "仪表盘");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -10,17 +10,59 @@
 <div class="app-layout">
 <%@ include file="/WEB-INF/includes/sidebar.jsp" %>
 
-<% if ("admin".equals(role)) {
+<% if ("admin".equals(role) || "director".equals(role)) {
+    boolean director = "director".equals(role);
+    UserScope directorScope = director ? ScopeUtil.directorScope(loginUser) : null;
+    if (director && directorScope == null) {
+      response.sendError(403, "director scope missing");
+      return;
+    }
     UserDao userDao = new UserDao();
     TopicDao topicDao = new TopicDao();
     SelectionDao selDao = new SelectionDao();
     AnnouncementDao annDao = new AnnouncementDao();
-    int teacherCount = userDao.countByRole("teacher");
-    int studentCount = userDao.countByRole("student");
-    int topicCount = topicDao.countAll();
-    int selectedCount = selDao.countApprovedStudents();
-    List<Announcement> announcements = annDao.findAll();
+    int teacherCount;
+    int studentCount;
+    int topicCount;
+    int selectedCount;
+    if (director) {
+      UserSearchCriteria teacherCriteria = new UserSearchCriteria();
+      teacherCriteria.setRole("teacher");
+      teacherCriteria.setCollege(directorScope.getCollege());
+      teacherCriteria.setMajor(directorScope.getMajor());
+      UserSearchCriteria studentCriteria = new UserSearchCriteria();
+      studentCriteria.setRole("student");
+      studentCriteria.setCollege(directorScope.getCollege());
+      studentCriteria.setMajor(directorScope.getMajor());
+      teacherCount = userDao.countAll(teacherCriteria);
+      studentCount = userDao.countAll(studentCriteria);
+      topicCount = topicDao.countByMajor(directorScope.getCollege(), directorScope.getMajor());
+      selectedCount = selDao.countApprovedStudents(directorScope.getCollege(), directorScope.getMajor());
+    } else {
+      teacherCount = userDao.countByRole("teacher");
+      studentCount = userDao.countByRole("student");
+      topicCount = topicDao.countAll();
+      selectedCount = selDao.countApprovedStudents();
+    }
+    List<Announcement> announcements = director
+      ? annDao.findVisible(directorScope.getCollege(), directorScope.getMajor())
+      : annDao.findAll();
+    int myTopics = 0;
+    int pendingSel = 0;
+    int pendingDoc = 0;
+    List<TopicSelection> pendingList = new ArrayList<TopicSelection>();
+    if (director) {
+      myTopics = topicDao.findByTeacher(loginUser.getId()).size();
+      pendingSel = selDao.countPendingByTeacher(loginUser.getId());
+      pendingDoc = new DocumentDao().countPendingByTeacher(loginUser.getId());
+      pendingList = selDao.findByTeacher(loginUser.getId(), "pending");
+    }
 %>
+<% if (director) { %>
+<div class="alert alert-info py-2">
+  当前系主任管理范围：<%= EscapeUtil.html(loginUser.getCollegeName()) %> / <%= EscapeUtil.html(loginUser.getMajorName()) %>
+</div>
+<% } %>
 <div class="stat-cards">
   <div class="stat-card"><span class="icon">&#128101;</span><div class="label">教师人数</div><div class="value"><%= teacherCount %></div></div>
   <div class="stat-card"><span class="icon">&#127891;</span><div class="label">学生人数</div><div class="value"><%= studentCount %></div></div>
@@ -39,16 +81,54 @@
     </div>
   <% }} %>
 </div>
+<% if (director) { %>
 <div class="content-card">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0">完整版功能</h5>
-    <a href="admin/export.action" class="btn btn-success btn-sm">导出成绩 Excel</a>
+    <div>
+      <h5 class="mb-1">教师身份工作台</h5>
+      <div class="text-muted small">系主任继承教师权限，这里只统计本人作为指导教师负责的课题、选题和文档。</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="teacher/topic.action" class="btn btn-outline-primary btn-sm">我的课题</a>
+      <a href="teacher/selection.action" class="btn btn-outline-primary btn-sm">选题审批</a>
+      <a href="teacher/document.action" class="btn btn-outline-primary btn-sm">文档审核</a>
+      <a href="teacher/students.jsp" class="btn btn-outline-primary btn-sm">学生进度</a>
+    </div>
+  </div>
+  <div class="stat-cards">
+    <div class="stat-card"><span class="icon">&#128221;</span><div class="label">我的课题</div><div class="value"><%= myTopics %></div></div>
+    <div class="stat-card"><span class="icon">&#128203;</span><div class="label">待审选题</div><div class="value"><%= pendingSel %></div></div>
+    <div class="stat-card"><span class="icon">&#128196;</span><div class="label">待审文档</div><div class="value"><%= pendingDoc %></div></div>
+  </div>
+  <% if (!pendingList.isEmpty()) { %>
+  <table class="table-modern mt-3">
+    <tr><th>学生</th><th>课题</th><th>时间</th><th></th></tr>
+    <% for (TopicSelection s : pendingList) { %>
+    <tr>
+      <td><%= EscapeUtil.html(s.getStudentName()) %></td>
+      <td><%= EscapeUtil.html(s.getTopicTitle()) %></td>
+      <td><%= sdf.format(s.getApplyTime()) %></td>
+      <td><a href="teacher/selection.action" class="btn btn-sm btn-outline-primary">去审批</a></td>
+    </tr>
+    <% } %>
+  </table>
+  <% } %>
+</div>
+<% } %>
+<div class="content-card">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><%= director ? "本专业管理功能" : "完整版功能" %></h5>
+    <a href="<%= director ? "director" : "admin" %>/export.action" class="btn btn-success btn-sm">导出成绩 Excel</a>
   </div>
   <div class="d-flex flex-wrap gap-2">
+    <a href="<%= director ? "director" : "admin" %>/topic-review.action" class="btn btn-outline-primary btn-sm"><%= director ? "本专业课题审核" : "课题审核" %></a>
+    <a href="<%= director ? "director" : "admin" %>/statistics.jsp" class="btn btn-outline-primary btn-sm"><%= director ? "本专业项目统计" : "ECharts 统计" %></a>
+    <% if (!director) { %>
+    <a href="admin/announcements.jsp" class="btn btn-outline-primary btn-sm">公告管理</a>
     <a href="admin/defenses.jsp" class="btn btn-outline-primary btn-sm">答辩安排</a>
-    <a href="admin/statistics.jsp" class="btn btn-outline-primary btn-sm">ECharts 统计</a>
     <a href="admin/messages.jsp" class="btn btn-outline-primary btn-sm">站内消息</a>
     <a href="admin/logs.jsp" class="btn btn-outline-primary btn-sm">操作日志</a>
+    <% } %>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
@@ -64,7 +144,7 @@
   var loadingEl = document.getElementById('adminMiniChartLoading');
   var errorEl = document.getElementById('adminMiniChartError');
   try {
-    fetch('admin/stats.action').then(function(r) {
+    fetch('<%= director ? "director" : "admin" %>/stats.action').then(function(r) {
       if (!r.ok) throw new Error('fetch failed');
       return r.json();
     }).then(function(data) {
@@ -96,7 +176,7 @@
     int pendingSel = selDao.countPendingByTeacher(loginUser.getId());
     int pendingDoc = docDao.countPendingByTeacher(loginUser.getId());
     List<TopicSelection> pendingList = selDao.findByTeacher(loginUser.getId(), "pending");
-    List<Announcement> announcements = annDao.findAll();
+    List<Announcement> announcements = annDao.findVisible(loginUser.getCollege(), loginUser.getMajor());
 %>
 <div class="stat-cards">
   <div class="stat-card"><span class="icon">&#128221;</span><div class="label">我的课题</div><div class="value"><%= myTopics %></div></div>
@@ -146,7 +226,7 @@
     TopicSelection approved = selDao.findApprovedByStudent(loginUser.getId());
     List<TopicSelection> mySelections = selDao.findByStudent(loginUser.getId());
     List<Document> myDocs = docDao.findByStudent(loginUser.getId());
-    List<Announcement> announcements = annDao.findAll();
+    List<Announcement> announcements = annDao.findVisible(loginUser.getCollege(), loginUser.getMajor());
     DefenseSchedule defense = defDao.findByStudent(loginUser.getId());
     SimpleDateFormat defSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>

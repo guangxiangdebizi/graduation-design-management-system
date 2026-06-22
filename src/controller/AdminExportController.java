@@ -29,7 +29,7 @@ public class AdminExportController extends HttpServlet {
             return;
         }
 
-        List<Object[]> rows = SQLHelper.queryList(
+        StringBuilder sql = new StringBuilder(
             "SELECT u.student_no,u.real_name,u.department,t.title,ut.real_name,"
             + "(SELECT score FROM documents WHERE student_id=u.id AND doc_type='proposal' LIMIT 1),"
             + "(SELECT score FROM documents WHERE student_id=u.id AND doc_type='midterm' LIMIT 1),"
@@ -41,6 +41,7 @@ public class AdminExportController extends HttpServlet {
             + "JOIN users ut ON t.teacher_id=ut.id "
             + "LEFT JOIN defense_schedules ds ON ds.student_id=u.id "
             + "WHERE u.role='student' ORDER BY u.student_no");
+        List<Object[]> rows = SQLHelper.queryList(sql.toString());
 
         Workbook wb = new XSSFWorkbook();
         Sheet sheet = wb.createSheet("成绩汇总");
@@ -74,7 +75,7 @@ public class AdminExportController extends HttpServlet {
         response.setHeader("Content-Disposition", "attachment; filename=grades_export.xlsx");
         wb.write(response.getOutputStream());
         wb.close();
-        OperationLogUtil.log(user.getId(), "EXPORT", "grades", "导出成绩 Excel");
+        OperationLogUtil.log(user.getId(), "EXPORT", "grades", "管理员导出全校成绩 Excel");
     }
 
     private void setScoreCell(Row r, int col, Object val) {
@@ -84,4 +85,5 @@ public class AdminExportController extends HttpServlet {
             r.createCell(col).setCellValue(new BigDecimal(val.toString()).doubleValue());
         }
     }
+
 }

@@ -4,8 +4,20 @@
   request.setAttribute("pageTitle", "用户管理");
   User loginUser = (User) session.getAttribute("loginUser");
 
-  String roleFilter = request.getParameter("role");
-  String collegeFilter = request.getParameter("college");
+  String roleFilter = (String) request.getAttribute("roleFilter");
+  String collegeFilter = (String) request.getAttribute("collegeFilter");
+  String majorFilter = (String) request.getAttribute("majorFilter");
+  String classNameFilter = (String) request.getAttribute("classNameFilter");
+  String studentNoFilter = (String) request.getAttribute("studentNoFilter");
+  String realNameFilter = (String) request.getAttribute("realNameFilter");
+  String filterQuery = (String) request.getAttribute("filterQuery");
+  if (roleFilter == null) roleFilter = request.getParameter("role");
+  if (collegeFilter == null) collegeFilter = request.getParameter("college");
+  if (majorFilter == null) majorFilter = request.getParameter("major");
+  if (classNameFilter == null) classNameFilter = request.getParameter("className");
+  if (studentNoFilter == null) studentNoFilter = request.getParameter("studentNo");
+  if (realNameFilter == null) realNameFilter = request.getParameter("realName");
+  if (filterQuery == null) filterQuery = "";
 
   List<User> users = (List<User>) request.getAttribute("users");
   Integer totalAttr = (Integer) request.getAttribute("total");
@@ -18,6 +30,8 @@
       (Map<String, Map<String, String>>) request.getAttribute("majorGroups");
   String usernamePattern = (String) request.getAttribute("usernamePattern");
   Integer passwordMinLength = (Integer) request.getAttribute("passwordMinLength");
+  List<String> importErrors = (List<String>) session.getAttribute("userImportErrors");
+  if (importErrors != null) session.removeAttribute("userImportErrors");
   if (roleOptions == null) roleOptions = new LinkedHashMap<String, String>();
   if (userStatusOptions == null) userStatusOptions = new LinkedHashMap<String, String>();
   if (collegeOptions == null) collegeOptions = new LinkedHashMap<String, String>();
@@ -35,19 +49,22 @@
     total = totalAttr != null ? totalAttr : 0;
   }
 
-  StringBuilder pagBase = new StringBuilder("user.action?");
-  if (roleFilter != null && !roleFilter.isEmpty()) pagBase.append("role=").append(roleFilter).append("&");
-  if (collegeFilter != null && !collegeFilter.isEmpty()) pagBase.append("college=").append(collegeFilter).append("&");
-  String pagUrl = pagBase.toString();
+  String pagUrl = "user.action?" + filterQuery;
 
   String msg = request.getParameter("msg");
   String msgTitle = "", msgContent = "", msgClass = "";
   if ("add_ok".equals(msg)) { msgTitle="成功"; msgContent="用户添加成功"; msgClass="success"; }
   else if ("edit_ok".equals(msg)) { msgTitle="成功"; msgContent="用户更新成功"; msgClass="success"; }
   else if ("delete_ok".equals(msg)) { msgTitle="成功"; msgContent="用户删除成功"; msgClass="success"; }
+  else if ("import_ok".equals(msg)) { msgTitle="成功"; msgContent="导入完成：成功 " + request.getParameter("success") + " 条，跳过 " + request.getParameter("skipped") + " 条"; msgClass="success"; }
+  else if ("reset_ok".equals(msg)) { msgTitle="成功"; msgContent="学生密码重置完成，共处理 " + request.getParameter("count") + " 个账号"; msgClass="success"; }
   else if ("delete_failed".equals(msg)) { msgTitle="失败"; msgContent="删除用户失败"; msgClass="danger"; }
   else if ("delete_self".equals(msg)) { msgTitle="失败"; msgContent="不能删除当前登录用户"; msgClass="danger"; }
   else if ("username_exists".equals(msg)) { msgTitle="错误"; msgContent="用户名已存在"; msgClass="danger"; }
+  else if ("import_empty".equals(msg)) { msgTitle="错误"; msgContent="请选择要导入的 Excel 文件"; msgClass="danger"; }
+  else if ("import_error".equals(msg)) { msgTitle="错误"; msgContent="导入失败，请检查文件格式"; msgClass="danger"; }
+  else if ("import_role_invalid".equals(msg)) { msgTitle="错误"; msgContent="只能导入教师或学生账号"; msgClass="danger"; }
+  else if ("reset_password_invalid".equals(msg)) { msgTitle="错误"; msgContent="新密码长度不符合要求"; msgClass="danger"; }
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <div class="app-layout">
@@ -59,29 +76,88 @@
   <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <% } %>
+<% if (importErrors != null && !importErrors.isEmpty()) { %>
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+  <strong>导入跳过明细：</strong>
+  <% int maxErrors = Math.min(importErrors.size(), 8); %>
+  <% for (int i = 0; i < maxErrors; i++) { %>
+  <div class="small"><%= EscapeUtil.html(importErrors.get(i)) %></div>
+  <% } %>
+  <% if (importErrors.size() > maxErrors) { %>
+  <div class="small">其余 <%= importErrors.size() - maxErrors %> 条已省略。</div>
+  <% } %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div class="d-flex gap-2 flex-wrap align-items-center">
-    <a href="user.action" class="btn btn-sm <%= roleFilter==null?"btn-primary":"btn-outline-primary" %>">全部</a>
-    <% for (Map.Entry<String, String> e : roleOptions.entrySet()) { %>
-    <a href="user.action?role=<%= e.getKey() %>" class="btn btn-sm <%= e.getKey().equals(roleFilter)?"btn-primary":"btn-outline-primary" %>"><%= e.getValue() %></a>
-    <% } %>
-    <span class="vr"></span>
-    <select id="collegeFilter" class="form-select form-select-sm" style="width:150px" onchange="location.href='user.action?role=<%= roleFilter != null ? roleFilter : "" %>&college='+this.value">
-      <option value="">全部学院</option>
-      <% for (Map.Entry<String, String> e : collegeOptions.entrySet()) { %>
-      <option value="<%= e.getKey() %>" <%= e.getKey().equals(collegeFilter) ? "selected" : "" %>><%= e.getValue() %></option>
-      <% } %>
-    </select>
-  </div>
-  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal">+ 新增用户</button>
+<div class="content-card mb-3">
+  <form action="user.action" method="get" class="row g-2 align-items-end">
+    <div class="col-md-2">
+      <label class="form-label">角色</label>
+      <select name="role" class="form-select form-select-sm">
+        <option value="">全部角色</option>
+        <% for (Map.Entry<String, String> e : roleOptions.entrySet()) { %>
+        <option value="<%= e.getKey() %>" <%= e.getKey().equals(roleFilter) ? "selected" : "" %>><%= e.getValue() %></option>
+        <% } %>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">学院</label>
+      <select name="college" id="filterCollege" class="form-select form-select-sm" onchange="updateFilterMajors()">
+        <option value="">全部学院</option>
+        <% for (Map.Entry<String, String> e : collegeOptions.entrySet()) { %>
+        <option value="<%= e.getKey() %>" <%= e.getKey().equals(collegeFilter) ? "selected" : "" %>><%= e.getValue() %></option>
+        <% } %>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">专业</label>
+      <select name="major" id="filterMajor" class="form-select form-select-sm">
+        <option value="">全部专业</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">班级</label>
+      <input name="className" class="form-control form-control-sm" value="<%= EscapeUtil.attr(classNameFilter) %>" placeholder="支持模糊">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">学号</label>
+      <input name="studentNo" class="form-control form-control-sm" value="<%= EscapeUtil.attr(studentNoFilter) %>" placeholder="支持模糊">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">姓名</label>
+      <input name="realName" class="form-control form-control-sm" value="<%= EscapeUtil.attr(realNameFilter) %>" placeholder="支持模糊">
+    </div>
+    <div class="col-12 d-flex gap-2 flex-wrap">
+      <button type="submit" class="btn btn-primary btn-sm">查询</button>
+      <a href="user.action" class="btn btn-outline-secondary btn-sm">清空</a>
+      <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#importModal">Excel 导入教师/学生</button>
+      <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#resetFilteredModal">按当前筛选重置学生密码</button>
+      <button type="button" class="btn btn-primary btn-sm ms-auto" data-bs-toggle="modal" data-bs-target="#addModal">+ 新增用户</button>
+    </div>
+  </form>
 </div>
 
+<form id="selectedResetForm" action="user.action" method="post" style="display:none">
+  <input type="hidden" name="action" value="resetSelected">
+</form>
 <div class="content-card">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="text-muted small">勾选学生后可批量重置密码；教师/管理员不会被勾选重置。</div>
+    <div class="d-flex gap-2 align-items-center">
+      <input type="password" name="newPassword" form="selectedResetForm" class="form-control form-control-sm" style="width:160px" minlength="<%= passwordMinLength %>" placeholder="新密码" required>
+      <button type="submit" form="selectedResetForm" class="btn btn-warning btn-sm" onclick="return confirmSelectedReset()">重置勾选学生</button>
+    </div>
+  </div>
   <table class="table-modern">
-    <tr><th>ID</th><th>用户名</th><th>姓名</th><th>角色</th><th>学院</th><th>专业</th><th>班级</th><th>学号</th><th>状态</th><th>操作</th></tr>
+    <tr><th><input type="checkbox" id="checkAllStudents" onclick="toggleStudentChecks(this)"></th><th>ID</th><th>用户名</th><th>姓名</th><th>角色</th><th>学院</th><th>专业</th><th>班级</th><th>学号</th><th>状态</th><th>操作</th></tr>
     <% for (User u : users) { %>
     <tr>
+      <td>
+        <% if ("student".equals(u.getRole())) { %>
+        <input type="checkbox" name="selectedIds" value="<%= u.getId() %>" class="student-check" form="selectedResetForm">
+        <% } %>
+      </td>
       <td><%= u.getId() %></td>
       <td><%= EscapeUtil.html(u.getUsername()) %></td>
       <td><%= EscapeUtil.html(u.getRealName()) %></td>
@@ -104,7 +180,7 @@
     </tr>
     <% } %>
     <% if (users.isEmpty()) { %>
-    <tr><td colspan="10" class="text-center text-muted py-4">暂无数据</td></tr>
+    <tr><td colspan="11" class="text-center text-muted py-4">暂无数据</td></tr>
     <% } %>
   </table>
   <% request.setAttribute("baseUrl", pagUrl);
@@ -112,6 +188,54 @@
      request.setAttribute("pageSize", pageSize);
      request.setAttribute("total", total); %>
   <%@ include file="/WEB-INF/includes/pagination.jsp" %>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form action="../admin/user-import.action" method="post" enctype="multipart/form-data">
+      <div class="modal-header"><h6 class="modal-title">Excel 批量导入教师/学生</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="alert alert-info small py-2">
+          首行为表头；列顺序：用户名、姓名、学号、学院代码、专业代码、班级、部门/院系、邮箱、电话、初始密码。学生用户名可留空，系统用学号作为用户名；密码留空默认 123456。
+        </div>
+        <div class="mb-2">
+          <label class="form-label">导入类型</label>
+          <select name="importRole" class="form-select form-select-sm" required>
+            <option value="student">学生</option>
+            <option value="teacher">教师</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Excel 文件</label>
+          <input type="file" name="file" class="form-control form-control-sm" accept=".xlsx,.xls" required>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="submit" class="btn btn-success btn-sm">开始导入</button></div>
+    </form>
+  </div></div>
+</div>
+
+<!-- Reset Filtered Modal -->
+<div class="modal fade" id="resetFilteredModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form action="user.action" method="post" onsubmit="return confirm('确定按当前筛选条件重置所有匹配学生的密码吗？教师和管理员不会被重置。')">
+      <input type="hidden" name="action" value="resetFiltered">
+      <input type="hidden" name="role" value="<%= EscapeUtil.attr(roleFilter) %>">
+      <input type="hidden" name="college" value="<%= EscapeUtil.attr(collegeFilter) %>">
+      <input type="hidden" name="major" value="<%= EscapeUtil.attr(majorFilter) %>">
+      <input type="hidden" name="className" value="<%= EscapeUtil.attr(classNameFilter) %>">
+      <input type="hidden" name="studentNo" value="<%= EscapeUtil.attr(studentNoFilter) %>">
+      <input type="hidden" name="realName" value="<%= EscapeUtil.attr(realNameFilter) %>">
+      <div class="modal-header"><h6 class="modal-title">按筛选结果重置学生密码</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="small text-muted">当前筛选命中总数：<%= total %>。实际只会重置其中角色为“学生”的账号。</p>
+        <label class="form-label">新密码</label>
+        <input type="password" name="newPassword" class="form-control form-control-sm" minlength="<%= passwordMinLength %>" required>
+      </div>
+      <div class="modal-footer"><button type="submit" class="btn btn-warning btn-sm">确认重置</button></div>
+    </form>
+  </div></div>
 </div>
 
 <!-- Add Modal -->
@@ -238,6 +362,37 @@ function updateEditMajors() {
   }
 }
 
+function updateFilterMajors() {
+  var college = document.getElementById('filterCollege').value;
+  var majorSelect = document.getElementById('filterMajor');
+  var selected = '<%= EscapeUtil.js(majorFilter != null ? majorFilter : "") %>';
+  majorSelect.innerHTML = '<option value="">全部专业</option>';
+  if (college && majorsData[college]) {
+    for (var key in majorsData[college]) {
+      var option = document.createElement('option');
+      option.value = key;
+      option.textContent = majorsData[college][key];
+      if (key === selected) option.selected = true;
+      majorSelect.appendChild(option);
+    }
+  }
+}
+
+function toggleStudentChecks(source) {
+  document.querySelectorAll('.student-check').forEach(function(cb) {
+    cb.checked = source.checked;
+  });
+}
+
+function confirmSelectedReset() {
+  var checked = document.querySelectorAll('.student-check:checked').length;
+  if (checked === 0) {
+    alert('请先勾选要重置密码的学生。');
+    return false;
+  }
+  return confirm('确定重置已勾选的 ' + checked + ' 个学生账号密码吗？');
+}
+
 function editUser(id, username, realName, role, college, major, className, studentNo, email, phone, status) {
   document.getElementById('editId').value = id;
   document.getElementById('editUsername').value = username;
@@ -253,6 +408,8 @@ function editUser(id, username, realName, role, college, major, className, stude
   document.getElementById('editStatus').value = status;
   new bootstrap.Modal(document.getElementById('editModal')).show();
 }
+
+updateFilterMajors();
 </script>
 
 <%@ include file="/WEB-INF/includes/footer.jsp" %>

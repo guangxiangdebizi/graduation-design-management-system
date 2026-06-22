@@ -16,6 +16,8 @@
   List<DocumentVersion> versions =
       (List<DocumentVersion>) request.getAttribute("documentVersions");
   String uploadAccept = (String) request.getAttribute("uploadAccept");
+  Boolean uploadOpenAttr = (Boolean) request.getAttribute("uploadOpen");
+  boolean uploadOpen = uploadOpenAttr == null || uploadOpenAttr.booleanValue();
   if (uploadAccept == null) uploadAccept = ".pdf,.doc,.docx,.zip,.rar";
   if (typeNames == null || versions == null) {
     response.sendRedirect(request.getContextPath() + "/student/document.action");
@@ -70,6 +72,12 @@
 
   <p class="text-muted small mb-3">当前课题: <strong><%= EscapeUtil.html(approved.getTopicTitle()) %></strong> | 指导教师: <%= EscapeUtil.html(approved.getTeacherName()) %></p>
 
+  <% if (!uploadOpen) { %>
+
+    <div class="alert alert-warning py-2">当前阶段上传入口已关闭，暂不能提交或重交<%= typeNames.get(activeType) %>。</div>
+
+  <% } %>
+
   <% if (currentDoc != null && !"draft".equals(currentDoc.getStatus())) { %>
 
     <div class="alert alert-info py-2">
@@ -92,7 +100,7 @@
 
       <label class="form-label">文档标题</label>
 
-      <input name="title" class="form-control form-control-sm" value="<%= currentDoc!=null?EscapeUtil.attr(currentDoc.getTitle()):"" %>" placeholder="请输入<%= typeNames.get(activeType) %>标题" required>
+      <input name="title" class="form-control form-control-sm" value="<%= currentDoc!=null?EscapeUtil.attr(currentDoc.getTitle()):"" %>" placeholder="请输入<%= typeNames.get(activeType) %>标题" required <%= uploadOpen ? "" : "disabled" %>>
 
     </div>
 
@@ -100,7 +108,7 @@
 
       <label class="form-label">文档内容</label>
 
-      <textarea name="content" class="form-control" rows="8" placeholder="请输入文档正文内容..." required><% if (currentDoc!=null && currentDoc.getContent()!=null) { %><%= EscapeUtil.html(currentDoc.getContent()) %><% } %></textarea>
+      <textarea name="content" class="form-control" rows="8" placeholder="请输入文档正文内容..." required <%= uploadOpen ? "" : "disabled" %>><% if (currentDoc!=null && currentDoc.getContent()!=null) { %><%= EscapeUtil.html(currentDoc.getContent()) %><% } %></textarea>
 
     </div>
 
@@ -108,7 +116,7 @@
 
       <label class="form-label">上传附件</label>
 
-      <input type="file" name="file" class="form-control form-control-sm" accept="<%= EscapeUtil.attr(uploadAccept) %>">
+      <input type="file" name="file" class="form-control form-control-sm" accept="<%= EscapeUtil.attr(uploadAccept) %>" <%= uploadOpen ? "" : "disabled" %>>
 
       <% if (currentDoc!=null && currentDoc.getFilePath()!=null && currentDoc.getFilePath().length()>0) { %>
 
@@ -118,7 +126,7 @@
 
     </div>
 
-    <button type="submit" class="btn btn-primary btn-sm">提交文档</button>
+    <button type="submit" class="btn btn-primary btn-sm" <%= uploadOpen ? "" : "disabled" %>>提交文档</button>
 
   </form>
 

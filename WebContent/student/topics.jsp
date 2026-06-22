@@ -8,22 +8,26 @@
   List<Topic> topics = (List<Topic>) request.getAttribute("topics");
   String keyword = (String) request.getAttribute("keyword");
   String collegeFilter = (String) request.getAttribute("collegeFilter");
+  String majorFilter = (String) request.getAttribute("majorFilter");
   Boolean hasAppliedAttr = (Boolean) request.getAttribute("hasApplied");
+  Boolean selectionOpenAttr = (Boolean) request.getAttribute("selectionOpen");
   if (topics == null || hasAppliedAttr == null) {
     response.sendRedirect(request.getContextPath() + "/student/topic.action");
     return;
   }
   if (keyword == null) keyword = "";
   if (collegeFilter == null) collegeFilter = "";
+  if (majorFilter == null) majorFilter = "";
   boolean hasApplied = hasAppliedAttr.booleanValue();
-  Map<String, String> collegeOptions = (Map<String, String>) request.getAttribute("collegeOptions");
-  if (collegeOptions == null) collegeOptions = new LinkedHashMap<String, String>();
+  boolean selectionOpen = selectionOpenAttr == null || selectionOpenAttr.booleanValue();
 
   // 消息提示
   String msg = request.getParameter("msg");
   String msgTitle = "", msgContent = "", msgClass = "";
   if ("already_applied".equals(msg)) { msgTitle="提示"; msgContent="您已有选题申请，请等待教师审核"; msgClass="warning"; }
   else if ("quota_full".equals(msg)) { msgTitle="提示"; msgContent="该课题名额已满"; msgClass="warning"; }
+  else if ("selection_closed".equals(msg)) { msgTitle="提示"; msgContent="管理员已关闭学生选题入口"; msgClass="warning"; }
+  else if ("major_mismatch".equals(msg)) { msgTitle="提示"; msgContent="只能申请本学院本专业范围内的课题"; msgClass="warning"; }
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <div class="app-layout">
@@ -39,15 +43,12 @@
 <form class="mb-3" method="get" action="topic.action">
   <div class="row g-2">
     <div class="col-md-4">
-      <input name="keyword" class="form-control form-control-sm" placeholder="搜索课题名称或描述..." value="<%= keyword %>">
+      <input name="keyword" class="form-control form-control-sm" placeholder="搜索课题名称或描述..." value="<%= EscapeUtil.attr(keyword) %>">
     </div>
-    <div class="col-md-3">
-      <select name="college" class="form-select form-select-sm">
-        <option value="">全部学院</option>
-        <% for (Map.Entry<String, String> e : collegeOptions.entrySet()) { %>
-        <option value="<%= e.getKey() %>" <%= e.getKey().equals(collegeFilter) ? "selected" : "" %>><%= e.getValue() %></option>
-        <% } %>
-      </select>
+    <div class="col-md-5">
+      <div class="form-control form-control-sm bg-light">
+        仅显示本人专业：<%= EscapeUtil.html(loginUser.getCollegeName()) %> / <%= EscapeUtil.html(loginUser.getMajorName()) %>
+      </div>
     </div>
     <div class="col-md-auto">
       <button type="submit" class="btn btn-primary btn-sm">搜索</button>
@@ -56,15 +57,20 @@
   </div>
 </form>
 
+<% if (!selectionOpen) { %>
+  <div class="alert alert-warning py-2">学生选题入口当前关闭，暂不能浏览和申请课题。</div>
+<% } %>
+
 <div class="topic-grid">
   <% if (topics.isEmpty()) { %>
-    <div class="empty-state" style="grid-column:1/-1"><div class="icon">&#128269;</div><p>没有找到匹配的课题</p></div>
+    <div class="empty-state" style="grid-column:1/-1"><div class="icon">&#128269;</div><p><%= selectionOpen ? "没有找到匹配的课题" : "选题入口暂未开放" %></p></div>
   <% } else { for (Topic t : topics) { %>
     <div class="topic-card">
       <h6><%= EscapeUtil.html(t.getTitle()) %></h6>
       <p><%= EscapeUtil.html(t.getDescription()) %></p>
       <div class="meta">
         <span class="badge bg-secondary"><%= t.getCollegeName() != null ? t.getCollegeName() : "未分类" %></span>
+        <span class="badge bg-info"><%= t.getMajorName() != null ? t.getMajorName() : "未分专业" %></span>
         <br>
         指导教师: <%= EscapeUtil.html(t.getTeacherName()) %>
         <br>

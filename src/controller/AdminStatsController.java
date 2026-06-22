@@ -74,4 +74,5 @@ public class AdminStatsController extends HttpServlet {
     private String escape(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
+
 }

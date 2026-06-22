@@ -23,6 +23,7 @@ import util.DictionaryUtil;
 import util.FileUploadUtil;
 import util.OperationLogUtil;
 import util.SystemConfigUtil;
+import util.SystemSwitchUtil;
 import util.WebUtil;
 
 @WebServlet("/student/document.action")
@@ -46,6 +47,8 @@ public class StudentDocumentController extends HttpServlet {
         request.setAttribute("documentVersions", versions);
         request.setAttribute("activeType", docType);
         request.setAttribute("typeNames", documentTypeNames());
+        request.setAttribute("uploadOpen",
+            Boolean.valueOf(SystemSwitchUtil.isEnabled(SystemSwitchUtil.uploadKey(docType))));
         request.setAttribute("uploadAccept",
             "." + SystemConfigUtil.getString("upload.allowed_extensions", "pdf,doc,docx,zip,rar")
                 .replace(",", ",."));
@@ -65,6 +68,10 @@ public class StudentDocumentController extends HttpServlet {
         String docType = request.getParameter("docType");
         if (!DictionaryUtil.contains("document_type", docType)) {
             redirectToList(request, response, "error", "proposal");
+            return;
+        }
+        if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.uploadKey(docType))) {
+            redirectToList(request, response, "upload_closed", docType);
             return;
         }
 

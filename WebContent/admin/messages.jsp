@@ -51,7 +51,7 @@
 
   }
 
-  List<User> contacts = userDao.findAll(null);
+  List<User> contacts = userDao.findAll((UserSearchCriteria) null);
 
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 

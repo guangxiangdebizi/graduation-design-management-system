@@ -79,7 +79,8 @@ function initPageMessages() {
     'upload_invalid', 'rejected', 'already_applied', 'no_topic', 'exists',
     'delete_failed', 'delete_self', 'forbidden', 'student_has_topic',
     'stage_locked', 'document_locked', 'invalid_score', 'invalid_quota',
-    'edit_self_role', 'last_admin', 'defense_ineligible'];
+    'edit_self_role', 'last_admin', 'defense_ineligible',
+    'topic_submit_closed', 'selection_closed', 'upload_closed'];
   var messages = {
     'add_ok': '添加成功',
     'edit_ok': '修改成功',
@@ -92,6 +93,7 @@ function initPageMessages() {
     'rejected': path.indexOf('documents') >= 0 ? '文档已退回' : '已驳回选题申请',
     'reviewed': '文档审核完成',
     'send_ok': '消息发送成功',
+    'switch_ok': '系统开关已保存',
     'exists': '该学生已有答辩安排',
     'delete_failed': '删除失败：该数据可能已被选题、文档、消息或日志引用',
     'delete_self': '不能删除当前登录账号',
@@ -109,6 +111,9 @@ function initPageMessages() {
     'import_error': '导入失败，请检查文件格式',
     'csrf_error': '安全验证失败，请刷新页面后重试',
     'upload_invalid': '文件格式或大小不符合要求',
+    'topic_submit_closed': '教师出题入口已关闭',
+    'selection_closed': '学生选题入口已关闭',
+    'upload_closed': '当前阶段上传入口已关闭',
     'locked': '登录失败次数过多，请稍后再试',
     'error': '操作失败，请重试'
   };
@@ -131,7 +136,194 @@ function initPageMessages() {
   }
 }
 
+function initAiAssistant() {
+  var form = document.getElementById('aiForm');
+  if (!form) return;
+  var input = document.getElementById('aiMessage');
+  var chatBox = document.getElementById('aiChatBox');
+  var sendBtn = document.getElementById('aiSendBtn');
+  var clearBtn = document.getElementById('aiClearBtn');
+  var action = form.getAttribute('data-action') || (window.GDMS_AI_CONFIG && window.GDMS_AI_CONFIG.action) || 'ai.action';
+  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  var csrf = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+  function appendMessage(role, text) {
+    var wrap = document.createElement('div');
+    wrap.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
+    var avatar = document.createElement('div');
+    avatar.className = 'ai-msg-role';
+    avatar.textContent = role === 'user' ? '我' : 'AI';
+    var body = document.createElement('div');
+    body.className = 'ai-msg-body';
+    body.textContent = text;
+    wrap.appendChild(avatar);
+    wrap.appendChild(body);
+    chatBox.appendChild(wrap);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return wrap;
+  }
+
+  function postJson(data) {
+    var params = new URLSearchParams(data);
+    if (csrf) params.set('_csrf', csrf);
+    return fetch(action, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'X-CSRF-Token': csrf
+      },
+      body: params.toString()
+    }).then(function(r) {
+      var contentType = r.headers.get('content-type') || '';
+      if (contentType.indexOf('application/json') < 0) {
+        return r.text().then(function(text) {
+          throw new Error(explainNonJsonResponse(r.status, text));
+        });
+      }
+      return r.json().then(function(json) {
+        if (!r.ok || json.ok === false) throw new Error((json && json.message) || '请求失败');
+        return json;
+      });
+    });
+  }
+
+  function explainNonJsonResponse(status, text) {
+    if ((text || '').indexOf('<!DOCTYPE') >= 0 || (text || '').indexOf('<html') >= 0) {
+      if (status === 404) return 'AI 接口未加载，请重启 Tomcat 后再试。';
+      if (status === 500) return 'AI 后端发生 500 错误，请查看 Tomcat 控制台日志。';
+      return '服务器返回了 HTML 页面，通常是登录过期、CSRF 失败或 Tomcat 未重启。';
+    }
+    return '服务器返回格式异常，状态码：' + status;
+  }
+
+  function postAiStream(message, onDelta) {
+    var params = new URLSearchParams({ message: message });
+    if (csrf) params.set('_csrf', csrf);
+    return fetch(action, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'X-CSRF-Token': csrf
+      },
+      body: params.toString()
+    }).then(function(r) {
+      var contentType = r.headers.get('content-type') || '';
+      if (contentType.indexOf('text/event-stream') < 0) {
+        if (contentType.indexOf('application/json') >= 0) {
+          return r.json().then(function(json) {
+            throw new Error((json && json.message) || 'AI 请求失败');
+          });
+        }
+        return r.text().then(function(text) {
+          throw new Error(explainNonJsonResponse(r.status, text));
+        });
+      }
+      if (!r.ok) {
+        throw new Error('AI 请求失败，状态码：' + r.status);
+      }
+      return readEventStream(r.body, onDelta);
+    });
+  }
+
+  function readEventStream(body, onDelta) {
+    if (!body || !body.getReader) {
+      throw new Error('当前浏览器不支持流式读取。');
+    }
+    var reader = body.getReader();
+    var decoder = new TextDecoder('utf-8');
+    var buffer = '';
+
+    function pump() {
+      return reader.read().then(function(result) {
+        if (result.done) {
+          if (buffer) handleSseBlock(buffer, onDelta);
+          return;
+        }
+        buffer += decoder.decode(result.value, { stream: true });
+        var parts = buffer.split(/\n\n/);
+        buffer = parts.pop();
+        parts.forEach(function(part) {
+          handleSseBlock(part, onDelta);
+        });
+        return pump();
+      });
+    }
+    return pump();
+  }
+
+  function handleSseBlock(block, onDelta) {
+    if (!block) return;
+    var lines = block.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line.indexOf('data:') !== 0) continue;
+      var raw = line.substring(5).trim();
+      if (!raw) continue;
+      var json = JSON.parse(raw);
+      if (json.event === 'delta') {
+        onDelta(json.data || '');
+      } else if (json.event === 'error') {
+        throw new Error(json.data || 'AI 服务调用失败。');
+      }
+    }
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var text = (input.value || '').trim();
+    if (!text) {
+      showToast('请输入要咨询的问题', true);
+      return;
+    }
+    appendMessage('user', text);
+    input.value = '';
+    sendBtn.disabled = true;
+    sendBtn.textContent = '思考中...';
+    var aiMessage = appendMessage('assistant', '');
+    var aiBody = aiMessage.querySelector('.ai-msg-body');
+    var received = false;
+    aiBody.textContent = '正在连接 AI...';
+    postAiStream(text, function(delta) {
+      if (!received) {
+        aiBody.textContent = '';
+        received = true;
+      }
+      aiBody.textContent += delta;
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }).then(function() {
+      if (!received) {
+        aiBody.textContent = 'AI 没有返回内容。';
+      }
+    }).catch(function(err) {
+      aiBody.textContent = err.message || 'AI 服务调用失败。';
+    }).finally(function() {
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送';
+      input.focus();
+    });
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      postJson({ action: 'clear' }).then(function(json) {
+        chatBox.innerHTML = '';
+        appendMessage('assistant', json.message || '已清空当前用户的 AI 会话。');
+      }).catch(function(err) {
+        showToast(err.message || '清空失败', true);
+      });
+    });
+  }
+
+  document.querySelectorAll('.ai-prompt').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      input.value = btn.getAttribute('data-prompt') || btn.textContent;
+      input.focus();
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   injectCsrfToken();
   initPageMessages();
+  initAiAssistant();
 });

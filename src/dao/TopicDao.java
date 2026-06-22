@@ -9,10 +9,22 @@ import util.CollegeUtil;
 
 public class TopicDao {
     private static final String SELECT_COLS =
-        "t.id,t.title,t.description,t.teacher_id,u.real_name,t.college,t.max_students,t.selected_count,t.status,t.created_at";
+        "t.id,t.title,t.description,t.teacher_id,u.real_name,t.college,t.major,t.max_students,t.selected_count,"
+        + "t.status,t.review_comment,t.reviewer_id,r.real_name,t.review_time,t.created_at";
+    private static final String FROM_SQL =
+        " FROM topics t JOIN users u ON t.teacher_id=u.id "
+        + "LEFT JOIN users r ON t.reviewer_id=r.id ";
 
     public List<Topic> findAll(String keyword, String college) {
-        String sql = "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id WHERE 1=1";
+        return findAll(keyword, college, null, null);
+    }
+
+    public List<Topic> findAll(String keyword, String college, String status) {
+        return findAll(keyword, college, null, status);
+    }
+
+    public List<Topic> findAll(String keyword, String college, String major, String status) {
+        String sql = "SELECT " + SELECT_COLS + FROM_SQL + "WHERE 1=1";
         List<Object> params = new ArrayList<>();
         if (keyword != null && !keyword.trim().isEmpty()) {
             sql += " AND (t.title LIKE ? OR t.description LIKE ?)";
@@ -24,6 +36,14 @@ public class TopicDao {
             sql += " AND t.college=?";
             params.add(college);
         }
+        if (major != null && !major.isEmpty()) {
+            sql += " AND t.major=?";
+            params.add(major);
+        }
+        if (status != null && !status.isEmpty()) {
+            sql += " AND t.status=?";
+            params.add(status);
+        }
         sql += " ORDER BY t.created_at DESC";
         List<Object[]> rows = params.isEmpty() ?
             SQLHelper.queryList(sql) :
@@ -33,13 +53,17 @@ public class TopicDao {
 
     public List<Topic> findByTeacher(int teacherId) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id WHERE t.teacher_id=? ORDER BY t.created_at DESC",
+            "SELECT " + SELECT_COLS + FROM_SQL + "WHERE t.teacher_id=? ORDER BY t.created_at DESC",
             teacherId);
         return mapList(rows);
     }
 
     public List<Topic> findOpenTopics(String keyword, String college) {
-        String sql = "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id "
+        return findOpenTopics(keyword, college, null);
+    }
+
+    public List<Topic> findOpenTopics(String keyword, String college, String major) {
+        String sql = "SELECT " + SELECT_COLS + FROM_SQL
             + "WHERE t.status='open' AND t.selected_count < t.max_students";
         List<Object> params = new ArrayList<>();
         if (keyword != null && !keyword.trim().isEmpty()) {
@@ -52,6 +76,10 @@ public class TopicDao {
             sql += " AND t.college=?";
             params.add(college);
         }
+        if (major != null && !major.isEmpty()) {
+            sql += " AND t.major=?";
+            params.add(major);
+        }
         sql += " ORDER BY t.created_at DESC";
         List<Object[]> rows = params.isEmpty() ?
             SQLHelper.queryList(sql) :
@@ -61,7 +89,7 @@ public class TopicDao {
 
     public Topic findById(int id) {
         List<Object[]> rows = SQLHelper.queryList(
-            "SELECT " + SELECT_COLS + " FROM topics t JOIN users u ON t.teacher_id=u.id WHERE t.id=?",
+            "SELECT " + SELECT_COLS + FROM_SQL + "WHERE t.id=?",
             id);
         if (rows.isEmpty()) {
             return null;
@@ -71,16 +99,34 @@ public class TopicDao {
 
     public int insert(Topic topic) {
         return SQLHelper.executeInsert(
-            "INSERT INTO topics(title,description,teacher_id,college,max_students,status) VALUES(?,?,?,?,?,?)",
+            "INSERT INTO topics(title,description,teacher_id,college,major,max_students,status) VALUES(?,?,?,?,?,?,?)",
             topic.getTitle(), topic.getDescription(), topic.getTeacherId(),
-            topic.getCollege(), topic.getMaxStudents(), topic.getStatus());
+            topic.getCollege(), topic.getMajor(), topic.getMaxStudents(), topic.getStatus());
     }
 
     public int update(Topic topic) {
         return SQLHelper.executeUpdate(
-            "UPDATE topics SET title=?,description=?,college=?,max_students=?,status=? WHERE id=? AND teacher_id=?",
-            topic.getTitle(), topic.getDescription(), topic.getCollege(),
+            "UPDATE topics SET title=?,description=?,college=?,major=?,max_students=?,status=?,"
+            + "review_comment=NULL,reviewer_id=NULL,review_time=NULL WHERE id=? AND teacher_id=?",
+            topic.getTitle(), topic.getDescription(), topic.getCollege(), topic.getMajor(),
             topic.getMaxStudents(), topic.getStatus(), topic.getId(), topic.getTeacherId());
+    }
+
+    public int review(int id, int reviewerId, String status, String comment) {
+        if (!"open".equals(status) && !"rejected".equals(status)) {
+            return 0;
+        }
+        if ("open".equals(status)) {
+            return SQLHelper.executeUpdate(
+                "UPDATE topics SET status=CASE WHEN selected_count>=max_students THEN 'closed' ELSE 'open' END,"
+                + "review_comment=?,reviewer_id=?,review_time=NOW() "
+                + "WHERE id=? AND status IN ('pending','rejected','open','closed')",
+                comment, reviewerId, id);
+        }
+        return SQLHelper.executeUpdate(
+            "UPDATE topics SET status=?,review_comment=?,reviewer_id=?,review_time=NOW() "
+            + "WHERE id=? AND status IN ('pending','rejected','open','closed')",
+            status, comment, reviewerId, id);
     }
 
     public int delete(int id, int teacherId) {
@@ -94,6 +140,12 @@ public class TopicDao {
 
     public int countByCollege(String college) {
         Object val = SQLHelper.queryScalar("SELECT COUNT(*) FROM topics WHERE college=?", college);
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
+    public int countByMajor(String college, String major) {
+        Object val = SQLHelper.queryScalar(
+            "SELECT COUNT(*) FROM topics WHERE college=? AND major=?", college, major);
         return val == null ? 0 : ((Number) val).intValue();
     }
 
@@ -113,14 +165,22 @@ public class TopicDao {
         t.setTeacherId(((Number) row[3]).intValue());
         t.setTeacherName((String) row[4]);
         t.setCollege((String) row[5]);
-        t.setMaxStudents(((Number) row[6]).intValue());
-        t.setSelectedCount(((Number) row[7]).intValue());
-        t.setStatus((String) row[8]);
-        t.setCreatedAt(DateUtil.toDate(row[9]));
+        t.setMajor((String) row[6]);
+        t.setMaxStudents(((Number) row[7]).intValue());
+        t.setSelectedCount(((Number) row[8]).intValue());
+        t.setStatus((String) row[9]);
+        t.setReviewComment((String) row[10]);
+        t.setReviewerId(row[11] == null ? null : ((Number) row[11]).intValue());
+        t.setReviewerName((String) row[12]);
+        t.setReviewTime(DateUtil.toDate(row[13]));
+        t.setCreatedAt(DateUtil.toDate(row[14]));
 
         // 翻译学院名称
         if (t.getCollege() != null) {
             t.setCollegeName(CollegeUtil.getCollegeName(t.getCollege()));
+        }
+        if (t.getCollege() != null && t.getMajor() != null) {
+            t.setMajorName(CollegeUtil.getMajorName(t.getCollege(), t.getMajor()));
         }
         return t;
     }

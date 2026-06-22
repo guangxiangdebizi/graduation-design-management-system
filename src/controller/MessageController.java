@@ -31,6 +31,7 @@ import dao.TopicDao;
 import dao.UserDao;
 
 import util.OperationLogUtil;
+import util.RoleUtil;
 
 import util.WebUtil;
 
@@ -132,7 +133,7 @@ public class MessageController extends HttpServlet {
 
         }
 
-        if ("teacher".equals(sender.getRole())) {
+        if (RoleUtil.hasRole(sender, "teacher")) {
 
             return "student".equals(receiver.getRole()) || "admin".equals(receiver.getRole());
 
@@ -176,7 +177,7 @@ public class MessageController extends HttpServlet {
 
         }
 
-        if ("teacher".equals(user.getRole())) {
+        if (RoleUtil.hasRole(user, "teacher")) {
 
             return "/teacher/messages.jsp";
 

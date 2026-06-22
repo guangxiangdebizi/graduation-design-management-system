@@ -14,6 +14,7 @@ import javax.servlet.http.HttpSession;
 import bean.User;
 import dao.UserDao;
 import util.CsrfUtil;
+import util.RoleUtil;
 
 @WebFilter("/*")
 public class AuthFilter implements Filter {
@@ -67,7 +68,11 @@ public class AuthFilter implements Filter {
             response.sendRedirect(ctx + "/dashboard.jsp");
             return;
         }
-        if (path.startsWith("/teacher/") && !"teacher".equals(user.getRole())) {
+        if (path.startsWith("/director/") && !"director".equals(user.getRole())) {
+            response.sendRedirect(ctx + "/dashboard.jsp");
+            return;
+        }
+        if (path.startsWith("/teacher/") && !RoleUtil.hasRole(user, "teacher")) {
             response.sendRedirect(ctx + "/dashboard.jsp");
             return;
         }

@@ -11,8 +11,9 @@ import bean.User;
 import bean.Topic;
 import dao.SelectionDao;
 import dao.TopicDao;
-import util.CollegeUtil;
 import util.OperationLogUtil;
+import util.ScopeUtil;
+import util.SystemSwitchUtil;
 import util.WebUtil;
 import java.util.List;
 
@@ -22,14 +23,18 @@ public class StudentTopicController extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String keyword = request.getParameter("keyword");
-        String college = request.getParameter("college");
         User user = (User) request.getSession().getAttribute("loginUser");
+        String college = ScopeUtil.clean(user.getCollege());
+        String major = ScopeUtil.clean(user.getMajor());
         TopicDao dao = new TopicDao();
-        List<Topic> topics = dao.findOpenTopics(keyword, college);
+        boolean selectionOpen = SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION);
+        List<Topic> topics = selectionOpen ? dao.findOpenTopics(keyword, college, major)
+            : new java.util.ArrayList<Topic>();
         request.setAttribute("topics", topics);
         request.setAttribute("keyword", keyword);
         request.setAttribute("collegeFilter", college);
-        request.setAttribute("collegeOptions", CollegeUtil.getColleges());
+        request.setAttribute("majorFilter", major);
+        request.setAttribute("selectionOpen", Boolean.valueOf(selectionOpen));
         request.setAttribute("hasApplied",
             new SelectionDao().hasPendingOrApproved(user.getId()));
         request.getRequestDispatcher("/student/topics.jsp").forward(request, response);
@@ -44,6 +49,10 @@ public class StudentTopicController extends HttpServlet {
         SelectionDao dao = new SelectionDao();
 
         if ("apply".equals(action)) {
+            if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION)) {
+                WebUtil.redirect(request, response, "/student/topic.action?msg=selection_closed");
+                return;
+            }
             int topicId = Integer.parseInt(request.getParameter("topicId"));
             String reason = request.getParameter("applyReason");
             int result = dao.apply(user.getId(), topicId, reason);
@@ -53,6 +62,14 @@ public class StudentTopicController extends HttpServlet {
             }
             if (result == -2) {
                 WebUtil.redirect(request, response, "/student/topic.action?msg=quota_full");
+                return;
+            }
+            if (result == -3) {
+                WebUtil.redirect(request, response, "/student/topic.action?msg=selection_closed");
+                return;
+            }
+            if (result == -4) {
+                WebUtil.redirect(request, response, "/student/topic.action?msg=major_mismatch");
                 return;
             }
             if (result <= 0) {
