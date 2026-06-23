@@ -112,6 +112,14 @@ public class TopicDao {
             topic.getMaxStudents(), topic.getStatus(), topic.getId(), topic.getTeacherId());
     }
 
+    public int updateByDirector(Topic topic, String college, String major, int reviewerId, String comment) {
+        return SQLHelper.executeUpdate(
+            "UPDATE topics SET title=?,description=?,max_students=?,review_comment=?,reviewer_id=?,review_time=NOW() "
+            + "WHERE id=? AND college=? AND major=? AND selected_count<=?",
+            topic.getTitle(), topic.getDescription(), topic.getMaxStudents(), comment, reviewerId,
+            topic.getId(), college, major, topic.getMaxStudents());
+    }
+
     public int review(int id, int reviewerId, String status, String comment) {
         if (!"open".equals(status) && !"rejected".equals(status)) {
             return 0;

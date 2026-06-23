@@ -14,7 +14,7 @@ public class SystemSwitchUtil {
     public static Map<String, String> definitions() {
         Map<String, String> defs = new LinkedHashMap<String, String>();
         defs.put(TOPIC_SUBMIT, "教师出题开关");
-        defs.put(SELECTION, "学生选题开关");
+        defs.put(SELECTION, "学生选题开关（第一轮/第二轮复用）");
         defs.put(UPLOAD_PROPOSAL, "开题报告上传开关");
         defs.put(UPLOAD_MIDTERM, "中期检查上传开关");
         defs.put(UPLOAD_FINAL, "终稿上传开关");

@@ -58,6 +58,41 @@ public class DirectorTopicReviewController extends HttpServlet {
         }
 
         String action = request.getParameter("action");
+        if ("edit".equals(action)) {
+            int id;
+            try {
+                id = Integer.parseInt(request.getParameter("id"));
+            } catch (Exception ex) {
+                WebUtil.redirect(request, response, "/director/topic-review.action?msg=error");
+                return;
+            }
+            Topic current = new TopicDao().findById(id);
+            if (!ScopeUtil.inDirectorScope(user, current)) {
+                WebUtil.redirect(request, response, "/director/topic-review.action?msg=error");
+                return;
+            }
+            Topic topic = new Topic();
+            topic.setId(id);
+            topic.setTitle(request.getParameter("title"));
+            topic.setDescription(request.getParameter("description"));
+            try {
+                topic.setMaxStudents(Integer.parseInt(request.getParameter("maxStudents")));
+            } catch (Exception ex) {
+                WebUtil.redirect(request, response, "/director/topic-review.action?msg=invalid_quota");
+                return;
+            }
+            if (topic.getMaxStudents() < current.getSelectedCount()
+                    || new TopicDao().updateByDirector(topic, scope.getCollege(), scope.getMajor(),
+                        user.getId(), request.getParameter("reviewComment")) <= 0) {
+                WebUtil.redirect(request, response, "/director/topic-review.action?msg=invalid_quota");
+                return;
+            }
+            OperationLogUtil.log(user.getId(), "UPDATE", "topic",
+                "系主任调整本专业课题 id=" + id);
+            WebUtil.redirect(request, response, "/director/topic-review.action?msg=edit_ok");
+            return;
+        }
+
         String status = "approve".equals(action) ? "open" : ("reject".equals(action) ? "rejected" : null);
         if (status == null) {
             WebUtil.redirect(request, response, "/director/topic-review.action?msg=error");

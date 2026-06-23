@@ -28,8 +28,7 @@ public class StudentTopicController extends HttpServlet {
         String major = ScopeUtil.clean(user.getMajor());
         TopicDao dao = new TopicDao();
         boolean selectionOpen = SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION);
-        List<Topic> topics = selectionOpen ? dao.findOpenTopics(keyword, college, major)
-            : new java.util.ArrayList<Topic>();
+        List<Topic> topics = dao.findOpenTopics(keyword, college, major);
         request.setAttribute("topics", topics);
         request.setAttribute("keyword", keyword);
         request.setAttribute("collegeFilter", college);

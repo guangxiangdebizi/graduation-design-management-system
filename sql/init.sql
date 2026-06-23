@@ -273,7 +273,7 @@ INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('validation.phone_regex', '^1[3-9]\\d{9}$', '手机号校验正则'),
 ('validation.email_regex', '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$', '邮箱校验正则'),
 ('switch.topic_submit', '1', '教师出题开关'),
-('switch.selection', '1', '学生选题开关'),
+('switch.selection', '1', '学生选题开关，第一轮和第二轮复用'),
 ('switch.selection_round1', '1', '第一轮选题开关'),
 ('switch.selection_round2', '0', '第二轮选题开关'),
 ('switch.upload_proposal', '1', '开题报告上传开关'),

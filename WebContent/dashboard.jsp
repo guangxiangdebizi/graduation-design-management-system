@@ -49,11 +49,13 @@
       : annDao.findAll();
     int myTopics = 0;
     int pendingSel = 0;
+    int pendingDirectorSel = 0;
     int pendingDoc = 0;
     List<TopicSelection> pendingList = new ArrayList<TopicSelection>();
     if (director) {
       myTopics = topicDao.findByTeacher(loginUser.getId()).size();
       pendingSel = selDao.countPendingByTeacher(loginUser.getId());
+      pendingDirectorSel = selDao.countPendingByDirector(directorScope.getCollege(), directorScope.getMajor());
       pendingDoc = new DocumentDao().countPendingByTeacher(loginUser.getId());
       pendingList = selDao.findByTeacher(loginUser.getId(), "pending");
     }
@@ -90,15 +92,16 @@
     </div>
     <div class="d-flex flex-wrap gap-2">
       <a href="teacher/topic.action" class="btn btn-outline-primary btn-sm">我的课题</a>
-      <a href="teacher/selection.action" class="btn btn-outline-primary btn-sm">选题审批</a>
+      <a href="teacher/selection.action" class="btn btn-outline-primary btn-sm">选题建议</a>
       <a href="teacher/document.action" class="btn btn-outline-primary btn-sm">文档审核</a>
       <a href="teacher/students.jsp" class="btn btn-outline-primary btn-sm">学生进度</a>
     </div>
   </div>
   <div class="stat-cards">
     <div class="stat-card"><span class="icon">&#128221;</span><div class="label">我的课题</div><div class="value"><%= myTopics %></div></div>
-    <div class="stat-card"><span class="icon">&#128203;</span><div class="label">待审选题</div><div class="value"><%= pendingSel %></div></div>
+    <div class="stat-card"><span class="icon">&#128203;</span><div class="label">待给建议选题</div><div class="value"><%= pendingSel %></div></div>
     <div class="stat-card"><span class="icon">&#128196;</span><div class="label">待审文档</div><div class="value"><%= pendingDoc %></div></div>
+    <div class="stat-card"><span class="icon">&#9989;</span><div class="label">本专业待确认选题</div><div class="value"><%= pendingDirectorSel %></div></div>
   </div>
   <% if (!pendingList.isEmpty()) { %>
   <table class="table-modern mt-3">
@@ -108,7 +111,7 @@
       <td><%= EscapeUtil.html(s.getStudentName()) %></td>
       <td><%= EscapeUtil.html(s.getTopicTitle()) %></td>
       <td><%= sdf.format(s.getApplyTime()) %></td>
-      <td><a href="teacher/selection.action" class="btn btn-sm btn-outline-primary">去审批</a></td>
+      <td><a href="teacher/selection.action" class="btn btn-sm btn-outline-primary">给建议</a></td>
     </tr>
     <% } %>
   </table>
@@ -123,6 +126,7 @@
   <div class="d-flex flex-wrap gap-2">
     <% if (director) { %>
     <a href="director/topic-review.action" class="btn btn-outline-primary btn-sm">本专业课题审核</a>
+    <a href="director/selection-confirm.action" class="btn btn-outline-primary btn-sm">本专业选题确认</a>
     <a href="director/statistics.jsp" class="btn btn-outline-primary btn-sm">本专业项目统计</a>
     <% } else { %>
     <a href="admin/statistics.jsp" class="btn btn-outline-primary btn-sm">ECharts 统计</a>
@@ -182,15 +186,15 @@
 %>
 <div class="stat-cards">
   <div class="stat-card"><span class="icon">&#128221;</span><div class="label">我的课题</div><div class="value"><%= myTopics %></div></div>
-  <div class="stat-card"><span class="icon">&#128203;</span><div class="label">待审选题</div><div class="value"><%= pendingSel %></div></div>
+  <div class="stat-card"><span class="icon">&#128203;</span><div class="label">待给建议选题</div><div class="value"><%= pendingSel %></div></div>
   <div class="stat-card"><span class="icon">&#128196;</span><div class="label">待审文档</div><div class="value"><%= pendingDoc %></div></div>
 </div>
 <div class="row">
   <div class="col-md-6">
     <div class="content-card">
-      <h5>待审选题</h5>
+      <h5>待给建议选题</h5>
       <% if (pendingList.isEmpty()) { %>
-        <div class="empty-state"><p>暂无待审选题申请</p></div>
+        <div class="empty-state"><p>暂无待给建议选题申请</p></div>
       <% } else { %>
         <table class="table-modern">
           <tr><th>学生</th><th>课题</th><th>时间</th><th></th></tr>
@@ -199,7 +203,7 @@
             <td><%= EscapeUtil.html(s.getStudentName()) %></td>
             <td><%= EscapeUtil.html(s.getTopicTitle()) %></td>
             <td><%= sdf.format(s.getApplyTime()) %></td>
-            <td><a href="teacher/selection.action" class="btn btn-sm btn-outline-primary">去审批</a></td>
+            <td><a href="teacher/selection.action" class="btn btn-sm btn-outline-primary">给建议</a></td>
           </tr>
           <% } %>
         </table>

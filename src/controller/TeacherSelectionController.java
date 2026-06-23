@@ -62,14 +62,15 @@ public class TeacherSelectionController extends HttpServlet {
 
             TopicSelection selection = dao.findById(id);
             if (selection != null) {
-                MessageNotifyUtil.send(selection.getStudentId(), "选题审批结果",
-                    "您的选题申请已" + ("approved".equals(status) ? "通过" : "被拒绝"));
+                MessageNotifyUtil.send(selection.getStudentId(), "指导教师选题意见",
+                    "指导教师已对您的选题申请填写"
+                    + ("approved".equals(status) ? "建议通过" : "建议不通过")
+                    + "意见，最终结果以系主任确认为准。");
             }
             OperationLogUtil.log(user.getId(),
-                "approve".equals(action) ? "APPROVE" : "REJECT",
-                "topic_selection", "审批选题 id=" + id + " -> " + status);
-            WebUtil.redirect(request, response,
-                "/teacher/selection.action?msg=" + status);
+                "approve".equals(action) ? "SUGGEST_APPROVE" : "SUGGEST_REJECT",
+                "topic_selection", "指导教师填写选题建议 id=" + id + " -> " + status);
+            WebUtil.redirect(request, response, "/teacher/selection.action?msg=suggest_ok");
         } else {
             WebUtil.redirect(request, response, "/teacher/selection.action");
         }

@@ -23,7 +23,7 @@
         <td><input class="form-check-input" type="checkbox" name="switch.topic_submit" <%= "1".equals(switches.get("switch.topic_submit"))?"checked":"" %>></td>
       </tr>
       <tr>
-        <td>学生选题</td><td>关闭后学生不能提交选题申请；当前版本先作为统一选题开关</td>
+        <td>学生选题</td><td>关闭后学生只能浏览已公布题目，不能提交选题申请；第一轮和第二轮复用该开关</td>
         <td><input class="form-check-input" type="checkbox" name="switch.selection" <%= "1".equals(switches.get("switch.selection"))?"checked":"" %>></td>
       </tr>
       <tr>

@@ -7,6 +7,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import bean.TopicSelection;
+import bean.User;
 import dbutil.SQLHelper;
 import util.DateUtil;
 import util.PageUtil;
@@ -30,6 +31,20 @@ public class SelectionDao {
         } else {
             sql += " ORDER BY s.apply_time DESC";
             rows = SQLHelper.queryList(sql, teacherId);
+        }
+        return mapList(rows);
+    }
+
+    public List<TopicSelection> findByDirectorScope(String college, String major, String status) {
+        String sql = SELECT_SQL
+            + "WHERE t.college=? AND t.major=? AND u.college=? AND u.major=?";
+        List<Object[]> rows;
+        if (status != null && status.length() > 0) {
+            sql += " AND s.status=? ORDER BY s.apply_time DESC";
+            rows = SQLHelper.queryList(sql, college, major, college, major, status);
+        } else {
+            sql += " ORDER BY s.apply_time DESC";
+            rows = SQLHelper.queryList(sql, college, major, college, major);
         }
         return mapList(rows);
     }
@@ -161,11 +176,10 @@ public class SelectionDao {
             conn = SQLHelper.getConnection();
             conn.setAutoCommit(false);
 
-            int studentId;
-            int topicId;
             String currentStatus;
+            String reviewComment;
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT s.student_id,s.topic_id,s.status "
+                    "SELECT s.status,s.review_comment "
                     + "FROM topic_selections s JOIN topics t ON s.topic_id=t.id "
                     + "WHERE s.id=? AND t.teacher_id=? FOR UPDATE")) {
                 ps.setInt(1, id);
@@ -175,9 +189,8 @@ public class SelectionDao {
                         conn.rollback();
                         return 0;
                     }
-                    studentId = rs.getInt(1);
-                    topicId = rs.getInt(2);
-                    currentStatus = rs.getString(3);
+                    currentStatus = rs.getString(1);
+                    reviewComment = rs.getString(2);
                 }
             }
             if (!"pending".equals(currentStatus)) {
@@ -185,59 +198,13 @@ public class SelectionDao {
                 return 0;
             }
 
-            try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT id FROM users WHERE id=? FOR UPDATE")) {
-                ps.setInt(1, studentId);
-                ps.executeQuery().close();
-            }
-
-            int maxStudents;
-            int selectedCount;
-            String topicStatus;
-            try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT max_students,selected_count,status FROM topics WHERE id=? FOR UPDATE")) {
-                ps.setInt(1, topicId);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) {
-                        conn.rollback();
-                        return 0;
-                    }
-                    maxStudents = rs.getInt(1);
-                    selectedCount = rs.getInt(2);
-                    topicStatus = rs.getString(3);
-                }
-            }
-
-            if ("approved".equals(status)) {
-                if (!"open".equals(topicStatus)) {
-                    conn.rollback();
-                    return -1;
-                }
-                try (PreparedStatement ps = conn.prepareStatement(
-                        "SELECT 1 FROM topic_selections "
-                        + "WHERE student_id=? AND status='approved' AND id<>? LIMIT 1")) {
-                    ps.setInt(1, studentId);
-                    ps.setInt(2, id);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (rs.next()) {
-                            conn.rollback();
-                            return -2;
-                        }
-                    }
-                }
-                if (selectedCount >= maxStudents) {
-                    conn.rollback();
-                    return -1;
-                }
-            }
-
             int updated;
             try (PreparedStatement ps = conn.prepareStatement(
-                    "UPDATE topic_selections SET status=?,review_comment=?,review_time=NOW() "
+                    "UPDATE topic_selections SET review_comment=?,review_time=NOW() "
                     + "WHERE id=? AND status='pending'")) {
-                ps.setString(1, status);
-                ps.setString(2, comment);
-                ps.setInt(3, id);
+                ps.setString(1, appendReviewComment(reviewComment,
+                    "approved".equals(status) ? "指导教师建议通过" : "指导教师建议退回", comment));
+                ps.setInt(2, id);
                 updated = ps.executeUpdate();
             }
             if (updated != 1) {
@@ -245,15 +212,6 @@ public class SelectionDao {
                 return 0;
             }
 
-            if ("approved".equals(status)) {
-                try (PreparedStatement ps = conn.prepareStatement(
-                        "UPDATE topics SET selected_count=selected_count+1,"
-                        + "status=CASE WHEN selected_count+1>=max_students THEN 'closed' ELSE status END "
-                        + "WHERE id=?")) {
-                    ps.setInt(1, topicId);
-                    ps.executeUpdate();
-                }
-            }
             conn.commit();
             return 1;
         } catch (Exception ex) {
@@ -290,6 +248,126 @@ public class SelectionDao {
         return val == null ? 0 : ((Number) val).intValue();
     }
 
+    public int countPendingByDirector(String college, String major) {
+        Object val = SQLHelper.queryScalar(
+            "SELECT COUNT(*) FROM topic_selections s "
+            + "JOIN topics t ON s.topic_id=t.id "
+            + "JOIN users u ON s.student_id=u.id "
+            + "WHERE s.status='pending' "
+            + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+            college, major, college, major);
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
+    public List<User> findUnselectedStudents(String college, String major) {
+        List<Object[]> rows = SQLHelper.queryList(
+            "SELECT u.id,u.username,u.real_name,u.student_no,u.college,u.major,u.class_name "
+            + "FROM users u "
+            + "WHERE u.role='student' AND u.status=1 AND u.college=? AND u.major=? "
+            + "AND NOT EXISTS ("
+            + "  SELECT 1 FROM topic_selections s "
+            + "  WHERE s.student_id=u.id AND s.status IN ('pending','approved')"
+            + ") "
+            + "ORDER BY u.student_no,u.id",
+            college, major);
+        List<User> list = new ArrayList<User>();
+        for (Object[] row : rows) {
+            User u = new User();
+            u.setId(((Number) row[0]).intValue());
+            u.setUsername((String) row[1]);
+            u.setRealName((String) row[2]);
+            u.setStudentNo((String) row[3]);
+            u.setCollege((String) row[4]);
+            u.setMajor((String) row[5]);
+            u.setClassName((String) row[6]);
+            list.add(u);
+        }
+        return list;
+    }
+
+    public int confirmByDirector(int id, String college, String major, String comment) {
+        return reviewInDirectorScope(id, college, major, "approved", comment);
+    }
+
+    public int rejectByDirector(int id, String college, String major, String comment) {
+        return reviewInDirectorScope(id, college, major, "rejected", comment);
+    }
+
+    public int manualAssign(int studentId, int topicId, String college, String major, String comment) {
+        Connection conn = null;
+        try {
+            conn = SQLHelper.getConnection();
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id FROM users "
+                    + "WHERE id=? AND role='student' AND status=1 AND college=? AND major=? "
+                    + "FOR UPDATE")) {
+                ps.setInt(1, studentId);
+                ps.setString(2, college);
+                ps.setString(3, major);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        conn.rollback();
+                        return 0;
+                    }
+                }
+            }
+
+            if (hasActiveSelection(conn, studentId, 0)) {
+                conn.rollback();
+                return -2;
+            }
+
+            int maxStudents;
+            int selectedCount;
+            String topicStatus;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT status,max_students,selected_count FROM topics "
+                    + "WHERE id=? AND college=? AND major=? FOR UPDATE")) {
+                ps.setInt(1, topicId);
+                ps.setString(2, college);
+                ps.setString(3, major);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        conn.rollback();
+                        return 0;
+                    }
+                    topicStatus = rs.getString(1);
+                    maxStudents = rs.getInt(2);
+                    selectedCount = rs.getInt(3);
+                }
+            }
+            if (!"open".equals(topicStatus) || selectedCount >= maxStudents) {
+                conn.rollback();
+                return -1;
+            }
+
+            int inserted;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO topic_selections(student_id,topic_id,status,apply_reason,review_comment,review_time) "
+                    + "VALUES(?,?,'approved','系主任手动分配',?,NOW())")) {
+                ps.setInt(1, studentId);
+                ps.setInt(2, topicId);
+                ps.setString(3, appendReviewComment(null, "系主任分配", comment));
+                inserted = ps.executeUpdate();
+            }
+            if (inserted != 1) {
+                conn.rollback();
+                return 0;
+            }
+            incrementTopicSelected(conn, topicId);
+            conn.commit();
+            return 1;
+        } catch (Exception ex) {
+            rollbackQuietly(conn);
+            ex.printStackTrace();
+            return 0;
+        } finally {
+            closeQuietly(conn);
+        }
+    }
+
     private List<TopicSelection> mapList(List<Object[]> rows) {
         List<TopicSelection> list = new ArrayList<TopicSelection>();
         for (Object[] row : rows) {
@@ -313,6 +391,131 @@ public class SelectionDao {
         s.setApplyTime(DateUtil.toDate(row[10]));
         s.setReviewTime(DateUtil.toDate(row[11]));
         return s;
+    }
+
+    private int reviewInDirectorScope(int id, String college, String major, String status, String comment) {
+        if (!"approved".equals(status) && !"rejected".equals(status)) {
+            return 0;
+        }
+        Connection conn = null;
+        try {
+            conn = SQLHelper.getConnection();
+            conn.setAutoCommit(false);
+
+            int studentId;
+            int topicId;
+            String currentStatus;
+            String reviewComment;
+            int maxStudents;
+            int selectedCount;
+            String topicStatus;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT s.student_id,s.topic_id,s.status,s.review_comment,"
+                    + "t.status,t.max_students,t.selected_count "
+                    + "FROM topic_selections s "
+                    + "JOIN topics t ON s.topic_id=t.id "
+                    + "JOIN users u ON s.student_id=u.id "
+                    + "WHERE s.id=? "
+                    + "AND t.college=? AND t.major=? AND u.college=? AND u.major=? "
+                    + "FOR UPDATE")) {
+                ps.setInt(1, id);
+                ps.setString(2, college);
+                ps.setString(3, major);
+                ps.setString(4, college);
+                ps.setString(5, major);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        conn.rollback();
+                        return 0;
+                    }
+                    studentId = rs.getInt(1);
+                    topicId = rs.getInt(2);
+                    currentStatus = rs.getString(3);
+                    reviewComment = rs.getString(4);
+                    topicStatus = rs.getString(5);
+                    maxStudents = rs.getInt(6);
+                    selectedCount = rs.getInt(7);
+                }
+            }
+            if (!"pending".equals(currentStatus)) {
+                conn.rollback();
+                return 0;
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id FROM users WHERE id=? FOR UPDATE")) {
+                ps.setInt(1, studentId);
+                ps.executeQuery().close();
+            }
+
+            if ("approved".equals(status)) {
+                if (!"open".equals(topicStatus) || selectedCount >= maxStudents) {
+                    conn.rollback();
+                    return -1;
+                }
+                if (hasActiveSelection(conn, studentId, id)) {
+                    conn.rollback();
+                    return -2;
+                }
+            }
+
+            int updated;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE topic_selections SET status=?,review_comment=?,review_time=NOW() "
+                    + "WHERE id=? AND status='pending'")) {
+                ps.setString(1, status);
+                ps.setString(2, appendReviewComment(reviewComment, "系主任意见", comment));
+                ps.setInt(3, id);
+                updated = ps.executeUpdate();
+            }
+            if (updated != 1) {
+                conn.rollback();
+                return 0;
+            }
+            if ("approved".equals(status)) {
+                incrementTopicSelected(conn, topicId);
+            }
+            conn.commit();
+            return 1;
+        } catch (Exception ex) {
+            rollbackQuietly(conn);
+            ex.printStackTrace();
+            return 0;
+        } finally {
+            closeQuietly(conn);
+        }
+    }
+
+    private boolean hasActiveSelection(Connection conn, int studentId, int excludedSelectionId)
+            throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT 1 FROM topic_selections "
+                + "WHERE student_id=? AND status IN ('pending','approved') AND id<>? LIMIT 1")) {
+            ps.setInt(1, studentId);
+            ps.setInt(2, excludedSelectionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    private void incrementTopicSelected(Connection conn, int topicId) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE topics SET selected_count=selected_count+1,"
+                + "status=CASE WHEN selected_count+1>=max_students THEN 'closed' ELSE status END "
+                + "WHERE id=?")) {
+            ps.setInt(1, topicId);
+            ps.executeUpdate();
+        }
+    }
+
+    private String appendReviewComment(String existing, String label, String comment) {
+        String clean = comment == null ? "" : comment.trim();
+        String line = label + "：" + (clean.isEmpty() ? "无补充意见" : clean);
+        if (existing == null || existing.trim().isEmpty()) {
+            return line;
+        }
+        return existing.trim() + "\n" + line;
     }
 
     private void rollbackQuietly(Connection conn) {

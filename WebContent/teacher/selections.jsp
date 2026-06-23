@@ -1,7 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
 <%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
-  request.setAttribute("pageTitle", "选题审批");
+  request.setAttribute("pageTitle", "选题建议");
   User loginUser = (User) session.getAttribute("loginUser");
   String statusFilter = (String) request.getAttribute("statusFilter");
   List<TopicSelection> list = (List<TopicSelection>) request.getAttribute("selections");
@@ -16,8 +16,8 @@
 <%@ include file="/WEB-INF/includes/sidebar.jsp" %>
 
 <div class="mb-3">
-  <a href="selection.action?status=pending" class="btn btn-sm <%= "pending".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">待审批</a>
-  <a href="selection.action?status=approved" class="btn btn-sm <%= "approved".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已通过</a>
+  <a href="selection.action?status=pending" class="btn btn-sm <%= "pending".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">待给建议</a>
+  <a href="selection.action?status=approved" class="btn btn-sm <%= "approved".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已由系主任确认</a>
   <a href="selection.action?status=rejected" class="btn btn-sm <%= "rejected".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">已驳回</a>
   <a href="selection.action?status=all" class="btn btn-sm <%= "all".equals(statusFilter)?"btn-primary":"btn-outline-primary" %>">全部</a>
 </div>
@@ -38,8 +38,8 @@
         <td><% request.setAttribute("status", s.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %></td>
         <td>
           <% if ("pending".equals(s.getStatus())) { %>
-            <button class="btn btn-sm btn-success" onclick="reviewSel(<%= s.getId() %>,'approve','<%= EscapeUtil.attr(s.getStudentName()) %>')">批准</button>
-            <button class="btn btn-sm btn-danger" onclick="reviewSel(<%= s.getId() %>,'reject','<%= EscapeUtil.attr(s.getStudentName()) %>')">驳回</button>
+            <button class="btn btn-sm btn-success" onclick="reviewSel(<%= s.getId() %>,'approve','<%= EscapeUtil.attr(s.getStudentName()) %>')">建议通过</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="reviewSel(<%= s.getId() %>,'reject','<%= EscapeUtil.attr(s.getStudentName()) %>')">建议不通过</button>
           <% } else { %>
             <%= s.getReviewComment()==null?"—":EscapeUtil.html(s.getReviewComment()) %>
           <% } %>
@@ -55,10 +55,10 @@
     <form id="reviewForm" action="../teacher/selection.action" method="post">
       <input type="hidden" name="action" id="reviewAction">
       <input type="hidden" name="id" id="reviewId">
-      <div class="modal-header"><h6 class="modal-title" id="reviewTitle">审批选题</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-header"><h6 class="modal-title" id="reviewTitle">填写指导教师意见</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
-        <label class="form-label">审批意见</label>
-        <textarea name="reviewComment" class="form-control form-control-sm" rows="3" placeholder="请输入审批意见"></textarea>
+        <label class="form-label">指导教师意见</label>
+        <textarea name="reviewComment" class="form-control form-control-sm" rows="3" placeholder="请输入对该学生选题的建议"></textarea>
       </div>
       <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">确认</button></div>
     </form>
@@ -69,7 +69,7 @@
 function reviewSel(id, action, name) {
   document.getElementById('reviewId').value = id;
   document.getElementById('reviewAction').value = action;
-  document.getElementById('reviewTitle').textContent = (action === 'approve' ? '批准' : '驳回') + ' - ' + name;
+  document.getElementById('reviewTitle').textContent = (action === 'approve' ? '建议通过' : '建议不通过') + ' - ' + name;
   new bootstrap.Modal(document.getElementById('reviewModal')).show();
 }
 </script>

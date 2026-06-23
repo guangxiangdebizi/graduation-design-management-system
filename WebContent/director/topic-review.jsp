@@ -66,12 +66,30 @@
           <% } else { %>—<% } %>
         </td>
         <td>
+          <button class="btn btn-sm btn-outline-primary" onclick="editTopic(<%= t.getId() %>,'<%= EscapeUtil.js(t.getTitle()) %>','<%= EscapeUtil.js(t.getDescription() != null ? t.getDescription() : "") %>',<%= t.getMaxStudents() %>)">调整</button>
           <button class="btn btn-sm btn-success" onclick="reviewTopic(<%= t.getId() %>,'approve','<%= EscapeUtil.js(t.getTitle()) %>')">通过</button>
           <button class="btn btn-sm btn-outline-danger" onclick="reviewTopic(<%= t.getId() %>,'reject','<%= EscapeUtil.js(t.getTitle()) %>')">驳回</button>
         </td>
       </tr>
     <% }} %>
   </table>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form action="topic-review.action" method="post">
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="id" id="editId">
+      <div class="modal-header"><h6 class="modal-title">调整本专业课题</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">课题名称</label><input name="title" id="editTitle" class="form-control form-control-sm" required></div>
+        <div class="mb-2"><label class="form-label">课题描述</label><textarea name="description" id="editDesc" class="form-control form-control-sm" rows="4" required></textarea></div>
+        <div class="mb-2"><label class="form-label">最大人数</label><input name="maxStudents" id="editMax" type="number" min="1" max="5" class="form-control form-control-sm" required></div>
+        <div class="mb-2"><label class="form-label">调整说明</label><textarea name="reviewComment" class="form-control form-control-sm" rows="3" placeholder="如：根据本专业方向调整题目范围"></textarea></div>
+      </div>
+      <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">保存调整</button></div>
+    </form>
+  </div></div>
 </div>
 
 <div class="modal fade" id="reviewModal" tabindex="-1">
@@ -95,6 +113,13 @@ function reviewTopic(id, action, title) {
   document.getElementById('reviewAction').value = action;
   document.getElementById('reviewTitle').textContent = (action === 'approve' ? '通过' : '驳回') + ' - ' + title;
   new bootstrap.Modal(document.getElementById('reviewModal')).show();
+}
+function editTopic(id, title, desc, max) {
+  document.getElementById('editId').value = id;
+  document.getElementById('editTitle').value = title;
+  document.getElementById('editDesc').value = desc;
+  document.getElementById('editMax').value = max;
+  new bootstrap.Modal(document.getElementById('editModal')).show();
 }
 </script>
 

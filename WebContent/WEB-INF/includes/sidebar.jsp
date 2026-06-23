@@ -28,7 +28,7 @@
       <a href="<%= ctx %>/admin/logs.jsp" class="<%= sidebarCurrentPage.contains("/admin/logs") ? "active" : "" %>">&#9632; 操作日志</a>
     <% } else if ("director".equals(userRole)) { %>
       <a href="<%= ctx %>/teacher/topic.action" class="<%= sidebarCurrentPage.contains("/teacher/topic") ? "active" : "" %>">&#9632; 我的课题</a>
-      <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题审批</a>
+      <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题建议</a>
       <a href="<%= ctx %>/teacher/document.action" class="<%= sidebarCurrentPage.contains("/teacher/document") ? "active" : "" %>">&#9632; 文档审核</a>
       <a href="<%= ctx %>/teacher/students.jsp" class="<%= sidebarCurrentPage.contains("/teacher/students") ? "active" : "" %>">&#9632; 学生进度</a>
       <a href="<%= ctx %>/teacher/defense.jsp" class="<%= sidebarCurrentPage.contains("/teacher/defense") ? "active" : "" %>">&#9632; 答辩安排</a>
@@ -36,10 +36,11 @@
       <a href="<%= ctx %>/teacher/ai.jsp" class="<%= sidebarCurrentPage.contains("/teacher/ai") ? "active" : "" %>">&#9632; AI 助手</a>
       <a href="<%= ctx %>/teacher/messages.jsp" class="<%= sidebarCurrentPage.contains("/messages") ? "active" : "" %>">&#9632; 站内消息<% if (unreadMsg > 0) { %> <span class="badge bg-danger"><%= unreadMsg %></span><% } %></a>
       <a href="<%= ctx %>/director/topic-review.action" class="<%= sidebarCurrentPage.contains("/director/topic-review") ? "active" : "" %>">&#9632; 本专业课题审核</a>
+      <a href="<%= ctx %>/director/selection-confirm.action" class="<%= sidebarCurrentPage.contains("/director/selection-confirm") ? "active" : "" %>">&#9632; 本专业选题确认</a>
       <a href="<%= ctx %>/director/statistics.jsp" class="<%= sidebarCurrentPage.contains("/director/statistics") ? "active" : "" %>">&#9632; 本专业项目统计</a>
     <% } else if ("teacher".equals(userRole)) { %>
       <a href="<%= ctx %>/teacher/topic.action" class="<%= sidebarCurrentPage.contains("/teacher/topic") ? "active" : "" %>">&#9632; 我的课题</a>
-      <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题审批</a>
+      <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题建议</a>
       <a href="<%= ctx %>/teacher/document.action" class="<%= sidebarCurrentPage.contains("/teacher/document") ? "active" : "" %>">&#9632; 文档审核</a>
       <a href="<%= ctx %>/teacher/students.jsp" class="<%= sidebarCurrentPage.contains("/teacher/students") ? "active" : "" %>">&#9632; 学生进度</a>
       <a href="<%= ctx %>/teacher/defense.jsp" class="<%= sidebarCurrentPage.contains("/teacher/defense") ? "active" : "" %>">&#9632; 答辩安排</a>

@@ -24,9 +24,9 @@
   // 消息提示
   String msg = request.getParameter("msg");
   String msgTitle = "", msgContent = "", msgClass = "";
-  if ("already_applied".equals(msg)) { msgTitle="提示"; msgContent="您已有选题申请，请等待教师审核"; msgClass="warning"; }
+  if ("already_applied".equals(msg)) { msgTitle="提示"; msgContent="您已有选题申请，请等待系主任确认"; msgClass="warning"; }
   else if ("quota_full".equals(msg)) { msgTitle="提示"; msgContent="该课题名额已满"; msgClass="warning"; }
-  else if ("selection_closed".equals(msg)) { msgTitle="提示"; msgContent="管理员已关闭学生选题入口"; msgClass="warning"; }
+  else if ("selection_closed".equals(msg)) { msgTitle="提示"; msgContent="选题系统当前未开启，只能浏览已公布题目"; msgClass="warning"; }
   else if ("major_mismatch".equals(msg)) { msgTitle="提示"; msgContent="只能申请本学院本专业范围内的课题"; msgClass="warning"; }
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
@@ -58,12 +58,12 @@
 </form>
 
 <% if (!selectionOpen) { %>
-  <div class="alert alert-warning py-2">学生选题入口当前关闭，暂不能浏览和申请课题。</div>
+  <div class="alert alert-warning py-2">选题系统当前关闭：可以浏览系主任已公布题目，但不能提交选题申请。</div>
 <% } %>
 
 <div class="topic-grid">
   <% if (topics.isEmpty()) { %>
-    <div class="empty-state" style="grid-column:1/-1"><div class="icon">&#128269;</div><p><%= selectionOpen ? "没有找到匹配的课题" : "选题入口暂未开放" %></p></div>
+    <div class="empty-state" style="grid-column:1/-1"><div class="icon">&#128269;</div><p>没有找到匹配的已公布课题</p></div>
   <% } else { for (Topic t : topics) { %>
     <div class="topic-card">
       <h6><%= EscapeUtil.html(t.getTitle()) %></h6>
@@ -76,7 +76,9 @@
         <br>
         名额: <%= t.getSelectedCount() %>/<%= t.getMaxStudents() %>
       </div>
-      <% if (!hasApplied && t.getSelectedCount() < t.getMaxStudents()) { %>
+      <% if (!selectionOpen) { %>
+        <span class="text-muted small mt-2 d-block">当前只能浏览，选题系统开启后才能申请</span>
+      <% } else if (!hasApplied && t.getSelectedCount() < t.getMaxStudents()) { %>
         <button class="btn btn-primary btn-sm mt-2" onclick="applyTopic(<%= t.getId() %>,'<%= EscapeUtil.js(t.getTitle()) %>')">申请选题</button>
       <% } else if (hasApplied) { %>
         <span class="text-muted small mt-2 d-block">您已有选题申请</span>
