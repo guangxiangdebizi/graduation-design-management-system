@@ -1,42 +1,44 @@
-# 05 站内消息与页面渲染 GET：JSP 直读 DAO、分页、日志、成绩、答辩与教师学生进度
+# 05 站内消息与页面渲染 GET：JSP 直读 DAO、分页、日志、成绩、答辩、教师进度与专业负责人统计
 
-本部分只分析非 AI 模块：站内消息、普通 GET 页面渲染、分页组件、操作日志、学生成绩/答辩展示、教师学生进度展示，以及少量用于对照的 Controller forward 型页面。这个项目里同时存在两种页面取数方式：
+本分片覆盖站内消息、普通页面 GET 渲染、分页片段、操作日志、学生成绩/答辩、教师学生进度/答辩、专业负责人统计页和导出入口。这里不写 AI 模块。
 
-1. **直接访问 JSP，JSP scriptlet 里 new DAO 并查库**：例如 `/admin/messages.jsp`、`/admin/logs.jsp`、`/student/grades.jsp`、`/student/defense.jsp`、`/teacher/students.jsp`。浏览器请求 JSP 后，JSP 顶部 Java 代码直接读取 `session.loginUser`、解析 query 参数、调用 DAO，然后在同一个 JSP 里输出 HTML。
-2. **访问 `.action` Servlet，Controller 查 DAO 后 forward 到 JSP**：例如 `/admin/user.action`、`/student/document.action`、`/teacher/document.action`、`/teacher/selection.action`、`/student/topic.action`。浏览器先到 Servlet，Servlet 把数据放进 `request.setAttribute(...)`，再 `RequestDispatcher.forward(...)` 到 JSP 渲染。
+项目当前同时存在两类页面取数方式：
 
-站内消息页面的 GET 属于第一类；`POST /message.action` 属于 Servlet 处理表单提交，但它不 forward，而是根据当前登录用户角色 redirect 回对应的 `messages.jsp`。
+1. **JSP 直读 DAO**：浏览器直接 GET `.jsp`，JSP 顶部 scriptlet 从 `session.loginUser` 和 query string 取参数，`new DAO()` 查库，然后在同一个 JSP 输出 HTML。本站内消息页、日志页、学生成绩/答辩、教师学生进度/答辩都属于这种模式。
+2. **Controller forward**：浏览器 GET `.action`，Servlet 解析参数并查 DAO，`request.setAttribute(...)` 放入页面模型，再 `forward` 到 JSP。典型例子是用户管理、学生文档提交页、教师文档审核页、教师选题建议页、学生浏览课题页。
+
+当前站内消息 GET 属于第一类；`POST /message.action` 只处理 send/read/delete 表单，处理完后按角色 redirect 回消息 JSP，不 forward。
 
 ---
 
-## 1. URL / 方法 / 字段总表
+## 1. URL / 方法 / 参数总表
 
-| 模块 | URL 与方法 | query / form 字段 | 数据来源 | 结果 |
+| 模块 | URL 与方法 | query / form 字段 | 当前取数方式 | 结果 |
 |---|---|---|---|---|
-| 管理员消息页 | `GET /admin/messages.jsp` | `tab`、`view`、`page`、`pageSize` | JSP scriptlet 直接调用 `MessageDao`、`UserDao` | 渲染收件箱/已发送、可选消息详情、发送弹窗、分页 |
-| 教师消息页 | `GET /teacher/messages.jsp` | `tab`、`view`、`page`、`pageSize` | JSP scriptlet 直接调用 `MessageDao`、`UserDao` | 同上，角色路径不同 |
-| 学生消息页 | `GET /student/messages.jsp` | `tab`、`view`、`page`、`pageSize` | JSP scriptlet 直接调用 `MessageDao`、`UserDao` | 同上，角色路径不同 |
-| 站内消息动作 | `POST /message.action` | hidden `action=send/read/delete`；`send` 还带 `receiverId,title,content`；`read/delete` 带 `id` | `MessageController` 调 `MessageDao`、`UserDao`、`SelectionDao`、`TopicDao` | 不渲染页面；redirect 到角色对应 `messages.jsp` |
-| 管理员日志 | `GET /admin/logs.jsp` | `userId`、`action`、`dateFrom`、`dateTo`、`page`、`pageSize` | JSP scriptlet 直接调用 `OperationLogDao` | 渲染日志表格与分页 |
-| 学生成绩 | `GET /student/grades.jsp` | 无业务 query | JSP scriptlet 直接调用 `DocumentDao`、`DefenseScheduleDao` | 渲染文档成绩卡片、答辩成绩和明细表 |
-| 学生答辩 | `GET /student/defense.jsp` | 无业务 query | JSP scriptlet 直接调用 `DefenseScheduleDao` | 渲染答辩安排或空状态 |
-| 教师学生进度 | `GET /teacher/students.jsp` | 无业务 query | JSP scriptlet 直接调用 `SelectionDao`、`DocumentDao` | 渲染已选题学生及各阶段文档状态 |
-| Controller forward 对照 | `GET /admin/user.action`、`GET /student/document.action` 等 | 由对应 Controller 解析 | Controller 调 DAO 后 `setAttribute` | forward 到 JSP，不改变浏览器地址 |
+| 管理员消息页 | `GET /admin/messages.jsp` | `tab`、`view`、`page`、`pageSize` | JSP 直调 `MessageDao`、`MessageContactUtil` | 渲染收件箱/已发送、详情、发送弹窗、分页 |
+| 教师/专业负责人消息页 | `GET /teacher/messages.jsp` | `tab`、`view`、`page`、`pageSize` | JSP 直调 `MessageDao`、`MessageContactUtil` | 教师和 director 共用教师消息页 |
+| 学生消息页 | `GET /student/messages.jsp` | `tab`、`view`、`page`、`pageSize` | JSP 直调 `MessageDao`、`MessageContactUtil` | 渲染学生消息 |
+| 消息动作 | `POST /message.action` | hidden `action=send/read/delete`；`send` 带 `receiverId,title,content`；`read/delete` 带 `id` | `MessageController` 调 `MessageDao`、`MessageContactUtil` | redirect 到角色消息页 |
+| 管理员日志 | `GET /admin/logs.jsp` | `userId`、`action`、`dateFrom`、`dateTo`、`page`、`pageSize` | JSP 直调 `OperationLogDao` | 渲染过滤表单、日志表、分页 |
+| 学生成绩 | `GET /student/grades.jsp` | 无业务 query | JSP 直调 `DocumentDao`、`DefenseScheduleDao` | 渲染文档成绩卡片、答辩成绩、明细表 |
+| 学生答辩 | `GET /student/defense.jsp` | 无业务 query | JSP 直调 `DefenseScheduleDao` | 渲染本人答辩安排或空状态 |
+| 教师学生进度 | `GET /teacher/students.jsp` | 无业务 query | JSP 直调 `SelectionDao`、`DocumentDao` | 渲染已选题学生和各阶段文档状态 |
+| 教师答辩 | `GET /teacher/defense.jsp` | 无业务 query | JSP 直调 `DefenseScheduleDao` | 渲染所带学生答辩安排 |
+| 专业负责人统计页 | `GET /director/statistics.jsp` | 无业务 query | JSP 校验 director scope，前端再 fetch JSON | 渲染 4 个 ECharts 容器和导出按钮 |
+| 专业负责人统计 JSON | `GET /director/stats.action` | 无 | Controller 调 `UserDao`、`StatsDao` | 返回 selection/docPass/defense/scores JSON |
+| 专业负责人成绩导出 | `GET /director/export.action` | 无 | Controller 查 scoped SQL 并写 XLSX | 下载 `director_grades_export.xlsx` |
 
-字段约定：
+关键字段：
 
-- `?tab=inbox`：`?` 表示 URL query 开始，`tab` 是消息列表视图；`inbox` 是默认收件箱。代码只特殊识别 `sent`，非 `sent` 都按收件箱处理。
-- `&view=1`：`&` 连接第二个 query 参数；`view` 是要打开详情的消息 id。JSP 会用 `findByIdForUser(viewId, loginUser.id)` 限制只能看本人发送或接收的消息。
-- `page/pageSize`：分页参数。`page` 是第几页，`pageSize` 是每页条数；非法、空值、小于等于 0 都回退到默认值。
-- `../message.action`：消息页都在 `/admin/`、`/teacher/`、`/student/` 子目录下，表单用相对路径 `../message.action` 回到应用根下的 `/message.action`。
-- hidden `action` / `id`：表单隐藏字段，不展示给用户，但会随 POST body 发给 Servlet。`action` 决定 send/read/delete 分支，`id` 指定消息主键。
-- `include pagination.jsp`：分页不是独立请求；主 JSP 先把 `baseUrl/page/pageSize/total` 放到 request attribute，再 include 分页片段拼出上一页/下一页链接。
+- `tab`：消息列表视图；空值默认 `inbox`，只有精确等于 `sent` 才走已发送分支，其他值都按收件箱分支处理。
+- `view`：消息详情 id；JSP 用 `findByIdForUser(viewId, loginUser.id)` 限制只能查看本人发送或接收的消息。
+- `page/pageSize`：分页参数；`PageUtil` 只接受正整数，非法、空值、0、负数回退默认。
+- `../message.action`：三个消息 JSP 都在角色子目录下，表单用 `../message.action` 回到应用根的 `/message.action`。
+- `baseUrl`：主 JSP 传给分页 include 的基础 URL，用来保留 `tab` 或日志过滤条件。
 
 ---
 
-## 2. 消息页面 GET：浏览器直达 JSP，JSP scriptlet 直接查 DAO
-
-### 2.1 网络请求与参数进入点
+## 2. 消息页面 GET：直达 JSP，JSP 读取 session/query 并查 DAO
 
 典型请求：
 
@@ -46,141 +48,86 @@ GET /teacher/messages.jsp?tab=sent
 GET /student/messages.jsp?tab=inbox&view=12
 ```
 
-浏览器请求的是 JSP 文件本身，不是 `.action`。JSP 顶部 scriptlet 直接执行 Java：
+三个角色消息页结构一致：
 
-- `session.getAttribute("loginUser")` 取当前登录用户。
-- `new MessageDao()` 和 `new UserDao()` 准备查消息和联系人。
-- `request.getParameter("tab")` 读取列表类型，空值默认 `inbox`。
-- `request.getParameter("view")` 尝试解析详情消息 id，解析失败就是 0。
-- `PageUtil.getPage(request)` 与 `PageUtil.getPageSize(request)` 读取分页参数。
+1. JSP 从 `session.getAttribute("loginUser")` 取当前用户。
+2. 创建 `MessageDao`。
+3. 读取 `tab`，空值设为 `inbox`。
+4. 读取 `view`，解析失败按 `0`。
+5. 如果 `viewId > 0`，先 `findByIdForUser`，若当前用户是接收者且消息未读，立即 `markRead`。
+6. 读取 `page/pageSize`。
+7. `tab=sent` 时 `findSent(loginUser.id)` 拉全量；否则 `countInbox` + `findInboxPaged`。
+8. 再查一次 `viewing = findByIdForUser(...)` 用于详情块。
+9. `MessageContactUtil.contactsFor(loginUser)` 生成发送弹窗联系人。
+10. 收件箱分支设置 `baseUrl/page/pageSize/total` 后 include `pagination.jsp`。
 
-管理员、教师、学生三个消息页代码结构一致，路径不同。以 `WebContent/admin/messages.jsp` 为例，关键流程集中在 `15-58` 行：读取 `tab/view/page/pageSize`，根据 `tab` 决定查已发送还是收件箱，按 `view` 查详情，再准备联系人列表和分页 base URL。
-
-### 2.2 `tab` 如何影响 DAO 查询
-
-消息页只把 `tab` 分成两类：
-
-| `tab` 值 | JSP 分支 | DAO 调用 | 分页 |
-|---|---|---|---|
-| `sent` | 已发送 | `msgDao.findSent(loginUser.getId())` | 不 include 分页；`total = list.size()` |
-| 空值、`inbox`、其他值 | 收件箱 | `msgDao.countInbox(...)` + `msgDao.findInboxPaged(...)` | include `pagination.jsp` |
-
-这里有一个容易被问到的点：**已发送列表没有用 `LIMIT/OFFSET`**。`sent` 分支直接 `findSent` 拉全量，并且 `if (!"sent".equals(tab))` 才 include 分页，因此 `page/pageSize` 对已发送页没有实际影响。收件箱分支才会把 `page/pageSize` 传入 `findInboxPaged`，最终变成 SQL 的 `LIMIT ? OFFSET ?`。
-
-### 2.3 `view` 如何影响详情和已读状态
-
-`view` 是详情消息 id，例如 `?tab=inbox&view=12`：
-
-1. JSP 先把 `view` parse 成 `viewId`。
-2. 如果 `viewId > 0`，调用 `msgDao.findByIdForUser(viewId, loginUser.getId())`。
-3. DAO SQL 条件是 `m.id=? AND (m.sender_id=? OR m.receiver_id=?)`，所以用户只能看自己发出或接收的消息。
-4. 如果打开的是自己收到的未读消息，JSP 直接调用 `msgDao.markRead(viewing.getId(), loginUser.getId())`，然后把内存对象 `viewing.setIsRead(1)`，这样当前页面立即显示已读。
-
-这也是直接 JSP 读 DAO 的典型特征：**GET 请求不仅查数据，还可能产生“标记已读”的写操作**。如果老师追问“点击查看消息是不是纯查询”，答案是否定的：带 `view` 的 GET 在未读收件消息场景下会执行 `UPDATE messages SET is_read=1 ...`。
-
-### 2.4 消息页 GET 直读 DAO 流程图
+注意：带 `view` 的 GET 不是纯读。当前 JSP 在展示未读收件详情前会执行 `UPDATE messages SET is_read=1 WHERE id=? AND receiver_id=?`，所以“查看消息”会产生已读状态变更。
 
 ```mermaid
 flowchart TD
     A["浏览器 GET /admin|teacher|student/messages.jsp?tab=&view=&page=&pageSize="]
-    B["WebContent/admin/messages.jsp:15-24\n读取 tab/view/page/pageSize"]
-    B2["WebContent/teacher/messages.jsp:15-25\n教师页同构读取参数"]
-    B3["WebContent/student/messages.jsp:15-25\n学生页同构读取参数"]
-    C{"tab == sent ?\nWebContent/admin/messages.jsp:30-42"}
-    D["src/dao/MessageDao.java:71-77\nfindSent(senderId)，查已发送全量"]
-    E["src/dao/MessageDao.java:59-67\ncountInbox(receiverId)，统计收件箱"]
-    F["src/dao/MessageDao.java:45-55\nfindInboxPaged(receiverId,page,pageSize)\nLIMIT/OFFSET"]
-    G{"viewId > 0 ?\nWebContent/admin/messages.jsp:44-52"}
-    H["src/dao/MessageDao.java:91-96\nfindByIdForUser(id,userId)\n限制发送者或接收者"]
-    I["src/dao/MessageDao.java:121-127\nmarkRead(id,receiverId)\nGET 查看时标记已读"]
-    J["WebContent/admin/messages.jsp:88-155\n输出详情、列表、分页 include"]
+    B["WebContent/admin/messages.jsp:9-19\n取 loginUser、MessageDao、tab、view"]
+    B2["WebContent/teacher/messages.jsp:9-19\n同构读取"]
+    B3["WebContent/student/messages.jsp:9-19\n同构读取"]
+    C{"viewId > 0 ?"}
+    D["src/dao/MessageDao.java:91-96\nfindByIdForUser: id 且 sender/receiver 为当前用户"]
+    E["src/dao/MessageDao.java:121-127\nmarkRead: 当前用户是 receiver 才更新"]
+    F["WebContent/admin/messages.jsp:28-30\nPageUtil.getPage/getPageSize"]
+    G{"tab == sent ?"}
+    H["src/dao/MessageDao.java:71-77\nfindSent(senderId)，已发送全量"]
+    I["src/dao/MessageDao.java:59-67\ncountInbox(receiverId)"]
+    J["src/dao/MessageDao.java:45-55\nfindInboxPaged(receiverId,page,pageSize)\nLIMIT/OFFSET"]
+    K["src/util/MessageContactUtil.java:11-23\ncontactsFor 生成可发送联系人"]
+    L["WebContent/admin/messages.jsp:75-151\n输出 tab、详情、列表、分页 include"]
 
     A --> B
-    A -.同构.-> B2
-    A -.同构.-> B3
+    A -.教师页.-> B2
+    A -.学生页.-> B3
     B --> C
-    C -- 是 --> D --> G
-    C -- 否 --> E --> F --> G
-    G -- 是 --> H --> I --> J
-    G -- 否 --> J
+    C -- 是 --> D --> E --> F
+    C -- 否 --> F
+    F --> G
+    G -- 是 --> H --> K --> L
+    G -- 否 --> I --> J --> K --> L
 ```
+
+### `tab/view/page/pageSize` 的当前行为
+
+| 参数 | 进入点 | 行为 |
+|---|---|---|
+| `tab` | 三个 `messages.jsp` 顶部 | 空值设为 `inbox`；只有 `sent` 走已发送，其他都走收件箱 |
+| `view` | 三个 `messages.jsp` 顶部 | 解析为消息 id；详情查询必须满足 sender 或 receiver 是当前用户 |
+| `page` | `PageUtil.getPage(request)` | 默认 1；只影响收件箱 |
+| `pageSize` | `PageUtil.getPageSize(request)` | 默认 `SystemConfigUtil page.default_size` 或 10；只影响收件箱 |
+
+已发送页没有分页 include，也没有 `LIMIT/OFFSET`；`page/pageSize` 对 `tab=sent` 当前无效。收件箱才会使用 `countInbox + findInboxPaged` 并渲染分页片段。
 
 ---
 
-## 3. 消息表单 POST：`message.action` 的 send / read / delete
+## 3. `POST /message.action`：send / read / delete 与角色 redirect
 
-### 3.1 表单从哪里来
+消息页里的两个可见表单：
 
-消息页里有两类表单：
+- 详情块删除表单：`action="../message.action"`，hidden `action=delete` 和 `id=<viewing.id>`。
+- 发送弹窗表单：`action="../message.action"`，hidden `action=send`，字段 `receiverId/title/content`。
 
-- 删除表单：详情块中 `<form action="../message.action" method="post">`，隐藏字段 `action=delete` 和 `id=<消息 id>`。
-- 发送表单：弹窗中 `<form action="../message.action" method="post">`，隐藏字段 `action=send`，并提交 `receiverId`、`title`、`content`。
-
-`../message.action` 是相对路径。以 `/admin/messages.jsp` 为例，它解析成 `/message.action`；以 `/teacher/messages.jsp` 和 `/student/messages.jsp` 也一样。这样三个角色页面可以复用同一个 `MessageController`。
-
-代码里还存在 `action=read` 分支，但当前三个消息 JSP 的“查看”按钮是普通 GET 链接 `?tab=<tab>&view=<id>`，不是 POST read 表单。因此实际页面点击查看主要走 JSP GET 的 `view` 标记已读；`MessageController` 的 read 分支更像保留接口或可被其他表单调用。
-
-### 3.2 Controller 入口与分支
-
-`MessageController` 映射为 `@WebServlet("/message.action")`，只实现 `doPost`。入口会：
-
-1. `request.setCharacterEncoding("UTF-8")`，避免标题/内容中文乱码。
-2. 从 session 取 `loginUser`。
-3. 读取 form 字段 `action`。
-4. 创建 `MessageDao`。
-
-然后按 `action` 分三支：
-
-| `action` | 必需字段 | Controller 行为 | DAO 行为 | redirect |
-|---|---|---|---|---|
-| `send` | `receiverId,title,content` | 先 `canSendTo`，通过后组装 `Message` | `insert` 到 `messages` | 成功 `?msg=send_ok`；权限失败 `?msg=forbidden` |
-| `read` | `id` | 标记指定消息已读 | `markRead(id, loginUser.id)` | `?view=<id>` |
-| `delete` | `id` | 删除本人相关消息并记日志 | `delete(id, loginUser.id)` | `?msg=delete_ok` |
-| 其他/空 | 无 | 不处理业务 | 无 | 回角色消息页 |
-
-注意：`markRead` 和 `delete` 都在 DAO 层带了当前用户条件。`markRead` 要求当前用户是 receiver；`delete` 要求当前用户是 sender 或 receiver。Controller 没检查影响行数，所以即使 id 不属于本人，也只是 DAO 更新/删除 0 行，然后按原逻辑 redirect。
-
-### 3.3 `canSendTo` 权限规则
-
-发送消息前必须调用 `canSendTo(sender, receiverId)`，这是防止用户绕过前端下拉框随意改 `receiverId` 的核心。因为 JSP 的联系人下拉框是 `userDao.findAll(null)` 拉全体用户，只在前端排除了自己；真正的角色限制必须放在服务端。
-
-规则如下：
-
-| 发送者角色 | 可发给谁 | 代码依据 |
-|---|---|---|
-| admin | 任意存在的用户 | 找到 receiver 后直接 `return true` |
-| teacher | student 或 admin | 判断 receiver role 是 `student` 或 `admin` |
-| student | admin | receiver role 是 `admin` 直接允许 |
-| student | 自己已审核通过选题对应的指导教师 | `SelectionDao.findApprovedByStudent(sender.id)` 找到 approved 选题，再 `TopicDao.findById(topicId)`，要求 `receiver.id == topic.teacherId` |
-| 其他、receiver 不存在、学生无 approved 选题 | 不允许 | 返回 false |
-
-设计原因：站内消息是跨角色沟通通道。如果只依赖页面下拉框，用户可以手工构造 POST，把 `receiverId` 改成任意用户。`canSendTo` 把业务关系放在服务端校验，保证学生只能联系管理员或自己的指导教师，教师只能联系学生或管理员，管理员拥有全局通知能力。
-
-### 3.4 为什么 POST 后 redirect
-
-`send/read/delete` 执行后都 redirect，而不是 forward 回 JSP，原因有三点：
-
-1. **避免刷新重复提交**：浏览器刷新 redirect 后的 GET 页面，不会重复发送 POST。
-2. **回到角色正确的消息页**：`messagesPath(user)` 根据当前用户角色返回 `/admin/messages.jsp`、`/teacher/messages.jsp` 或 `/student/messages.jsp`。
-3. **用 query 传递轻量结果**：`?msg=send_ok`、`?msg=forbidden`、`?msg=delete_ok`、`?view=<id>` 都是简单状态或定位信息，不需要 request attribute。
-
-### 3.5 `message.action` 分支流程图
+当前 JSP 的“查看”按钮是普通链接 `?tab=<tab>&view=<id>`，实际点击查看主要走消息页 GET 并在 JSP 中标记已读。`MessageController` 仍保留 `action=read` 分支，适合其他 POST 表单或接口调用。
 
 ```mermaid
 flowchart TD
-    A["WebContent/admin/messages.jsp:98-103\n删除表单 hidden action=delete,id"]
-    B["WebContent/admin/messages.jsp:166-190\n发送表单 ../message.action\nhidden action=send + receiverId/title/content"]
-    C["浏览器 POST /message.action"]
-    D["src/controller/MessageController.java:39-55\n@WebServlet + doPost 取 loginUser/action"]
-    E{"action?\nsrc/controller/MessageController.java:59-109"}
-    F["src/controller/MessageController.java:59-87\nsend: 读 receiverId/title/content"]
-    G["src/controller/MessageController.java:117-165\ncanSendTo 角色/选题权限"]
+    A["消息详情删除表单\nWebContent/admin/messages.jsp:95-103"]
+    B["发送弹窗表单\nWebContent/admin/messages.jsp:163-191"]
+    C["POST /message.action"]
+    D["src/controller/MessageController.java:18-27\n@WebServlet + doPost\nUTF-8/session/action/MessageDao"]
+    E{"action ?"}
+    F["send\nsrc/controller/MessageController.java:28-44\nreceiverId/title/content"]
+    G["src/util/MessageContactUtil.java:25-31\ncanSendTo 服务端权限校验"]
     H["src/dao/MessageDao.java:109-117\ninsert messages"]
-    I["src/controller/MessageController.java:89-95\nread: markRead 后 redirect ?view=id"]
-    J["src/dao/MessageDao.java:121-127\nUPDATE messages SET is_read=1"]
-    K["src/controller/MessageController.java:97-105\ndelete: dao.delete + 日志 + redirect"]
-    L["src/dao/MessageDao.java:131-139\nDELETE WHERE id AND sender/receiver"]
-    M["src/controller/MessageController.java:171-185\nmessagesPath 根据角色返回 JSP"]
+    I["read\nsrc/controller/MessageController.java:45-48\nmarkRead 后 redirect ?view=id"]
+    J["src/dao/MessageDao.java:121-127\nUPDATE is_read=1"]
+    K["delete\nsrc/controller/MessageController.java:49-53\ndelete 后记录日志"]
+    L["src/dao/MessageDao.java:131-139\nDELETE 限制 sender/receiver"]
+    M["src/controller/MessageController.java:59-67\nmessagesPath: admin/teacher/student"]
 
     A --> C
     B --> C
@@ -193,79 +140,81 @@ flowchart TD
     E -- other --> M
 ```
 
+### `canSendTo` 当前权限规则
+
+`canSendTo` 已不在 `MessageController` 内部，而是在 `MessageContactUtil`。JSP 联系人下拉框也不是拉全量用户再只排除自己，而是调用同一个 `contactsFor(loginUser)`，前端展示和服务端 POST 校验使用同一套 `isAllowed` 规则。
+
+当前规则：
+
+| 发送者 | 可发给谁 | 代码行为 |
+|---|---|---|
+| 任意登录用户 | active 管理员 | `receiver.role=admin` 直接允许；但 receiver 必须存在、状态为 1、不能是自己 |
+| admin | 任意 active 非本人用户 | sender.role 为 admin 直接允许 |
+| director | 同学院同专业的 teacher 或 student | `sameMajor(sender, receiver)` 且 receiver role 是 teacher/student |
+| teacher | 与自己存在选题关系的 student | `topic_selections JOIN topics` 中存在 `t.teacher_id=teacherId AND s.student_id=studentId`；当前 SQL 不额外限定 `s.status` |
+| student | 自己最近 approved 选题对应的指导教师 | 查 `s.status='approved'` 的最新选题并比较 teacher id |
+| 其他 | 不允许 | 返回 false |
+
+### redirect 到角色页面
+
+`send/read/delete` 都不 forward，而是 redirect：
+
+- admin -> `/admin/messages.jsp`
+- teacher -> `/teacher/messages.jsp`
+- director -> `/teacher/messages.jsp`，因为 `RoleUtil.hasRole(director, "teacher")` 返回 true，且侧边栏中 director 也使用教师消息页。
+- 其他默认 -> `/student/messages.jsp`
+
+这样可以避免刷新重复提交，并让三个角色共用一个 `/message.action`。
+
 ---
 
-## 4. 分页参数流：`page/pageSize`、`baseUrl` 与 `pagination.jsp`
+## 4. 分页参数流：`PageUtil`、主 JSP attribute、`pagination.jsp`
 
-### 4.1 参数解析
+分页不是独立请求；主页面先解析参数、查总数和当前页数据，再把分页上下文放进 request attribute：
 
-分页工具统一在 `PageUtil`：
-
-- `getPage(request)` 读 `request.getParameter("page")`，默认 1。
-- `getPageSize(request)` 读 `request.getParameter("pageSize")`，默认来自 `SystemConfigUtil.getInt("page.default_size", 10)`。
-- `parsePositive` 只接受正整数；空值、非法数字、0、负数都回退默认值。
-- `offset(page, pageSize)` 计算 `(page - 1) * pageSize`，并再次修正小于 1 的输入。
-- `totalPages(total, pageSize)` 计算总页数，`total <= 0` 返回 0。
-
-因此 `?page=abc&pageSize=-1` 不会抛异常；会回到 `page=1` 和默认 pageSize。当前代码没有设置 pageSize 上限，如果用户传很大的 `pageSize`，DAO 会把它作为 SQL `LIMIT` 参数。
-
-### 4.2 主 JSP 为什么要设置 request attribute
-
-分页片段 `pagination.jsp` 不知道主页面是消息、日志还是用户列表。它只从 request attribute 拿四个值：
-
-- `baseUrl`：保留当前筛选条件的基础 URL，例如 `messages.jsp?tab=inbox` 或 `logs.jsp?userId=1&action=LOGIN`。
+- `baseUrl`：业务页面构造，保留当前 tab 或过滤条件。
 - `page`：当前页。
 - `pageSize`：每页条数。
 - `total`：总记录数。
 
-主 JSP 负责查 `total` 和当前页数据，再把这四个值塞到 request attribute，然后 include 分页片段。这样分页组件可以复用；它只关心如何拼上一页、下一页、页码链接，不关心业务 DAO。
-
-消息收件箱的设置点是 `WebContent/admin/messages.jsp:144-155`；日志页是 `WebContent/admin/logs.jsp:162-170`。
-
-### 4.3 `baseUrl` 如何保留 tab 和筛选条件
-
-消息页：
-
-- `pagBase = "messages.jsp?tab=" + tab`。
-- 分页链接最终变成 `messages.jsp?tab=inbox&page=2&pageSize=10`。
-- 因为已发送页不 include 分页，所以 `tab=sent` 时这个 baseUrl 基本不用。
-
-日志页：
-
-- 从 `logs.jsp?` 开始，把非空 `userId/action/dateFrom/dateTo` 追加进去。
-- 末尾多余的 `?` 或 `&` 会被裁掉。
-- 分页链接会保留筛选条件，例如 `logs.jsp?action=LOGIN&dateFrom=2026-06-01&page=2&pageSize=10`。
-
-`pagination.jsp` 通过 `pgBaseUrl.contains("?") ? "&" : "?"` 判断新参数前用 `&` 还是 `?`。这就是为什么主页面只传 baseUrl，分页片段就能适配带不带 query 的 URL。
-
-### 4.4 分页参数流图
+`pagination.jsp` 只读 attribute，不读业务 query。它根据 `baseUrl` 是否包含 `?` 决定追加参数时使用 `?` 还是 `&`，输出上一页、页码、下一页，并把 `pageSize` 继续带到链接里。
 
 ```mermaid
 flowchart LR
-    A["浏览器 GET ?page=2&pageSize=10"]
-    B["src/util/PageUtil.java:8-14\ngetPage/getPageSize 读 query"]
+    A["浏览器 GET ?page=abc&pageSize=-1 或 ?page=2&pageSize=10"]
+    B["src/util/PageUtil.java:8-14\ngetPage/getPageSize"]
     C["src/util/PageUtil.java:36-50\nparsePositive + defaultPageSize"]
     D["src/util/PageUtil.java:16-23\noffset=(page-1)*pageSize"]
-    E["WebContent/admin/messages.jsp:38-40\ncountInbox + findInboxPaged"]
-    F["src/dao/MessageDao.java:45-55\nLIMIT pageSize OFFSET offset"]
-    G["WebContent/admin/logs.jsp:44-46\nfindFiltered + countFiltered"]
-    H["src/dao/OperationLogDao.java:26-42\n日志 LIMIT/OFFSET + COUNT"]
-    I["WebContent/admin/messages.jsp:144-155\nsetAttribute baseUrl/page/pageSize/total"]
-    J["WebContent/admin/logs.jsp:162-170\nsetAttribute baseUrl/page/pageSize/total"]
-    K["WebContent/WEB-INF/includes/pagination.jsp:4-13\n读取 request attribute"]
-    L["WebContent/WEB-INF/includes/pagination.jsp:15-35\n输出页码链接 ?page=&pageSize="]
+    E["消息收件箱\nWebContent/admin/messages.jsp:43-45\ncountInbox + findInboxPaged"]
+    F["日志页\nWebContent/admin/logs.jsp:44-46\nfindFiltered + countFiltered"]
+    G["WebContent/admin/messages.jsp:141-151\nbaseUrl=messages.jsp?tab=..."]
+    H["WebContent/admin/logs.jsp:50-62\nbaseUrl 保留 userId/action/dateFrom/dateTo"]
+    I["WebContent/WEB-INF/includes/pagination.jsp:4-13\n读取 attribute 并判断 ?/&"]
+    J["WebContent/WEB-INF/includes/pagination.jsp:15-35\n输出 page/pageSize 链接"]
 
     A --> B --> C --> D
-    D --> E --> F --> I
-    D --> G --> H --> J
-    I --> K
-    J --> K
-    K --> L
+    D --> E --> G
+    D --> F --> H
+    G --> I
+    H --> I
+    I --> J
+```
+
+日志页的 `baseUrl` 会保留非空筛选条件，例如：
+
+```text
+logs.jsp?action=LOGIN&dateFrom=2026-06-01&page=2&pageSize=10
+```
+
+消息页的 `baseUrl` 保留 `tab`，例如：
+
+```text
+messages.jsp?tab=inbox&page=2&pageSize=10
 ```
 
 ---
 
-## 5. 操作日志页：GET 过滤 + 分页 + JSP 直读 DAO
+## 5. 操作日志页：GET 过滤、精确匹配、分页渲染
 
 典型请求：
 
@@ -274,218 +223,188 @@ GET /admin/logs.jsp
 GET /admin/logs.jsp?userId=3&action=SEND&dateFrom=2026-06-01&dateTo=2026-06-22&page=1&pageSize=20
 ```
 
-`admin/logs.jsp` 也是直读 DAO：
+日志页也是 JSP 直读 DAO：
 
-1. 顶部 scriptlet 从 session 取登录用户，并 `new OperationLogDao()`。
-2. 读取 `page/pageSize`。
-3. 读取并清洗筛选参数：
-   - `userId` 尝试 parse int，失败忽略；
-   - `action` 空串转 null；
-   - `dateFrom/dateTo` 空串转 null。
-4. 调用 `dao.findFiltered(filterUserId, filterAction, dateFrom, dateTo, currentPageNum, pageSize)` 取当前页日志。
-5. 调用 `dao.countFiltered(...)` 取总数。
-6. 拼 `pagBase`，保留非空筛选条件。
-7. 渲染筛选表单、日志表格，再 include `pagination.jsp`。
+1. 从 session 取 `loginUser`，创建 `OperationLogDao`。
+2. 用 `PageUtil` 读取 `page/pageSize`。
+3. 解析过滤条件：`userId` 尝试转整数，失败忽略；`action/dateFrom/dateTo` 空串转 null。
+4. `findFiltered(...)` 查当前页，`countFiltered(...)` 查总数。
+5. 手工拼 `logs.jsp?...` 的 `baseUrl`，保留非空过滤条件。
+6. 渲染 GET 筛选表单、日志表格，最后 include `pagination.jsp`。
 
-DAO 层 `appendFilters` 是精确过滤：`userId` 用 `l.user_id=?`，`action` 用 `l.action=?`，日期用 `l.created_at>=?` 和 `l.created_at<=dateTo 23:59:59`。也就是说，`action=SEND` 只匹配完整的 SEND，不是模糊搜索。
+DAO 的过滤是精确条件：`l.user_id=?`、`l.action=?`、`l.created_at>=?`、`l.created_at<=dateTo 23:59:59`，不是模糊搜索。
 
 ```mermaid
 flowchart TD
-    A["浏览器 GET /admin/logs.jsp?userId=&action=&dateFrom=&dateTo=&page=&pageSize="]
-    B["WebContent/admin/logs.jsp:17-40\n解析 page/pageSize/userId/action/dateFrom/dateTo"]
-    C["WebContent/admin/logs.jsp:44-46\nfindFiltered + countFiltered"]
-    D["src/dao/OperationLogDao.java:26-34\nBASE_SQL + appendFilters + LIMIT/OFFSET"]
-    E["src/dao/OperationLogDao.java:37-42\nCOUNT 同样 appendFilters"]
-    F["src/dao/OperationLogDao.java:50-68\nuserId/action/dateFrom/dateTo 条件"]
-    G["WebContent/admin/logs.jsp:50-62\n拼 pagBase 保留过滤条件"]
-    H["WebContent/admin/logs.jsp:76-118\n输出筛选表单"]
-    I["WebContent/admin/logs.jsp:134-170\n输出日志表格并 include pagination.jsp"]
+    A["GET /admin/logs.jsp?userId=&action=&dateFrom=&dateTo=&page=&pageSize="]
+    B["WebContent/admin/logs.jsp:9-18\n取 loginUser、OperationLogDao、分页参数"]
+    C["WebContent/admin/logs.jsp:20-40\n解析 userId/action/dateFrom/dateTo"]
+    D["WebContent/admin/logs.jsp:44-46\nfindFiltered + countFiltered"]
+    E["src/dao/OperationLogDao.java:26-35\nappendFilters + ORDER BY + LIMIT/OFFSET"]
+    F["src/dao/OperationLogDao.java:37-42\nCOUNT 同样过滤"]
+    G["src/dao/OperationLogDao.java:50-68\n精确过滤条件"]
+    H["WebContent/admin/logs.jsp:50-62\n拼 baseUrl 保留筛选"]
+    I["WebContent/admin/logs.jsp:76-118\n输出 GET 筛选表单"]
+    J["WebContent/admin/logs.jsp:134-170\n输出日志表并 include 分页"]
 
-    A --> B --> C
-    C --> D --> F
-    C --> E --> F
-    B --> G --> H --> I
-```
-
-设计上，日志页直接 JSP 读 DAO 简单直观，适合后台列表页快速开发；缺点是过滤解析、DAO 调用、HTML 输出都在一个 JSP 中，后续如果要加接口复用、单元测试或权限审计，会比 Controller forward 更难拆。
-
----
-
-## 6. 成绩、答辩、教师学生进度：展示页 DAO 读取
-
-### 6.1 学生成绩 `/student/grades.jsp`
-
-学生成绩页没有业务 query 参数，完全依赖当前 session 用户：
-
-1. `loginUser = session.getAttribute("loginUser")`。
-2. `new DocumentDao()` 和 `new DefenseScheduleDao()`。
-3. `docDao.findByStudent(loginUser.getId())` 查该学生所有文档记录。
-4. `defDao.findByStudent(loginUser.getId())` 查该学生答辩安排。
-5. `DictionaryUtil.items("document_type")` 得到阶段名称。
-6. 把文档列表按 `docType` 放进 `docMap`，先渲染成绩卡片，再渲染明细表。
-
-DAO 层 `DocumentDao.findByStudent` 使用 `BASE_SQL` 连接 `documents/users/topics`，按 `student_id` 过滤；`DefenseScheduleDao.findByStudent` 使用答辩安排表并左连接 approved 选题、课题、教师，拿到课题标题和指导教师。
-
-### 6.2 学生答辩 `/student/defense.jsp`
-
-答辩页也没有业务 query 参数：
-
-1. 从 session 取 `loginUser`。
-2. `new DefenseScheduleDao()`。
-3. `dao.findByStudent(loginUser.getId())`。
-4. 如果返回 null，显示“答辩安排尚未发布”；否则输出课题、指导教师、答辩时间、教室、分组、成绩、备注。
-
-这个页面只展示当前学生自己的答辩安排。能否看到别人的答辩，不由 query 控制，因为页面没有接收 `studentId` 参数，而是固定使用 session 用户 id。
-
-### 6.3 教师学生进度 `/teacher/students.jsp`
-
-教师学生进度页同样是 JSP 直读 DAO：
-
-1. 从 session 取教师 `loginUser`。
-2. `SelectionDao.findByTeacher(loginUser.getId(), "approved")` 查当前教师名下已通过选题的学生。
-3. 对每个 `TopicSelection`，再调用 `DocumentDao.findByStudent(s.getStudentId())` 查询该学生文档。
-4. 用 `docMap` 按文档类型展示“未提交”、状态徽章和分数。
-
-这里有一个性能追问点：这是典型 **N+1 查询**。先查 1 次 approved 学生列表，然后每个学生再查 1 次文档。如果一个教师有 N 个学生，至少 N+1 次查询。优点是 JSP 逻辑直接、容易写；缺点是学生数量大时效率不如一次 join 聚合查询。
-
-### 6.4 学生/教师展示页 DAO 读取图
-
-```mermaid
-flowchart TD
-    A["浏览器 GET /student/grades.jsp"]
-    B["WebContent/student/grades.jsp:5-13\n取 loginUser，DocumentDao/DefenseScheduleDao 查库"]
-    C["src/dao/DocumentDao.java:22-26\nfindByStudent(studentId)"]
-    D["src/dao/DefenseScheduleDao.java:29-33\nfindByStudent(studentId)"]
-    E["WebContent/student/grades.jsp:19-63\n成绩卡片 + 文档/答辩明细表"]
-
-    F["浏览器 GET /student/defense.jsp"]
-    G["WebContent/student/defense.jsp:5-8\nDefenseScheduleDao.findByStudent"]
-    H["WebContent/student/defense.jsp:14-31\n空状态或答辩详情表"]
-
-    I["浏览器 GET /teacher/students.jsp"]
-    J["WebContent/teacher/students.jsp:5-9\nSelectionDao + DocumentDao"]
-    K["src/dao/SelectionDao.java:23-33\nfindByTeacher(teacherId, approved)"]
-    L["WebContent/teacher/students.jsp:23-26\n每个学生再 docDao.findByStudent"]
-    M["src/dao/DocumentDao.java:22-26\n按 studentId 查文档"]
-    N["WebContent/teacher/students.jsp:28-43\n输出学生进度、状态、分数"]
-
-    A --> B --> C --> E
-    B --> D --> E
-    F --> G --> D --> H
-    I --> J --> K --> L --> M --> N
+    A --> B --> C --> D
+    D --> E --> G
+    D --> F --> G
+    C --> H --> I --> J
 ```
 
 ---
 
-## 7. Controller forward 与 JSP 直读 DAO 的区别
+## 6. 学生成绩与学生答辩：按 session 用户绑定展示
 
-本部分核心页面大多是 **JSP 直读 DAO**，但项目其他页面能看到 **Controller forward** 模式。两者区别如下：
+`/student/grades.jsp` 和 `/student/defense.jsp` 都没有业务 query，访问范围固定绑定 session 中的学生 id：
+
+- 成绩页：`DocumentDao.findByStudent(loginUser.id)` 查文档成绩，`DefenseScheduleDao.findByStudent(loginUser.id)` 查答辩安排，`DictionaryUtil.items("document_type")` 取阶段名称，随后用 `docMap` 按 `docType` 渲染成绩卡片和明细表。
+- 答辩页：只调用 `DefenseScheduleDao.findByStudent(loginUser.id)`；无记录显示“尚未发布”，有记录则展示课题、教师、时间、教室、分组、成绩、备注。
+
+```mermaid
+flowchart TD
+    A["GET /student/grades.jsp"]
+    B["WebContent/student/grades.jsp:4-13\nsession 用户 + DocumentDao + DefenseScheduleDao + docMap"]
+    C["src/dao/DocumentDao.java:15-25\nBASE_SQL 连接 documents/users/topics\nfindByStudent"]
+    D["src/dao/DefenseScheduleDao.java:11-18\nBASE_SQL 连接答辩/学生/选题/课题/教师"]
+    E["src/dao/DefenseScheduleDao.java:29-33\nfindByStudent"]
+    F["WebContent/student/grades.jsp:19-63\n成绩卡片、文档成绩、答辩成绩表"]
+
+    G["GET /student/defense.jsp"]
+    H["WebContent/student/defense.jsp:4-8\nsession 用户 + DefenseScheduleDao.findByStudent"]
+    I["WebContent/student/defense.jsp:14-31\n空状态或答辩详情"]
+
+    A --> B --> C --> F
+    B --> D --> E --> F
+    G --> H --> E --> I
+```
+
+这两页没有 `studentId` 参数，不能通过改 URL 查看别人数据；页面取数入口固定是当前 session 用户 id。
+
+---
+
+## 7. 教师学生进度与教师答辩：教师视角展示
+
+`/teacher/students.jsp` 是 JSP 直读 DAO：
+
+1. 从 session 取教师或 director 用户。
+2. `SelectionDao.findByTeacher(loginUser.id, "approved")` 查该教师名下 approved 选题。
+3. 遍历每个 `TopicSelection`，对每个学生再 `DocumentDao.findByStudent(studentId)`。
+4. 按 `document_type` 字典渲染每个阶段的“未提交”、状态徽章和分数。
+
+这里是典型 N+1 查询：先查 1 次学生列表，再对 N 个学生分别查文档。数据量小时直观；学生数量大时应改为 join 聚合或批量查询。
+
+`/teacher/defense.jsp` 同样直读 DAO：`DefenseScheduleDao.findByTeacher(loginUser.id)` 返回该教师所带学生的答辩安排，然后输出表格。
+
+```mermaid
+flowchart TD
+    A["GET /teacher/students.jsp"]
+    B["WebContent/teacher/students.jsp:4-9\nsession 用户 + SelectionDao + DocumentDao + document_type 字典"]
+    C["src/dao/SelectionDao.java:25-35\nfindByTeacher(teacherId,'approved')"]
+    D["WebContent/teacher/students.jsp:23-26\n遍历 approved 学生并逐个查文档"]
+    E["src/dao/DocumentDao.java:22-25\nfindByStudent(studentId)"]
+    F["WebContent/teacher/students.jsp:28-43\n输出学生、学号、课题、阶段状态/分数"]
+
+    G["GET /teacher/defense.jsp"]
+    H["WebContent/teacher/defense.jsp:4-8\nsession 用户 + DefenseScheduleDao.findByTeacher"]
+    I["src/dao/DefenseScheduleDao.java:24-27\nWHERE t.teacher_id=?"]
+    J["WebContent/teacher/defense.jsp:14-32\n输出答辩安排表或空行"]
+
+    A --> B --> C --> D --> E --> F
+    G --> H --> I --> J
+```
+
+---
+
+## 8. 专业负责人统计页：JSP 页面容器 + `stats.action` JSON + `export.action` 文件流
+
+专业负责人统计由三个 GET 组成：
+
+1. `GET /director/statistics.jsp`：JSP 只做 scope 校验和页面容器渲染。`ScopeUtil.directorScope(loginUser)` 为空则 403；成功则展示当前学院/专业、导出按钮和 4 个图表容器。
+2. 页面 JS `fetch('../director/stats.action')`：异步请求统计 JSON，拿到 `selection/docPass/defense/scores` 后初始化 ECharts。
+3. `GET /director/export.action`：点击导出按钮后返回 XLSX 文件流。这个入口也可放到管理员/导出分片交叉引用；本分片按“页面展示 GET 的导出入口”覆盖其网络数据流。
+
+```mermaid
+flowchart TD
+    A["GET /director/statistics.jsp"]
+    B["WebContent/director/statistics.jsp:4-9\npageTitle + loginUser + directorScope 校验"]
+    C["WebContent/director/statistics.jsp:16-23\n显示当前统计范围和导出按钮"]
+    D["WebContent/director/statistics.jsp:25-62\n4 个 ECharts 容器"]
+    E["WebContent/director/statistics.jsp:76-79\nfetch('../director/stats.action')"]
+    F["GET /director/stats.action"]
+    G["src/controller/DirectorStatsController.java:23-35\nsession 用户、directorScope、student criteria"]
+    H["src/controller/DirectorStatsController.java:36-45\nUserDao.countAll + StatsDao 四类统计"]
+    I["src/dao/StatsDao.java:30-49\nselection: 已选/待审/未选"]
+    J["src/dao/StatsDao.java:55-60\ndocPass: 各文档类型 reviewed 数"]
+    K["src/dao/StatsDao.java:67-106\ndefense: 已评分/待评分/未安排"]
+    L["src/dao/StatsDao.java:112-136\nscoreDistribution: 分数段"]
+    M["src/controller/DirectorStatsController.java:46-53\n拼 JSON 返回"]
+    N["WebContent/director/statistics.jsp:81-110\n渲染饼图/柱状图"]
+
+    O["点击导出 GET /director/export.action"]
+    P["src/controller/DirectorExportController.java:26-31\nsession 用户 + directorScope 校验"]
+    Q["src/controller/DirectorExportController.java:33-52\n按 college/major 查询本专业成绩"]
+    R["src/controller/DirectorExportController.java:54-85\n生成 XLSX 并写 response"]
+
+    A --> B --> C --> D --> E --> F
+    F --> G --> H
+    H --> I --> M
+    H --> J --> M
+    H --> K --> M
+    H --> L --> M
+    M --> N
+    C --> O --> P --> Q --> R
+```
+
+专业负责人统计范围来自 `ScopeUtil.directorScope`：用户必须是 `director`，且 `college`、`major` 都非空。统计 SQL 都同时限定课题范围和学生范围，避免只按课题或只按学生导致跨专业数据混入。
+
+---
+
+## 9. JSP 直读 DAO vs Controller forward
 
 | 对比点 | JSP 直读 DAO | Controller forward |
 |---|---|---|
 | 浏览器访问 | 直接访问 `.jsp` | 访问 `.action` |
 | 参数解析位置 | JSP scriptlet | Servlet `doGet/doPost` |
 | DAO 调用位置 | JSP 顶部 Java 代码 | Controller |
-| 数据传给页面 | 局部变量直接用于 JSP 输出 | `request.setAttribute(...)` 后 forward |
-| 浏览器地址栏 | `.jsp` | 仍显示 `.action`，forward 是服务端内部跳转 |
-| 优点 | 写起来短、页面和数据在一个文件里 | 分层清晰、易测试、JSP 更专注展示 |
-| 缺点 | JSP 负责参数、业务、DAO、HTML，耦合高 | 文件更多，简单页开发略繁 |
+| 页面数据传递 | JSP 局部变量直接输出 | `request.setAttribute(...)` 后 forward |
+| 地址栏 | `.jsp` | 仍显示 `.action`，forward 是服务端内部跳转 |
+| 当前代表页面 | `messages.jsp`、`logs.jsp`、`grades.jsp`、`defense.jsp`、`students.jsp`、`statistics.jsp` | `admin/user.action`、`student/document.action`、`teacher/document.action`、`teacher/selection.action`、`student/topic.action` |
 
-项目中的 forward 例子：
+Controller forward 对照：
 
-- `/admin/user.action`：Controller 解析 `role/college/page/pageSize`，调用 `UserDao.findAllPaged` 和 `countAll`，把 `users/total/currentPage/pageSize/...` 放进 request，再 forward 到 `/admin/users.jsp`。
-- `/student/document.action`：Controller 解析 `type`，查 approved 选题、当前文档、版本列表，setAttribute 后 forward 到 `/student/documents.jsp`。
-- `/teacher/document.action`：Controller 解析 `type/status`，查教师待审文档，setAttribute 后 forward 到 `/teacher/documents.jsp`。
-- `/teacher/selection.action`：Controller 解析 `status`，查选题申请，setAttribute 后 forward 到 `/teacher/selections.jsp`。
-- `/student/topic.action`：Controller 解析 `keyword/college`，查开放课题，setAttribute 后 forward 到 `/student/topics.jsp`。
-
-```mermaid
-flowchart LR
-    A["直读 DAO: 浏览器 GET /student/grades.jsp"]
-    B["WebContent/student/grades.jsp:5-13\nJSP 取 session + new DAO + 查库"]
-    C["WebContent/student/grades.jsp:19-63\nJSP 直接输出 HTML"]
-
-    D["Controller forward: 浏览器 GET /admin/user.action"]
-    E["src/controller/AdminUserController.java:23-32\nController 解析参数并查 UserDao"]
-    F["src/controller/AdminUserController.java:34-48\nsetAttribute 后 forward /admin/users.jsp"]
-
-    G["Controller forward: GET /student/document.action"]
-    H["src/controller/StudentDocumentController.java:31-52\n查 Selection/Document/Version 后 forward"]
-
-    A --> B --> C
-    D --> E --> F
-    G --> H
-```
-
-对消息页而言，当前实现选择 JSP 直读 DAO 的原因大概率是：三个角色消息页结构完全一致，直接复制/复用 JSP 逻辑能快速完成页面；分页 include 也让公共分页不必写 Controller。代价是：`view` 标记已读这种写操作藏在 JSP GET 里，权限和数据访问逻辑分散在 JSP 与 Controller 两处，后续如果要做 REST API 或审计，会需要重构。
+- `/admin/user.action`：解析筛选与分页，`UserDao.findAllPaged/countAll`，设置 `users/total/currentPage/pageSize/...`，forward 到 `/admin/users.jsp`。
+- `/student/document.action`：解析 `type`，查 approved 选题、当前文档、版本列表，forward 到 `/student/documents.jsp`。
+- `/teacher/document.action`：解析 `type/status`，查教师待审文档，forward 到 `/teacher/documents.jsp`。
+- `/teacher/selection.action`：解析 `status`，查选题建议，forward 到 `/teacher/selections.jsp`。
+- `/student/topic.action`：解析 `keyword`，按学生学院专业查开放课题，forward 到 `/student/topics.jsp`。
 
 ---
 
-## 8. 逐段代码解释要点
+## 10. 代码证据清单
 
-### 8.1 `messages.jsp` 顶部 scriptlet
-
-- `page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.PageUtil"`：JSP 直接 import DAO 和工具类，说明页面本身承担 Java 逻辑。
-- `loginUser = (User) session.getAttribute("loginUser")`：所有消息查询都绑定当前登录用户 id。
-- `MessageDao msgDao = new MessageDao(); UserDao userDao = new UserDao();`：页面直接实例化 DAO。
-- `tab = request.getParameter("tab"); if (tab == null) tab = "inbox";`：默认收件箱；其他非 sent 字符串也会走收件箱分支。
-- `viewId` 的 try/catch：非法 view 不报错，按 0 处理，不展示详情。
-- `currentPageNum/pageSize`：只影响收件箱分页 DAO。
-- `if ("sent".equals(tab)) ... else ...`：已发送全量查；收件箱分页查。
-- `findByIdForUser`：详情权限在 DAO SQL 里做发送者/接收者限制。
-- `markRead`：查看未读收件消息会写库。
-- `userDao.findAll(null)`：发送弹窗联系人来源，前端只过滤自己，服务端 `canSendTo` 继续做权限校验。
-- `pagBase = "messages.jsp?tab=" + tab`：分页链接保留当前 tab。
-
-### 8.2 `MessageController` 核心段
-
-- `@WebServlet("/message.action")`：三个角色消息页的表单都打到同一个 Servlet。
-- `doPost` 而不是 `doGet`：发送、删除、标记已读都是状态改变，用 POST 更合理。
-- `send` 分支先 parse `receiverId`，再 `canSendTo`：防止绕过前端限制。
-- `dao.insert(msg)`：只插入 sender、receiver、title、content，`is_read/created_at` 依赖数据库默认值。
-- `OperationLogUtil.log(... "SEND" ...)`：发送消息记操作日志。
-- `read` 分支 redirect `?view=id`：标记已读后回到详情视图。
-- `delete` 分支 `dao.delete(id, user.id)`：DAO 限制本人发出或收到的消息才能删。
-- `messagesPath(user)`：同一 Controller 根据角色回到不同 JSP。
-
-### 8.3 `pagination.jsp` 核心段
-
-- 它不读取 request parameter，而是读取 request attribute，说明分页组件依赖主页面先准备上下文。
-- `pgSep = pgBaseUrl.contains("?") ? "&" : "?"`：解决 baseUrl 是否已有 query 的拼接差异。
-- 只有 `pgTotalPages > 1` 才输出分页导航。
-- 页码窗口只展示首页、尾页、当前页前后 2 页，中间用省略号。
-- 上一页/下一页链接统一追加 `page` 和 `pageSize`，所以切页时每页条数会保留。
-
-### 8.4 展示类 JSP
-
-- `student/grades.jsp`：一次取文档列表和答辩安排，然后在内存里按 `docType` 组织展示；适合学生个人页，因为数据量小。
-- `student/defense.jsp`：只查当前学生一条答辩安排，没有 query 参数暴露，访问范围天然绑定 session 用户。
-- `teacher/students.jsp`：先查 approved 学生，再逐个查文档；业务表达清楚，但存在 N+1 查询。
-- `admin/logs.jsp`：参数解析、过滤、分页都在 JSP 顶部完成；DAO 负责 SQL 条件拼接和分页。
-
----
-
-## 9. 代码证据清单
-
-- `WebContent/admin/messages.jsp:3-58`：管理员消息页 import、取 `loginUser`、读取 `tab/view/page/pageSize`、直调 `MessageDao/UserDao`。
-- `WebContent/admin/messages.jsp:78-82`：收件箱/已发送 tab 链接与未读数。
-- `WebContent/admin/messages.jsp:88-106`：消息详情和删除表单 `../message.action`、hidden `action=delete/id`。
-- `WebContent/admin/messages.jsp:114-155`：消息列表、`view` 链接、分页 request attribute、include `pagination.jsp`。
-- `WebContent/admin/messages.jsp:162-196`：发送弹窗表单 `../message.action`、hidden `action=send`、`receiverId/title/content`。
-- `WebContent/teacher/messages.jsp:15-59`：教师消息页同构参数读取、DAO 查询和分页 base URL。
-- `WebContent/teacher/messages.jsp:99-103`：教师消息详情删除表单 hidden 字段。
-- `WebContent/teacher/messages.jsp:145-155`：教师消息页收件箱分页 include。
-- `WebContent/teacher/messages.jsp:167-191`：教师消息发送表单字段。
-- `WebContent/student/messages.jsp:15-59`：学生消息页同构参数读取、DAO 查询和分页 base URL。
-- `WebContent/student/messages.jsp:99-103`：学生消息详情删除表单 hidden 字段。
-- `WebContent/student/messages.jsp:145-155`：学生消息页收件箱分页 include。
-- `WebContent/student/messages.jsp:167-191`：学生消息发送表单字段。
-- `src/controller/MessageController.java:39-55`：`/message.action` Servlet 映射、POST 入口、读取 session 用户和 `action`。
-- `src/controller/MessageController.java:59-87`：`send` 分支、`receiverId/title/content`、`canSendTo`、insert、发送成功/禁止 redirect。
-- `src/controller/MessageController.java:89-105`：`read/delete` 分支、markRead/delete、redirect。
-- `src/controller/MessageController.java:107-109`：未知 action 回消息页。
-- `src/controller/MessageController.java:117-165`：`canSendTo` 角色与选题关系权限规则。
-- `src/controller/MessageController.java:171-185`：按角色返回 `/admin/messages.jsp`、`/teacher/messages.jsp`、`/student/messages.jsp`。
+- `WebContent/admin/messages.jsp:3-56`：管理员消息页 import、取 session 用户、读 `tab/view/page/pageSize`、查消息、生成联系人、设置 `pagBase`。
+- `WebContent/admin/messages.jsp:75-81`：消息 tab 链接与未读数。
+- `WebContent/admin/messages.jsp:85-103`：消息详情和删除表单 `../message.action`、hidden `action=delete/id`。
+- `WebContent/admin/messages.jsp:111-151`：消息列表、`view` 链接、收件箱分页 attribute、include `pagination.jsp`。
+- `WebContent/admin/messages.jsp:159-191`：发送弹窗表单、hidden `action=send`、`receiverId/title/content`。
+- `WebContent/teacher/messages.jsp:9-56`：教师/专业负责人消息页同构参数读取、DAO 查询、联系人和分页 base URL。
+- `WebContent/teacher/messages.jsp:86-104`：教师消息详情删除表单 hidden 字段。
+- `WebContent/teacher/messages.jsp:112-152`：教师消息列表与分页 include。
+- `WebContent/teacher/messages.jsp:160-192`：教师消息发送表单字段。
+- `WebContent/student/messages.jsp:9-56`：学生消息页同构参数读取、DAO 查询、联系人和分页 base URL。
+- `WebContent/student/messages.jsp:86-104`：学生消息详情删除表单 hidden 字段。
+- `WebContent/student/messages.jsp:112-152`：学生消息列表与分页 include。
+- `WebContent/student/messages.jsp:160-192`：学生消息发送表单字段。
+- `src/controller/MessageController.java:18-27`：`/message.action` 映射、POST 入口、UTF-8、session 用户、`action`、`MessageDao`。
+- `src/controller/MessageController.java:28-44`：`send` 分支、`canSendTo`、insert、发送日志、redirect。
+- `src/controller/MessageController.java:45-56`：`read/delete/other` 分支、markRead/delete、redirect。
+- `src/controller/MessageController.java:59-67`：按角色返回 `/admin/messages.jsp`、`/teacher/messages.jsp`、`/student/messages.jsp`。
+- `src/util/MessageContactUtil.java:11-23`：`contactsFor` 用 `UserDao.findAll` 后按 `isAllowed` 过滤联系人。
+- `src/util/MessageContactUtil.java:25-31`：`canSendTo` 服务端按 receiverId 查用户并复用 `isAllowed`。
+- `src/util/MessageContactUtil.java:33-55`：admin、admin receiver、director、teacher、student 的发送权限规则。
+- `src/util/MessageContactUtil.java:58-84`：同专业判断、教师学生关系 SQL、学生 approved 指导教师 SQL。
 - `src/dao/MessageDao.java:21-31`：消息查询 `BASE_SQL` 连接 sender/receiver 用户名。
 - `src/dao/MessageDao.java:45-55`：收件箱分页 `findInboxPaged` 与 `LIMIT/OFFSET`。
 - `src/dao/MessageDao.java:59-67`：收件箱总数 `countInbox`。
@@ -496,36 +415,61 @@ flowchart LR
 - `src/dao/MessageDao.java:121-127`：标记已读 update。
 - `src/dao/MessageDao.java:131-139`：删除消息时限制 sender 或 receiver。
 - `src/util/PageUtil.java:8-14`：读取 `page/pageSize`。
-- `src/util/PageUtil.java:16-23`：计算 offset。
-- `src/util/PageUtil.java:26-33`：计算 totalPages。
-- `src/util/PageUtil.java:36-50`：正整数解析与默认 pageSize。
+- `src/util/PageUtil.java:16-23`：计算 `offset`。
+- `src/util/PageUtil.java:26-34`：计算 `totalPages`。
+- `src/util/PageUtil.java:36-50`：正整数解析与默认 `pageSize`。
 - `WebContent/WEB-INF/includes/pagination.jsp:4-13`：从 request attribute 读取分页上下文并判断 `?`/`&`。
 - `WebContent/WEB-INF/includes/pagination.jsp:15-35`：输出上一页、页码、下一页和总数。
-- `WebContent/admin/logs.jsp:17-46`：日志页读取分页/过滤参数并调用 `OperationLogDao`。
-- `WebContent/admin/logs.jsp:50-62`：日志分页 baseUrl 保留筛选条件。
+- `WebContent/admin/logs.jsp:9-18`：日志页取 session 用户、创建 `OperationLogDao`、读取分页参数。
+- `WebContent/admin/logs.jsp:20-46`：日志过滤参数解析、`findFiltered/countFiltered`。
+- `WebContent/admin/logs.jsp:50-62`：日志分页 `baseUrl` 保留筛选条件。
 - `WebContent/admin/logs.jsp:76-118`：日志筛选 GET 表单。
 - `WebContent/admin/logs.jsp:134-170`：日志表格和分页 include。
-- `src/dao/OperationLogDao.java:26-42`：日志过滤查询和总数查询。
+- `src/dao/OperationLogDao.java:26-35`：日志过滤查询、排序、`LIMIT/OFFSET`。
+- `src/dao/OperationLogDao.java:37-42`：日志总数查询。
 - `src/dao/OperationLogDao.java:50-68`：日志 `userId/action/dateFrom/dateTo` SQL 条件。
-- `WebContent/student/grades.jsp:5-13`：学生成绩页取 session 用户并直调 `DocumentDao/DefenseScheduleDao`。
+- `WebContent/student/grades.jsp:4-13`：学生成绩页取 session 用户并直调 `DocumentDao/DefenseScheduleDao`。
 - `WebContent/student/grades.jsp:19-63`：成绩卡片、文档成绩、答辩成绩渲染。
-- `WebContent/student/defense.jsp:5-8`：学生答辩页直调 `DefenseScheduleDao.findByStudent`。
+- `WebContent/student/defense.jsp:4-8`：学生答辩页取 session 用户并直调 `DefenseScheduleDao.findByStudent`。
 - `WebContent/student/defense.jsp:14-31`：答辩空状态或详情表渲染。
-- `WebContent/teacher/students.jsp:5-9`：教师学生进度页直调 `SelectionDao/DocumentDao`。
-- `WebContent/teacher/students.jsp:23-43`：遍历 approved 学生并逐个 `docDao.findByStudent` 渲染进度。
-- `src/dao/DocumentDao.java:15-26`：文档 `BASE_SQL` 与 `findByStudent`。
+- `WebContent/teacher/students.jsp:4-9`：教师学生进度页取 session 用户并直调 `SelectionDao/DocumentDao`。
+- `WebContent/teacher/students.jsp:23-43`：遍历 approved 学生、逐个 `docDao.findByStudent`、渲染阶段进度。
+- `WebContent/teacher/defense.jsp:4-8`：教师答辩页取 session 用户并直调 `DefenseScheduleDao.findByTeacher`。
+- `WebContent/teacher/defense.jsp:14-32`：教师答辩安排表格渲染。
+- `src/dao/DocumentDao.java:15-25`：文档 `BASE_SQL` 与 `findByStudent`。
 - `src/dao/DocumentDao.java:28-40`：学生文档分页和计数能力。
 - `src/dao/DocumentDao.java:42-57`：教师按类型/状态查文档。
 - `src/dao/DocumentDao.java:59-77`：教师文档分页查询。
 - `src/dao/DocumentDao.java:79-93`：教师文档计数。
 - `src/dao/DefenseScheduleDao.java:11-18`：答辩安排 `BASE_SQL` 连接学生、选题、课题、教师。
 - `src/dao/DefenseScheduleDao.java:24-33`：按教师/学生查询答辩安排。
-- `src/dao/SelectionDao.java:15-21`：选题查询 `SELECT_SQL` 连接学生、课题、教师。
-- `src/dao/SelectionDao.java:23-33`：教师按状态查询选题学生。
-- `src/dao/SelectionDao.java:50-57`：学生 approved 选题查询，用于消息发送权限。
-- `src/dao/SelectionDao.java:260-263`：approved 学生总数能力。
-- `src/controller/AdminUserController.java:23-48`：Controller forward 对照：查用户、setAttribute、forward。
-- `src/controller/StudentDocumentController.java:31-52`：Controller forward 对照：查学生文档上下文后 forward。
-- `src/controller/TeacherDocumentController.java:22-38`：Controller forward 对照：查教师文档后 forward。
-- `src/controller/TeacherSelectionController.java:19-31`：Controller forward 对照：查选题审批后 forward。
-- `src/controller/StudentTopicController.java:22-35`：Controller forward 对照：查开放课题后 forward。
+- `src/dao/SelectionDao.java:17-23`：选题查询 `SELECT_SQL` 连接学生、课题、教师。
+- `src/dao/SelectionDao.java:25-35`：教师按状态查询选题学生。
+- `src/dao/SelectionDao.java:38-50`：专业负责人按学院/专业/状态查询选题。
+- `src/dao/SelectionDao.java:66-73`：学生 approved 选题查询。
+- `src/dao/SelectionDao.java:240-260`：本专业 approved/pending 学生计数能力。
+- `WebContent/director/statistics.jsp:4-9`：专业负责人统计页设置标题、取 session 用户、校验 `directorScope`。
+- `WebContent/director/statistics.jsp:16-23`：显示当前统计范围和导出按钮。
+- `WebContent/director/statistics.jsp:25-62`：四个统计图表容器。
+- `WebContent/director/statistics.jsp:76-110`：fetch `../director/stats.action` 并渲染 ECharts。
+- `src/controller/DirectorStatsController.java:19-30`：`/director/stats.action` 映射、scope 校验、JSON content type。
+- `src/controller/DirectorStatsController.java:31-45`：构造学生条件、调用 `UserDao.countAll` 和 `StatsDao`。
+- `src/controller/DirectorStatsController.java:46-53`：输出 selection/docPass/defense/scores JSON。
+- `src/controller/DirectorStatsController.java:56-96`：JSON 拼接、labels/values、字符串 escape。
+- `src/controller/DirectorExportController.java:22-31`：`/director/export.action` 映射和 director scope 校验。
+- `src/controller/DirectorExportController.java:33-52`：导出 SQL 同时限定 topic 与 student 的 college/major。
+- `src/controller/DirectorExportController.java:54-85`：创建 XLSX、写表头/数据、设置响应头、输出文件。
+- `src/controller/DirectorExportController.java:86-88`：导出操作日志。
+- `src/dao/StatsDao.java:15-28`：本专业 approved 选题人数统计。
+- `src/dao/StatsDao.java:30-49`：选题情况统计：已选题、待审批、未选题。
+- `src/dao/StatsDao.java:55-60`：各文档类型已评阅通过数。
+- `src/dao/StatsDao.java:67-106`：答辩已评分、待评分、未安排统计。
+- `src/dao/StatsDao.java:112-136`：文档成绩分布统计。
+- `src/dao/StatsDao.java:142-160`：按文档类型和 scope 统计 reviewed 数、scope 判定。
+- `src/util/ScopeUtil.java:15-25`：`directorScope` 要求 role 为 director 且学院/专业非空。
+- `src/util/RoleUtil.java:5-18`：director 被视为 teacher 角色，用于消息 redirect 到教师消息页。
+- `src/controller/AdminUserController.java:26-56`：Controller forward 对照：用户管理 GET 查 DAO、setAttribute、forward。
+- `src/controller/StudentDocumentController.java:32-55`：Controller forward 对照：学生文档 GET 查上下文、forward。
+- `src/controller/TeacherDocumentController.java:22-38`：Controller forward 对照：教师文档 GET 查 DAO、forward。
+- `src/controller/TeacherSelectionController.java:19-31`：Controller forward 对照：教师选题建议 GET 查 DAO、forward。
+- `src/controller/StudentTopicController.java:23-39`：Controller forward 对照：学生课题 GET 查开放课题、forward。

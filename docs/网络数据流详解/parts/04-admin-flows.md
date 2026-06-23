@@ -1,515 +1,549 @@
-# 04 管理员后台网络数据流详解：用户、公告、答辩、导入、统计与导出
+# 04 管理员后台网络数据流详解：用户、公告、答辩、系统开关、统计与导出
 
-本节只分析管理员后台的传统管理流程：用户管理、公告管理、答辩安排、答辩 Excel 批量导入、统计 JSON、成绩 Excel 导出。不包含 AI 模块。
+本节只写管理员传统管理链路，不写 AI 模块。当前代码里的管理员后台仍然保留原有结构：
 
-核心结论先说明：
+- **用户管理**：必须从 `/admin/user.action` 进入 Controller，Controller 查询后 `forward` 到 `users.jsp`；直接访问 `users.jsp` 会被重定向回 Controller。
+- **公告、答辩安排**：列表页由 JSP 直接查 DAO 渲染；写操作 POST 到 Servlet，处理后 redirect 回 JSP。
+- **统计**：`statistics.jsp` 输出容器，浏览器 `fetch('../admin/stats.action')` 拉 JSON，前端 ECharts 渲染。
+- **Excel 导出**：点击链接 GET `/admin/export.action`，Servlet 直接写 `.xlsx` 二进制响应。
+- **系统开关**：新增为 Controller forward 到 `system-switches.jsp`，POST 保存后 redirect 回 `/admin/system-switch.action?msg=switch_ok`。
 
-- **用户管理列表页走 Controller forward**：浏览器访问 `/admin/user.action`，`AdminUserController#doGet` 查询用户、总数、字典和配置后，把数据放到 `request`，再 `forward` 到 `users.jsp`。`users.jsp` 如果直接被访问且没有 `users` 属性，会主动重定向回 `/admin/user.action`。
-- **公告/答辩列表页主要是 JSP 直达展示**：`announcements.jsp`、`defenses.jsp` 自己在 JSP 中 new DAO 并查询展示数据；新增、编辑、删除才 POST 到对应 Servlet，然后 redirect 回 JSP。
-- **统计页用 JSON fetch**：`statistics.jsp` 先输出 HTML 和 ECharts 容器，再用 `fetch('../admin/stats.action')` 拉 JSON，`AdminStatsController` 设置 `Content-Type: application/json;charset=UTF-8` 并用 `response.getWriter()` 写 JSON 字符串。
-- **导入用 multipart + POI**：`defenses.jsp` 的上传表单使用 `multipart/form-data`，`AdminDefenseImportController` 通过 `@MultipartConfig` 和 `request.getPart("file")` 取得 Excel 文件，再用 Apache POI 读第一张表、跳过表头、逐行导入。
-- **导出直接写二进制响应**：`AdminExportController` 不返回 JSP，而是设置 Excel MIME 与 `Content-Disposition: attachment`，用 POI 生成 workbook 后写入 `response.getOutputStream()`。
+新变化重点：
+
+1. 用户过滤字段从原来的 `role/college` 扩展为 `role/college/major/className/studentNo/realName`，其中 `className/studentNo/realName` 是模糊匹配。
+2. 用户页新增教师/学生 Excel 导入：`multipart/form-data`，字段 `importRole` + 文件 part `file`。
+3. 用户页新增学生密码批量重置：支持勾选学生 `resetSelected`，也支持按当前筛选条件 `resetFiltered`。
+4. 公告新增作用域：`scopeType=global/college/major`，配合 `college/major` 控制可见范围。
+5. 答辩统计 JSON 新增 `defense` 数据，统计页也新增“答辩安排”图表。
+6. 系统开关新增：教师出题、学生选题、开题/中期/终稿上传开关。
+
+> 注意：用户要求里列了 `src/util/SQLHelper.java`，当前项目真实路径是 `src/dbutil/SQLHelper.java`，所有 DAO 和导出查询都 import `dbutil.SQLHelper`。
 
 ## 1. URL、方法、Content-Type、字段总表
 
-| 流程 | URL | 方法 | 请求 Content-Type | 主要字段/参数 | 发起位置 | 后端入口 | 响应 |
-|---|---|---:|---|---|---|---|---|
-| 用户列表/过滤/分页 | `/admin/user.action?role=...&college=...&page=...&pageSize=...` | GET | 无请求体 | `role`、`college`、分页参数由 `PageUtil` 从 request 取 | `users.jsp` 的角色链接、学院下拉、分页链接 | `AdminUserController#doGet` | `forward` 到 `/admin/users.jsp`，HTML |
-| 用户新增 | `/admin/user.action` | POST | `application/x-www-form-urlencoded`（普通表单默认） | `action=add`、`username`、`password`、`realName`、`role`、`college`、`major`、`className`、`studentNo`、`department`、`email`、`phone` | `users.jsp` 新增用户 modal 表单 | `AdminUserController#doPost` | redirect 到 `/admin/user.action?msg=add_ok` 或 `?msg=username_exists` |
-| 用户编辑 | `/admin/user.action` | POST | `application/x-www-form-urlencoded` | `action=edit`、`id`、上述用户字段、`status`，`password` 可为空 | `users.jsp` 编辑用户 modal 表单 | `AdminUserController#doPost` | redirect 到 `/admin/user.action?msg=edit_ok` 或错误 msg |
-| 用户删除 | `/admin/user.action` | POST | `application/x-www-form-urlencoded` | `action=delete`、`id` | `users.jsp` 行内删除表单 | `AdminUserController#doPost` | redirect 到 `/admin/user.action?msg=delete_ok/delete_self/delete_failed` |
-| 公告列表 | `/admin/announcements.jsp` | GET | 无请求体 | 无 | 浏览器直接访问 JSP | JSP 内部创建 `AnnouncementDao` | JSP 直接输出 HTML |
-| 公告新增/编辑/删除 | `/admin/announcement.action` | POST | `application/x-www-form-urlencoded` | `action=add/edit/delete`、`id`、`title`、`content`、`isTop` | `announcements.jsp` 表单 | `AdminAnnouncementController#doPost` | redirect 到 `/admin/announcements.jsp?msg=...` |
-| 答辩列表 | `/admin/defenses.jsp` | GET | 无请求体 | `msg`、`success`、`skipped` 仅用于展示导入结果 | 浏览器直接访问 JSP | JSP 内部创建 DAO 查询 | JSP 直接输出 HTML |
-| 答辩新增/编辑/删除 | `/admin/defense.action` | POST | `application/x-www-form-urlencoded` | `action=add/edit/delete`、`id`、`studentId`、`defenseTime`、`room`、`groupName`、`score`、`comment` | `defenses.jsp` 表单 | `AdminDefenseController#doPost` | redirect 到 `/admin/defenses.jsp?msg=...` |
-| 答辩批量导入 | `/admin/defense-import.action` | POST | `multipart/form-data` | 文件 part：`file`，Excel 列为学号、答辩时间、教室、分组、备注 | `defenses.jsp` 上传表单 | `AdminDefenseImportController#doPost` | redirect 到 `/admin/defenses.jsp?msg=import_ok&success=...&skipped=...` 或失败 msg |
-| 统计 JSON | `/admin/stats.action` | GET | 无请求体 | 无 | `statistics.jsp` 中的 `fetch('../admin/stats.action')` | `AdminStatsController#doGet` | `application/json;charset=UTF-8`，响应体为统计 JSON |
-| 成绩 Excel 导出 | `/admin/export.action` | GET | 无请求体 | 无 | `statistics.jsp` 导出链接 | `AdminExportController#doGet` | Excel MIME，`Content-Disposition: attachment`，响应体为 `.xlsx` 二进制 |
+| 流程 | URL | 方法 | 请求 Content-Type | 关键 query / body 字段 | 后端入口 | 响应 |
+|---|---|---:|---|---|---|---|
+| 用户列表/过滤/分页 | `/admin/user.action?role=&college=&major=&className=&studentNo=&realName=&page=&pageSize=` | GET | 无请求体 | `role`、`college`、`major` 精确过滤；`className/studentNo/realName` 模糊过滤；`page/pageSize` 分页 | `AdminUserController#doGet` | forward `/admin/users.jsp`，HTML |
+| 用户新增 | `/admin/user.action` | POST | `application/x-www-form-urlencoded` | `action=add`，`username/password/realName/title/role/college/major/className/studentNo/department/email/phone` | `AdminUserController#doPost` | redirect `?msg=add_ok` 或 `?msg=username_exists` |
+| 用户编辑 | `/admin/user.action` | POST | `application/x-www-form-urlencoded` | `action=edit`，`id`，用户字段，`status`，`password` 可空 | `AdminUserController#doPost` | redirect `?msg=edit_ok` 或错误 msg |
+| 用户删除 | `/admin/user.action` | POST | `application/x-www-form-urlencoded` | `action=delete`，`id` | `AdminUserController#doPost` | redirect `?msg=delete_ok/delete_self/delete_failed` |
+| 勾选学生重置密码 | `/admin/user.action` | POST | `application/x-www-form-urlencoded` | `action=resetSelected`，多个 `selectedIds`，`newPassword` | `AdminUserController#doPost` | redirect `?msg=reset_ok&count=N` 或 `?msg=reset_password_invalid` |
+| 按筛选结果重置密码 | `/admin/user.action` | POST | `application/x-www-form-urlencoded` | `action=resetFiltered`，当前过滤字段，`newPassword` | `AdminUserController#doPost` | redirect 保留筛选 query + `msg=reset_ok&count=N` |
+| 用户 Excel 导入 | `/admin/user-import.action` | POST | `multipart/form-data` | `importRole=student/teacher`，文件 part：`file` | `AdminUserImportController#doPost` | redirect `?msg=import_ok&success=N&skipped=M`；错误明细放 session |
+| 公告列表 | `/admin/announcements.jsp` | GET | 无请求体 | 无 | JSP 内部 `AnnouncementDao.findAll()` | HTML |
+| 公告新增/编辑/删除 | `/admin/announcement.action` | POST | `application/x-www-form-urlencoded` | `action=add/edit/delete`，`id/title/content/isTop/scopeType/college/major` | `AdminAnnouncementController#doPost` | redirect `/admin/announcements.jsp?msg=...` |
+| 答辩列表 | `/admin/defenses.jsp` | GET | 无请求体 | `msg/success/skipped` 只用于导入结果提示 | JSP 内部查 DAO | HTML |
+| 答辩新增/编辑/删除 | `/admin/defense.action` | POST | `application/x-www-form-urlencoded` | `action=add/edit/delete`，`id/studentId/defenseTime/room/groupName/score/comment` | `AdminDefenseController#doPost` | redirect `/admin/defenses.jsp?msg=...` |
+| 答辩 Excel 导入 | `/admin/defense-import.action` | POST | `multipart/form-data` | 文件 part：`file`；Excel 列：学号、答辩时间、教室、分组、备注 | `AdminDefenseImportController#doPost` | redirect `?msg=import_ok&success=N&skipped=M` |
+| 系统开关页 | `/admin/system-switch.action` | GET | 无请求体 | 无 | `AdminSystemSwitchController#doGet` | forward `/admin/system-switches.jsp` |
+| 系统开关保存 | `/admin/system-switch.action` | POST | `application/x-www-form-urlencoded` | checkbox 名称就是配置键：`switch.topic_submit` 等；勾选提交 `on` | `AdminSystemSwitchController#doPost` | redirect `?msg=switch_ok` |
+| 统计 JSON | `/admin/stats.action` | GET | 无请求体 | 无 | `AdminStatsController#doGet` | `application/json;charset=UTF-8` |
+| 成绩 Excel 导出 | `/admin/export.action` | GET | 无请求体 | 无 | `AdminExportController#doGet` | `.xlsx` 二进制下载 |
 
-## 2. URL 与参数约定
+## 2. 用户 GET：过滤、分页、Controller forward
 
-### 2.1 `.action` 不是物理文件，而是 Servlet 映射
-
-项目里大量 URL 以 `.action` 结尾，例如 `/admin/user.action`、`/admin/announcement.action`、`/admin/defense.action`、`/admin/stats.action`、`/admin/export.action`。这些不是磁盘上的 `.action` 文件，而是 `@WebServlet` 绑定的逻辑路由：
-
-- `AdminUserController` 映射 `/admin/user.action`。
-- `AdminAnnouncementController` 映射 `/admin/announcement.action`。
-- `AdminDefenseController` 映射 `/admin/defense.action`。
-- `AdminDefenseImportController` 映射 `/admin/defense-import.action`。
-- `AdminStatsController` 映射 `/admin/stats.action`。
-- `AdminExportController` 映射 `/admin/export.action`。
-
-所以老师如果追问“为什么点的是 `.action`，却执行 Java 类”，答案是：Servlet 容器按 `@WebServlet` 的 URL pattern 分发请求，不按文件系统查找。
-
-### 2.2 query 参数与 redirect msg
-
-GET 请求和 redirect 后的状态提示都放在 URL query 中，例如：
-
-- `?role=teacher&college=cs`：用户列表筛选参数。
-- `?msg=add_ok`：POST 成功后 redirect 回列表页时携带的“闪现状态码”。
-- `?msg=import_ok&success=3&skipped=2`：导入完成后展示成功数和跳过数。
-
-query 参数的特点是：浏览器地址栏可见、没有请求体、刷新页面不会重新提交 POST。管理后台用它实现了典型 **PRG（Post/Redirect/Get）** 流程：表单 POST 修改数据库，Servlet 处理完 redirect 到 GET 页面，页面通过 `msg` 显示结果。
-
-### 2.3 隐藏字段 `action` 和 `id`
-
-多个操作共用同一个 Servlet，所以表单用隐藏字段区分动作：
-
-- `action=add`：新增。
-- `action=edit`：编辑。
-- `action=delete`：删除。
-- `id`：编辑或删除哪一条记录。
-
-这样一个 URL 可以承载多种后台动作，Controller 先读取 `request.getParameter("action")`，再进入对应分支。
-
-### 2.4 `multipart/form-data` 与 `@MultipartConfig`
-
-普通表单默认是 `application/x-www-form-urlencoded`，适合传文本字段；Excel 上传必须传文件字节，所以表单声明 `enctype="multipart/form-data"`。Servlet 端必须配合 `@MultipartConfig`，容器才会解析 multipart 请求，`request.getPart("file")` 才能拿到文件 part。
-
-### 2.5 JSON 与 Excel 响应头
-
-- JSON 接口设置 `Content-Type: application/json;charset=UTF-8`，表示响应体是 UTF-8 JSON，前端 `r.json()` 按 JSON 解析。
-- Excel 导出设置 `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`，表示响应体是 `.xlsx`。
-- `Content-Disposition: attachment; filename=grades_export.xlsx` 告诉浏览器不要当 HTML 展示，而是作为附件下载，并给出文件名。
-
-## 3. 用户管理：GET 列表与 POST 增删改
-
-### 3.1 用户 GET：浏览器请求如何进入 Controller，再 forward 到 JSP
-
-用户列表不是直接访问 `users.jsp` 完成查询，而是先访问 `/admin/user.action`。`AdminUserController#doGet` 做了三件关键事：
-
-1. 从 query 读取筛选条件：`role`、`college`。
-2. 调 DAO 查询分页用户和总数。
-3. 把 `users`、`total`、`currentPage`、`pageSize`、字典项、学院专业、校验规则放入 request 后 `forward` 到 `users.jsp`。
-
-`forward` 的意义是：服务器内部把同一个 request 转交给 JSP 渲染，浏览器地址栏仍然是 `/admin/user.action`，而且 request attribute 不会丢。`users.jsp` 正是从 request attribute 中拿 `users`、`total` 等数据。如果有人绕过 Controller 直接访问 `/admin/users.jsp`，`users` 为 null，JSP 会立刻 `sendRedirect` 到 `/admin/user.action`，强制回到正确入口。
-
-```mermaid
-flowchart LR
-  A["浏览器 GET /admin/user.action?role&college&page<br/>src/controller/AdminUserController.java:20-28"] --> B["Servlet 映射与 doGet 读取 query<br/>src/controller/AdminUserController.java:20-28"]
-  B --> C["分页查询 users + total<br/>src/controller/AdminUserController.java:30-32<br/>src/dao/UserDao.java:69-105"]
-  C --> D["设置 request attributes<br/>src/controller/AdminUserController.java:34-47"]
-  D --> E["forward 到 /admin/users.jsp<br/>src/controller/AdminUserController.java:48"]
-  E --> F["JSP 从 request 取 users/total/pageSize<br/>WebContent/admin/users.jsp:10-20"]
-  F --> G["渲染用户表格和分页<br/>WebContent/admin/users.jsp:80-114"]
-  H["若直接访问 users.jsp 且 users=null<br/>WebContent/admin/users.jsp:28-31"] --> A
-```
-
-#### 逐段解释
-
-- `src/controller/AdminUserController.java:20-28`：`@WebServlet("/admin/user.action")` 绑定入口；`doGet` 用 `request.getParameter("role")`、`request.getParameter("college")` 读取筛选条件，分页参数由 `PageUtil.getPage/getPageSize` 从 request 中取。
-- `src/controller/AdminUserController.java:30-32`：创建 `UserDao`，调用 `findAllPaged(role, college, page, pageSize)` 和 `countAll(role, college)`，把同一组过滤条件分别用于列表和总数。
-- `src/dao/UserDao.java:69-83`：SQL 从 `WHERE 1=1` 开始拼可选条件；如果传了 `role` 就加 `AND role=?`，传了 `college` 就加 `AND college=?`，最后加 `ORDER BY id LIMIT ? OFFSET ?`。参数通过 `SQLHelper.queryList(sql, params.toArray())` 绑定，不是字符串直接拼值。
-- `src/dao/UserDao.java:91-105`：总数查询同样按 `role`、`college` 拼条件，返回 `COUNT(*)`。
-- `src/controller/AdminUserController.java:34-47`：把页面渲染必需的 `users`、总数、当前页、页大小、角色字典、状态字典、学院专业、用户名正则、密码最小长度放进 request。
-- `src/controller/AdminUserController.java:48`：`request.getRequestDispatcher("/admin/users.jsp").forward(request, response)` 进入 JSP。这里不是 redirect；redirect 会让浏览器重新发一次请求，request attribute 会丢，JSP 拿不到 `users`。
-- `WebContent/admin/users.jsp:28-31`：JSP 的保护逻辑。如果 `users == null`，说明不是 Controller forward 进来的，于是 `response.sendRedirect(request.getContextPath() + "/admin/user.action")`。
-
-### 3.2 用户 POST：新增、编辑、删除如何通过隐藏字段进入同一个 Servlet
-
-用户页面有三类 POST 表单：
-
-- 删除：行内表单，提交 `action=delete` 和 `id`。
-- 新增：modal 表单，提交 `action=add` 和完整用户字段。
-- 编辑：modal 表单，提交 `action=edit`、`id`、用户字段和 `status`。
-
-这些表单都没有 `enctype`，浏览器默认用 `application/x-www-form-urlencoded` 编码。字段进入 Servlet 后，统一由 `request.getParameter(...)` 读取。
+`users.jsp` 现在只负责渲染，不负责查数据库。它先读 Controller 放入的 `roleFilter/collegeFilter/majorFilter/classNameFilter/studentNoFilter/realNameFilter/filterQuery/users/total/currentPage/pageSize`；如果 `users == null`，说明不是从 Controller forward 进来的，会 `sendRedirect` 回 `/admin/user.action`。
 
 ```mermaid
 flowchart TD
-  A["新增表单 POST /admin/user.action<br/>WebContent/admin/users.jsp:120-154"] --> D["doPost 设置 UTF-8 并读 action<br/>src/controller/AdminUserController.java:51-57"]
-  B["编辑表单 POST /admin/user.action<br/>WebContent/admin/users.jsp:161-203"] --> D
-  C["删除表单 action=delete,id<br/>WebContent/admin/users.jsp:97-101"] --> D
-  D --> E{"action 分支<br/>src/controller/AdminUserController.java:58-115"}
-  E -->|add| F["查重 + buildUser + insert<br/>src/controller/AdminUserController.java:58-68<br/>src/dao/UserDao.java:108-113"]
-  E -->|edit| G["查重/自保护/末管理员保护 + update<br/>src/controller/AdminUserController.java:69-99<br/>src/dao/UserDao.java:116-130"]
-  E -->|delete| H["禁止删自己 + delete<br/>src/controller/AdminUserController.java:100-112<br/>src/dao/UserDao.java:132-133"]
-  F --> I["redirect ?msg=add_ok 或 username_exists<br/>src/controller/AdminUserController.java:60-68"]
-  G --> J["redirect ?msg=edit_ok 或错误 msg<br/>src/controller/AdminUserController.java:72-99"]
-  H --> K["redirect ?msg=delete_ok/delete_self/delete_failed<br/>src/controller/AdminUserController.java:102-112"]
+  A["浏览器 GET /admin/user.action?role&college&major&className&studentNo&realName&page&pageSize"] --> B["AdminUserController.doGet<br/>buildCriteria + PageUtil"]
+  B --> C["UserSearchCriteria 保存 role/college/major/className/studentNo/realName"]
+  C --> D["UserDao.findAllPaged(criteria,page,pageSize)<br/>UserDao.countAll(criteria)"]
+  D --> E["appendCriteria 拼 WHERE<br/>role/college/major 精确<br/>className/studentNo/realName LIKE"]
+  E --> F["SQLHelper PreparedStatement 绑定参数"]
+  F --> G["Controller 设置 users/total/filterQuery/字典/学院专业/校验规则"]
+  G --> H["forward /admin/users.jsp"]
+  H --> I["users.jsp 渲染筛选表单、表格、分页"]
+  J["直接访问 /admin/users.jsp 且 users=null"] --> K["sendRedirect /admin/user.action"] --> A
 ```
 
-#### 字段进入 Controller 的路径
+关键字段与代码路径：
 
-- `WebContent/admin/users.jsp:120-154`：新增表单的 `<form action="user.action" method="post">` 会把输入框的 `name` 作为参数名提交。隐藏字段 `action=add` 告诉后台这是新增。
-- `WebContent/admin/users.jsp:161-203`：编辑表单包含 `action=edit` 和隐藏 `id`，同时提交 `status`。密码字段可以留空。
-- `WebContent/admin/users.jsp:97-101`：删除表单只有 `action=delete` 和 `id`，用户点击确认后 POST。
-- `src/controller/AdminUserController.java:51-57`：`doPost` 先 `request.setCharacterEncoding("UTF-8")`，再读 session 中的 `loginUser` 和表单里的 `action`。
-- `src/controller/AdminUserController.java:118-131`：`buildUser(request)` 把 `username/password/role/realName/studentNo/college/major/className/department/email/phone` 逐个从 request parameter 装进 `User` 对象。
+- Query 来源：筛选表单 `method="get"`，字段在 `WebContent/admin/users.jsp:93-138`；新增过滤字段是 `major/className/studentNo/realName`。
+- Controller 读取：`buildCriteria` 读取 `role/college/major/className/studentNo/realName`，见 `src/controller/AdminUserController.java:190-198`。
+- 分页读取：`PageUtil.getPage/getPageSize/offset` 处理 `page/pageSize`，见 `src/util/PageUtil.java:8-23`。
+- DAO 过滤：`UserDao.appendCriteria` 先处理 `role`，再处理其余字段；`class_name/student_no/real_name` 使用 `LIKE '%值%'`，见 `src/dao/UserDao.java:244-279`。
+- forward 原因：用户页需要 Controller 准备用户列表、总数、字典、学院/专业分组、用户名正则、密码最短长度；这些都在 request attribute 里，见 `src/controller/AdminUserController.java:37-56`。
 
-#### 新增分支
+老师追问点：
 
-- `src/controller/AdminUserController.java:58-63`：如果 `action=add`，先读 `username` 并调用 `dao.existsByUsername(username)` 查重；已存在就 redirect 到 `?msg=username_exists`。
-- `src/controller/AdminUserController.java:64-68`：通过 `buildUser` 构造对象，默认 `status=1`，调用 `dao.insert(u)`，记录日志，redirect 到 `?msg=add_ok`。
-- `src/dao/UserDao.java:108-113`：插入 SQL 包含用户名、哈希后的密码、角色、姓名、学号、学院、专业、班级、部门、邮箱、电话、状态。密码不是明文直接入库，而是调用 `PasswordUtil.hash(user.getPassword())`。
+- **为什么用户页不用 JSP 直接查 DAO？** 因为用户页包含分页、筛选、批量操作、字典和校验配置，Controller 集中准备数据更清楚；直接访问 JSP 会丢 request attribute，所以 JSP 有保护性 redirect。
+- **为什么筛选后重置还能保留筛选条件？** Controller 用 `buildFilterQuery` URL encode 当前过滤字段，分页和 `resetFiltered` redirect 都复用它，见 `src/controller/AdminUserController.java:223-247`。
 
-#### 编辑分支
+## 3. 用户 POST：新增、编辑、删除、批量重置
 
-- `src/controller/AdminUserController.java:70-78`：读取 `id`、`username`、`status`，并排除当前用户 id 做用户名查重。
-- `src/controller/AdminUserController.java:79-94`：读取当前数据库用户，防止管理员把自己改成非 admin 或禁用自己，也防止系统最后一个启用管理员被降级/禁用。
-- `src/controller/AdminUserController.java:95-99`：密码为空则设置为 null，DAO 更新时会走“不改密码”的 SQL；非空则更新密码。
-- `src/dao/UserDao.java:116-130`：根据 `user.getPassword()` 是否为空选择两条 SQL：一条更新密码字段，一条不更新密码字段。
-
-#### 删除分支
-
-- `src/controller/AdminUserController.java:100-105`：删除前读取 `id`，如果要删除的是当前登录用户，redirect `?msg=delete_self`。
-- `src/controller/AdminUserController.java:106-112`：调用 `dao.delete(id)`，影响行数小于等于 0 则 `?msg=delete_failed`，否则 `?msg=delete_ok`。
-- `src/dao/UserDao.java:132-133`：真正执行 `DELETE FROM users WHERE id=?`。
-
-#### 用户管理 msg 展示
-
-`users.jsp` 自己读取 `request.getParameter("msg")`，识别 `add_ok`、`edit_ok`、`delete_ok`、`delete_failed`、`delete_self`、`username_exists` 并输出 Bootstrap alert。注意 Controller 还会 redirect `msg=error`、`msg=edit_self_role`、`msg=last_admin`，但在当前 `users.jsp` 本地 alert 映射中没有逐项处理。
-
-## 4. 公告管理：JSP 直达列表，POST 到 Servlet 后 redirect
-
-公告管理和用户管理不同：`announcements.jsp` 自己创建 `AnnouncementDao` 并查询全部公告，不经过 GET Controller。
-
-设计原因很直接：公告列表没有复杂分页配置，也不需要 Controller 先塞大量字典/配置到 request；JSP 直接查 DAO 就能展示。修改动作仍然放在 Servlet 中，是为了把数据库写操作集中在 Controller，并通过 redirect 防止刷新重复提交。
+用户页多种操作共用 `/admin/user.action`，靠隐藏字段 `action` 分流。普通表单都是默认 `application/x-www-form-urlencoded`，Servlet 用 `request.getParameter(...)` 取字段。
 
 ```mermaid
 flowchart TD
-  A["浏览器 GET /admin/announcements.jsp<br/>WebContent/admin/announcements.jsp:1-9"] --> B["JSP 创建 AnnouncementDao 并 findAll<br/>WebContent/admin/announcements.jsp:4-8"]
-  B --> C["DAO 联表查询公告和发布者<br/>src/dao/AnnouncementDao.java:10-15"]
-  C --> D["JSP 渲染公告列表/空状态<br/>WebContent/admin/announcements.jsp:18-37"]
-  E["新增/编辑/删除表单 POST /admin/announcement.action<br/>WebContent/admin/announcements.jsp:27-31,40-67"] --> F["AdminAnnouncementController 读 action/title/content/isTop/id<br/>src/controller/AdminAnnouncementController.java:18-45"]
-  F --> G["AnnouncementDao insert/update/delete<br/>src/dao/AnnouncementDao.java:29-43"]
-  G --> H["redirect 回 /admin/announcements.jsp?msg=...<br/>src/controller/AdminAnnouncementController.java:34-50"]
-  H --> A
+  A["新增 modal<br/>action=add<br/>username/password/realName/title/role/college/major/className/studentNo/department/email/phone"] --> P["POST /admin/user.action"]
+  B["编辑 modal<br/>action=edit,id,status<br/>password 可留空"] --> P
+  C["行内删除表单<br/>action=delete,id"] --> P
+  D["勾选学生重置<br/>action=resetSelected<br/>selectedIds[] + newPassword"] --> P
+  E["按筛选重置<br/>action=resetFiltered<br/>过滤字段 + newPassword"] --> P
+  P --> F["AdminUserController.doPost<br/>读取 action"]
+  F -->|add| G["用户名查重 -> buildUser -> UserDao.insert -> log -> msg=add_ok"]
+  F -->|edit| H["排除自身用户名查重 -> 自保护/末管理员保护 -> UserDao.update -> msg=edit_ok"]
+  F -->|delete| I["禁止删除当前登录用户 -> UserDao.delete -> msg=delete_ok/delete_failed"]
+  F -->|resetSelected| J["校验密码长度 -> parseIds -> resetStudentPasswords -> msg=reset_ok&count=N"]
+  F -->|resetFiltered| K["校验密码长度 -> findStudentIdsForReset(criteria) -> resetStudentPasswords -> 保留筛选 query + msg=reset_ok&count=N"]
+  G --> R["redirect /admin/user.action?..."]
+  H --> R
+  I --> R
+  J --> R
+  K --> R
 ```
 
-### 4.1 公告 GET 展示
+字段说明：
 
-- `WebContent/admin/announcements.jsp:4-8`：JSP 设置页面标题，从 session 取登录用户，直接 `new AnnouncementDao()` 并 `dao.findAll()`。
-- `src/dao/AnnouncementDao.java:10-15`：查询 `announcements` 表并 join `users` 表拿发布者姓名，排序规则是置顶优先、创建时间倒序。
-- `WebContent/admin/announcements.jsp:18-37`：如果列表为空显示空状态；否则逐条输出标题、置顶标记、发布者、时间、内容，以及编辑/删除按钮。
+- 新增表单：`WebContent/admin/users.jsp:242-280`，包含用户名、密码、姓名、身份/职称、角色、学院、专业、班级、学号、部门、邮箱、电话。
+- 编辑表单：`WebContent/admin/users.jsp:284-331`，多了隐藏 `id` 和 `status`；`password` 留空表示不改密码。
+- 删除表单：`WebContent/admin/users.jsp:173-179`，提交 `action=delete/id`。
+- 勾选重置：表格里只有学生行才输出 `selectedIds` 复选框，隐藏表单提交 `action=resetSelected`，见 `WebContent/admin/users.jsp:141-149` 和 `WebContent/admin/users.jsp:156-159`。
+- 按筛选重置：modal 把当前 `role/college/major/className/studentNo/realName` 全部做成 hidden input，见 `WebContent/admin/users.jsp:220-239`。
 
-### 4.2 公告 POST 字段与分支
+后端规则：
 
-公告表单同样是普通 POST，默认 `application/x-www-form-urlencoded`。
+- 新增查重 `existsByUsername` 后插入，默认 `status=1`，见 `src/controller/AdminUserController.java:66-76`。
+- 编辑时防止把当前管理员自己改成非 admin 或禁用自己，也防止最后一个启用管理员被降级/禁用，见 `src/controller/AdminUserController.java:87-107`。
+- `buildUser` 对学生才保留 `studentNo/className`，非学生置空，见 `src/controller/AdminUserController.java:154-168`。
+- 批量重置只作用于 `role='student'`：按筛选先查学生 id，真正 UPDATE 也有 `WHERE role='student' AND id IN (...)`，见 `src/dao/UserDao.java:199-242`。
+- 密码长度用系统配置 `validation.password_min_length`，见 `src/controller/AdminUserController.java:218-220`。
 
-| action | 字段 | JSP 来源 | Controller 处理 | 成功 redirect |
-|---|---|---|---|---|
-| `add` | `title`、`content`、`isTop` | 新增 modal | 构造 `Announcement`，设置发布人 id 和置顶状态，insert | `/admin/announcements.jsp?msg=add_ok` |
-| `edit` | `id`、`title`、`content`、`isTop` | 编辑 modal | 读 id 后更新标题、内容、置顶 | `/admin/announcements.jsp?msg=edit_ok` |
-| `delete` | `id` | 行内删除表单 | 删除指定公告 | `/admin/announcements.jsp?msg=delete_ok` |
+Redirect msg：
 
-关键点：
+- 成功：`add_ok`、`edit_ok`、`delete_ok`、`reset_ok&count=N`。
+- 失败/特殊：`username_exists`、`delete_self`、`delete_failed`、`edit_self_role`、`last_admin`、`reset_password_invalid`、`error`。
+- 当前 `users.jsp` 已显示导入和重置相关 msg：`import_ok/import_empty/import_error/import_role_invalid/reset_ok/reset_password_invalid` 等，见 `WebContent/admin/users.jsp:54-67`。
 
-- `WebContent/admin/announcements.jsp:42-51`：新增表单提交到 `../admin/announcement.action`，隐藏字段 `action=add`，文本字段是 `title`、`content`，置顶复选框 `name="isTop" value="1"`。
-- `WebContent/admin/announcements.jsp:57-67`：编辑表单提交 `action=edit` 和隐藏 `id`，字段同新增。
-- `WebContent/admin/announcements.jsp:27-31`：删除表单提交 `action=delete` 和 `id`。
-- `src/controller/AdminAnnouncementController.java:18-24`：`doPost` 设置 UTF-8，读取 `action`，创建 DAO，从 session 取当前用户。
-- `src/controller/AdminAnnouncementController.java:26-34`：新增时读取 `title/content/isTop`，其中 `isTop` 是复选框，只有勾选时才会提交 `"1"`，所以代码用 `"1".equals(request.getParameter("isTop")) ? 1 : 0` 转成 1/0。
-- `src/controller/AdminAnnouncementController.java:35-43`：编辑时多读 `id`，调用 `dao.update(a)`。
-- `src/controller/AdminAnnouncementController.java:44-48`：删除时只读 `id` 并调用 `dao.delete(id)`。
-- `src/dao/AnnouncementDao.java:29-43`：三类写操作分别对应 `INSERT`、`UPDATE`、`DELETE`，最终都通过 `SQLHelper` 的 PreparedStatement 执行。
+老师追问点：
 
-## 5. 答辩安排：JSP 直达展示，POST 负责校验与写库
+- **为什么批量重置不会误伤教师/管理员？** 前端只给学生行输出复选框，后端 `resetStudentPasswords` 仍用 `role='student'` 二次限制。
+- **为什么编辑密码可以为空？** Controller 把空密码设为 `null`，DAO 在 `user.getPassword()` 为空时走不更新 password 的 SQL，见 `src/dao/UserDao.java:120-134`。
 
-答辩页面也是 JSP 直达展示：`defenses.jsp` 自己查全部答辩安排，还会查“已通过选题的学生”供新增/编辑下拉框使用。与公告类似，展示逻辑放在 JSP，写操作放在 `AdminDefenseController`。
+## 4. 用户 Excel 导入：multipart + POI + session 错误明细
 
-```mermaid
-flowchart TD
-  A["浏览器 GET /admin/defenses.jsp<br/>WebContent/admin/defenses.jsp:1-18"] --> B["JSP 创建 DefenseScheduleDao/UserDao/SelectionDao<br/>WebContent/admin/defenses.jsp:6-9"]
-  B --> C["查询全部答辩安排<br/>src/dao/DefenseScheduleDao.java:11-22"]
-  B --> D["遍历学生并筛出已通过选题学生<br/>WebContent/admin/defenses.jsp:10-15"]
-  C --> E["渲染答辩表格<br/>WebContent/admin/defenses.jsp:53-78"]
-  D --> F["渲染新增/编辑下拉框<br/>WebContent/admin/defenses.jsp:81-126"]
-  G["add/edit/delete POST /admin/defense.action<br/>WebContent/admin/defenses.jsp:70-74,83-126"] --> H["AdminDefenseController 读 action 并 buildSchedule<br/>src/controller/AdminDefenseController.java:27-35,81-99"]
-  H --> I["资格校验/重复校验/分数范围校验<br/>src/controller/AdminDefenseController.java:36-43,56-58,102-116"]
-  I --> J["DefenseScheduleDao insert/update/delete<br/>src/dao/DefenseScheduleDao.java:40-67"]
-  J --> K["redirect 回 /admin/defenses.jsp?msg=...<br/>src/controller/AdminDefenseController.java:37-78"]
-```
-
-### 5.1 答辩 GET 展示
-
-- `WebContent/admin/defenses.jsp:6-9`：JSP 创建 `DefenseScheduleDao`、`UserDao`、`SelectionDao`，调用 `dao.findAll()` 查询已有答辩。
-- `WebContent/admin/defenses.jsp:10-15`：遍历所有 student，只有 `selDao.findApprovedByStudent(u.getId()) != null` 的学生才加入 `approvedStudents`，用于表单下拉。
-- `src/dao/DefenseScheduleDao.java:11-22`：`BASE_SQL` join 学生、选题、课题、指导教师，`findAll()` 按答辩时间和 id 倒序返回列表。
-- `WebContent/admin/defenses.jsp:53-78`：JSP 渲染学号、姓名、课题、指导教师、答辩时间、教室、分组、答辩分和操作按钮。
-
-### 5.2 答辩 POST 字段
-
-| action | 字段 | 字段含义 | 处理结果 |
-|---|---|---|---|
-| `add` | `studentId`、`defenseTime`、`room`、`groupName`、`score`、`comment` | 新增某学生的答辩时间、地点、分组、分数和备注 | 校验资格、查重，通过后 insert，通知学生，redirect `msg=add_ok` |
-| `edit` | `id`、`studentId`、`defenseTime`、`room`、`groupName`、`score`、`comment` | 修改已有答辩安排 | 校验资格、排除自身查重，通过后 update，redirect `msg=edit_ok` |
-| `delete` | `id` | 删除答辩安排 | delete 成功 redirect `msg=delete_ok` |
-
-关键代码解释：
-
-- `WebContent/admin/defenses.jsp:83-101`：新增表单提交 `action=add`，`studentId` 来自学生下拉，`defenseTime` 是 HTML `datetime-local`，格式形如 `2026-06-22T14:30`。
-- `WebContent/admin/defenses.jsp:107-126`：编辑表单提交 `action=edit` 和隐藏 `id`，字段结构与新增一致。
-- `WebContent/admin/defenses.jsp:70-74`：删除表单提交 `action=delete` 和 `id`。
-- `src/controller/AdminDefenseController.java:27-33`：`doPost` 设置 UTF-8，从 session 取管理员用户，读取 `action`，创建 `DefenseScheduleDao`。
-- `src/controller/AdminDefenseController.java:81-99`：`buildSchedule` 是字段解析核心：`studentId` 转 int，`defenseTime` 用 `SimpleDateFormat("yyyy-MM-dd'T'HH:mm")` 解析，`score` 转 `BigDecimal`，其余文本字段直接取 parameter。解析失败会抛 `IOException("invalid defense data")`。
-- `src/controller/AdminDefenseController.java:102-116`：`isEligible` 不只是检查学生存在，还要求角色是 `student`、状态为 1、有已批准选题、分数在 0 到 100 之间，并且终稿文档存在且状态为 `reviewed`。
-- `src/controller/AdminDefenseController.java:34-52`：新增时先 `buildSchedule`，再资格校验、重复学生校验、insert。insert 成功后发送站内通知并 redirect `msg=add_ok`。
-- `src/controller/AdminDefenseController.java:53-66`：编辑时设置 `id`，用 `existsByStudentExceptId` 防止同一学生在另一条答辩安排中重复出现。
-- `src/controller/AdminDefenseController.java:67-78`：删除时按 id 删除，失败 redirect `msg=error`，成功 redirect `msg=delete_ok`。
-- `src/dao/DefenseScheduleDao.java:40-67`：insert/update/delete/exists 都是针对 `defense_schedules` 表的 PreparedStatement 操作。
-
-### 5.3 答辩 redirect msg
-
-答辩普通增删改由 Controller redirect 到：
-
-- `?msg=add_ok`
-- `?msg=edit_ok`
-- `?msg=delete_ok`
-- `?msg=defense_ineligible`
-- `?msg=exists`
-- `?msg=error`
-
-批量导入相关 msg 则由 `defenses.jsp` 本页明确读取并展示，见下一节。
-
-## 6. 答辩批量导入：multipart 上传、POI 逐行读取、统计 success/skipped
-
-Excel 导入不是普通表单提交，因为请求体里有文件字节。`defenses.jsp` 的导入表单声明了 `enctype="multipart/form-data"`，文件控件名为 `file`，并提示 Excel 列为：学号、答辩时间、教室、分组、备注，首行为表头。
+用户导入是单独的 `/admin/user-import.action`，不是 `/admin/user.action`。表单必须是 `multipart/form-data`，否则 Servlet 端无法通过 `request.getPart("file")` 取到文件。
 
 ```mermaid
 sequenceDiagram
-  participant B as 浏览器 multipart POST<br/>WebContent/admin/defenses.jsp:28-37
-  participant C as AdminDefenseImportController<br/>src/controller/AdminDefenseImportController.java:31-50
-  participant P as POI Workbook/Sheet/Row<br/>src/controller/AdminDefenseImportController.java:63-96
-  participant U as UserDao 查学号<br/>src/dao/UserDao.java:25-31
-  participant D as DefenseScheduleDao 写答辩<br/>src/dao/DefenseScheduleDao.java:40-45,58-67
-  participant R as redirect 结果<br/>src/controller/AdminDefenseImportController.java:97-105
+  participant B as 浏览器 users.jsp 导入 modal
+  participant C as AdminUserImportController
+  participant P as Apache POI WorkbookFactory
+  participant U as UserDao
+  participant S as Session/Redirect
 
-  B->>C: POST /admin/defense-import.action, Content-Type multipart/form-data, part name=file
-  C->>C: @MultipartConfig 允许 request.getPart("file")
+  B->>C: POST /admin/user-import.action multipart(importRole,file)
+  C->>C: 校验 loginUser.role == admin
+  C->>C: 校验 importRole 只能 student/teacher
+  C->>C: request.getPart("file")
   C->>P: WorkbookFactory.create(filePart.getInputStream())
-  P->>P: getSheetAt(0), iterator(), 跳过首行表头
+  P-->>C: 第一张 sheet，跳过首行表头
   loop 每一行
-    P->>U: 第0列 studentNo -> findByStudentNo
-    U-->>P: User 或 null
-    P->>D: 非重复学生 -> insert DefenseSchedule
-    P->>P: success++ 或 skipped++
+    C->>C: 读取 0-10 列并 normalize
+    C->>U: existsByUsername / existsByStudentNoExcludeId
+    U-->>C: 是否重复
+    C->>U: insert(User) 或 skipped++
   end
-  P-->>R: msg=import_ok&success=...&skipped=...
+  C->>S: session.userImportErrors = errors
+  C-->>B: redirect /admin/user.action?msg=import_ok&success=N&skipped=M
 ```
 
-### 6.1 multipart 如何进入 Controller
+Excel 列顺序由页面提示直接给出：`用户名、姓名、学号、学院代码、专业代码、班级、部门/院系、邮箱、电话、初始密码、身份/职称`，见 `WebContent/admin/users.jsp:197-213`。
 
-- `WebContent/admin/defenses.jsp:28-37`：导入区域表单 `action="../admin/defense-import.action"`、`method="post"`、`enctype="multipart/form-data"`；文件 input 是 `name="file"`，accept `.xls,.xlsx`。
-- `src/controller/AdminDefenseImportController.java:31-33`：Servlet 映射 `/admin/defense-import.action`，并声明 `@MultipartConfig(maxFileSize = 10485760, maxRequestSize = 20971520)`，限制单文件最大 10MB、请求最大 20MB。
-- `src/controller/AdminDefenseImportController.java:40-48`：POST 开始后设置 UTF-8，校验 session 用户必须是 admin，否则 redirect 到 `/login.jsp`。
-- `src/controller/AdminDefenseImportController.java:50-54`：`request.getPart("file")` 读取文件 part；如果 part 不存在或大小为 0，redirect 到 `?msg=import_empty`。
+导入规则：
 
-### 6.2 POI 读取行、跳过、成功数
-
-- `src/controller/AdminDefenseImportController.java:56-61`：准备 `UserDao`、`DefenseScheduleDao`、`DataFormatter`，初始化 `success=0`、`skipped=0`、`errors`。
-- `src/controller/AdminDefenseImportController.java:63-68`：`WorkbookFactory.create(filePart.getInputStream())` 自动识别 xls/xlsx；取第一张 sheet；创建行迭代器；如果有第一行则 `it.next()` 跳过表头。
-- `src/controller/AdminDefenseImportController.java:69-74`：逐行读取第 0 列学号。学号为空时直接 `continue`，这里不会增加 `skipped`。
-- `src/controller/AdminDefenseImportController.java:75-80`：用 `userDao.findByStudentNo(studentNo.trim())` 查学生；不存在或角色不是 student，则记录错误并 `skipped++`。
-- `src/controller/AdminDefenseImportController.java:81-85`：如果该学生已有答辩安排，则记录错误并 `skipped++`。
-- `src/controller/AdminDefenseImportController.java:86-95`：构造 `DefenseSchedule`，从第 1 到第 4 列读取答辩时间、教室、分组、备注，调用 `defenseDao.insert(ds)`，发送通知，`success++`。
-- `src/controller/AdminDefenseImportController.java:108-114`：`cellText` 用 POI `DataFormatter` 把不同单元格类型格式化成字符串并 trim。
-- `src/controller/AdminDefenseImportController.java:116-127`：`parseDate` 支持 `yyyy-MM-dd HH:mm:ss`、`yyyy-MM-dd HH:mm`、`yyyy/MM/dd HH:mm` 三种格式；都解析失败时返回 null。也就是说日期格式不匹配不会让整行失败，而是导入一条 `defense_time=null` 的安排。
-- `src/controller/AdminDefenseImportController.java:97-99`：POI 打开文件或读取过程中出现异常，redirect 到 `?msg=import_error`。
-- `src/controller/AdminDefenseImportController.java:102-105`：正常结束后记录导入日志，并 redirect 到 `?msg=import_ok&success=...&skipped=...`。
-
-### 6.3 导入结果如何显示
-
-`defenses.jsp` 在导入表单下面读取 query：
-
-- `msg=import_ok`：继续读取 `success` 和 `skipped`，显示“导入完成：成功 N 条，跳过 M 条”。
-- `msg=import_empty`：显示“请选择要导入的 Excel 文件”。
-- `msg=import_error`：显示“导入失败，请检查文件格式后重试”。
-
-这也是为什么导入完成后用 redirect 携带 `success/skipped`，而不是 forward：redirect 让浏览器回到普通 GET 页面，刷新不会再次上传同一个 Excel。
-
-## 7. 统计 JSON：JSP 先出页面，fetch 再拉数据
-
-统计页不是后端把所有图表数据直接写进 HTML，而是先让 `statistics.jsp` 输出 ECharts 容器，再由浏览器执行 JavaScript 请求 `/admin/stats.action`。
+- `importRole` 只能是 `student` 或 `teacher`；其他值 redirect `msg=import_role_invalid`。
+- 学生用户名可空，空时用学号当用户名；教师用户名不能为空。
+- 密码为空默认 `123456`；但最终仍要满足 `validation.password_min_length`。
+- 学生必须有学号；教师导入时 `studentNo/className` 不入库。
+- 用户名重复跳过；学生学号重复跳过。
+- 错误明细最多在页面显示 8 条，其余省略；错误列表先存入 session，再由 `users.jsp` 读出后 remove，见 `WebContent/admin/users.jsp:33-34` 和 `WebContent/admin/users.jsp:79-90`。
 
 设计原因：
 
-- 图表数据天然适合结构化 JSON。
-- 页面 HTML 与统计 API 解耦，统计接口失败时可以只显示图表错误，不影响页面骨架。
-- ECharts 在前端渲染，后端只负责给 `selection`、`docPass`、`scores` 三类数据。
+- 导入用独立 Controller 可以把文件解析和普通增删改分开，避免 `/admin/user.action` 的表单参数逻辑变复杂。
+- 采用 PRG：导入完成 redirect 回用户列表，刷新页面不会重复上传 Excel。
+
+## 5. 公告作用域：global / college / major
+
+公告列表仍然是 JSP 直接查询全部公告；新增变化是公告有作用域字段。管理员页面展示所有公告，并在新增/编辑表单里选择发布范围。
 
 ```mermaid
-flowchart LR
-  A["浏览器 GET /admin/statistics.jsp<br/>WebContent/admin/statistics.jsp:1-23"] --> B["JSP 输出图表容器和导出链接<br/>WebContent/admin/statistics.jsp:17-83"]
-  B --> C["前端 fetch('../admin/stats.action')<br/>WebContent/admin/statistics.jsp:87-117"]
-  C --> D["AdminStatsController 设置 JSON Content-Type<br/>src/controller/AdminStatsController.java:15-20"]
-  D --> E["StatsDao/UserDao 查询统计<br/>src/controller/AdminStatsController.java:20-25<br/>src/dao/StatsDao.java:11-49<br/>src/dao/UserDao.java:144-146"]
-  E --> F["response.getWriter 写 JSON<br/>src/controller/AdminStatsController.java:27-33"]
-  F --> G["前端 r.json 后渲染 ECharts<br/>WebContent/admin/statistics.jsp:117-169"]
-  G --> H["失败则显示错误占位<br/>WebContent/admin/statistics.jsp:171-188"]
+flowchart TD
+  A["GET /admin/announcements.jsp"] --> B["JSP new AnnouncementDao().findAll()"]
+  B --> C["AnnouncementDao SELECT scope_type,college,major<br/>并映射 collegeName/majorName"]
+  C --> D["JSP scopeText 显示：全校/学院/专业"]
+  E["新增/编辑表单<br/>title/content/isTop/scopeType/college/major"] --> F["POST /admin/announcement.action"]
+  F --> G["AdminAnnouncementController.applyScope"]
+  G -->|scopeType 非 college/major| H["scopeType=global<br/>college=null major=null"]
+  G -->|college 且 college 有值| I["scopeType=college<br/>major=null"]
+  G -->|major 且 college/major 都有值| J["scopeType=major<br/>college + major"]
+  H --> K["AnnouncementDao.insert/update"]
+  I --> K
+  J --> K
+  K --> L["redirect /admin/announcements.jsp?msg=add_ok/edit_ok/delete_ok"]
 ```
 
-### 7.1 前端发了什么
+字段说明：
 
-- `WebContent/admin/statistics.jsp:17-23`：页面顶部有“导出成绩 Excel”按钮，和统计 JSON 是同一页面上的另一个动作。
-- `WebContent/admin/statistics.jsp:27-83`：页面先输出三个图表容器：选题情况、文档通过数、成绩分布。
-- `WebContent/admin/statistics.jsp:109-117`：脚本执行 `fetch('../admin/stats.action')`。这是 GET 请求，无请求体；如果 HTTP 状态不是 2xx，则抛错；否则 `return r.json()`。
-- `WebContent/admin/statistics.jsp:117-169`：拿到 JSON 后，把 `data.selection` 转成饼图数据，把 `data.docPass` 转成柱状图数据，把 `data.scores.labels/values` 渲染为成绩分布柱状图。
+- 新增表单：`scopeType` 下拉值为 `global/college/major`，学院/专业下拉来自 `CollegeUtil`，见 `WebContent/admin/announcements.jsp:42-67`。
+- 编辑表单：同样提交 `scopeType/college/major`，见 `WebContent/admin/announcements.jsp:71-97`。
+- 前端联动：`majorsData` 由后端 `majorGroups` 输出，`toggleScopeFields` 会在全校范围禁用学院，在非专业范围禁用专业，见 `WebContent/admin/announcements.jsp:101-146`。
+- 后端兜底：如果选择 `major` 但缺 `college/major`，或选择 `college` 但缺 `college`，Controller 会降级为 `global`，见 `src/controller/AdminAnnouncementController.java:56-79`。
 
-### 7.2 后端为什么必须设置 JSON Content-Type 并用 writer
+可见性设计：
 
-- `src/controller/AdminStatsController.java:15-19`：`@WebServlet("/admin/stats.action")` 绑定 JSON API；`response.setContentType("application/json;charset=UTF-8")` 明确声明响应类型和字符集。
-- `src/controller/AdminStatsController.java:20-25`：查询学生总数、选题统计、文档通过统计、成绩分布。
-- `src/dao/StatsDao.java:11-23`：选题统计会查询已批准学生数、待审批学生数，再用总学生数减出未选题数。
-- `src/dao/StatsDao.java:25-31`：文档通过统计按 `document_type` 字典逐项统计 `status='reviewed'` 的数量。
-- `src/dao/StatsDao.java:33-49`：成绩分布按 `score` 分段聚合。
-- `src/controller/AdminStatsController.java:27-33`：通过 `response.getWriter()` 拿字符输出流，手工拼出 JSON：`selection`、`docPass`、`scores.labels`、`scores.values`。
-- `src/controller/AdminStatsController.java:36-77`：`mapToJson`、`labelsJson`、`valuesJson` 负责把 Java 集合转 JSON 片段，`escape` 处理反斜杠和双引号，避免破坏 JSON 字符串。
+- 管理员列表 `findAll()` 不过滤，用于全局维护。
+- 前台可见公告由 `findVisible(college, major)` 过滤：全校公告总可见，学院公告要求 `a.college=?`，专业公告要求 `a.college=? AND a.major=?`，见 `src/dao/AnnouncementDao.java:24-32`。
 
-这条响应不能用 redirect，因为前端 fetch 需要拿到 JSON body；也不能 forward 到 JSP，因为 JSP 输出的是 HTML，不是 API 数据。
+老师追问点：
 
-## 8. 成绩 Excel 导出：GET 直接生成文件响应
+- **为什么不是按角色筛公告？** 当前作用域是组织范围，不是权限角色范围；公告对某学院/专业下的用户可见。
+- **为什么 JSP 里还要显示 scopeText？** 因为管理员需要核对公告投放范围；DAO 映射时把学院/专业代码转换为名称，见 `src/dao/AnnouncementDao.java:77-96`。
 
-导出入口是统计页上的链接 `<a href="../admin/export.action">导出成绩 Excel</a>`。浏览器点击后发 GET 请求，后端不返回 HTML，而是返回 `.xlsx` 文件。
+## 6. 答辩安排 POST：新增、编辑、删除
+
+答辩页仍是 JSP 直达展示：JSP 查全部答辩安排，同时查所有学生并筛出“已有通过选题”的学生作为下拉候选。真正 POST 写库时，Controller 还会做更严格校验。
+
+```mermaid
+flowchart TD
+  A["GET /admin/defenses.jsp"] --> B["JSP: DefenseScheduleDao.findAll()"]
+  A --> C["JSP: UserDao.findAll('student') + SelectionDao.findApprovedByStudent"]
+  B --> D["渲染答辩表格"]
+  C --> E["渲染新增/编辑学生下拉"]
+  F["POST /admin/defense.action<br/>action=add/edit/delete"] --> G["AdminDefenseController.doPost"]
+  G -->|add| H["buildSchedule: studentId/defenseTime/room/groupName/score/comment"]
+  G -->|edit| I["buildSchedule + id"]
+  G -->|delete| J["dao.delete(id)"]
+  H --> K["isEligible: 学生存在且启用、已通过选题、分数0-100、final文档reviewed"]
+  I --> K
+  K --> L["重复安排检测 existsByStudent / existsByStudentExceptId"]
+  L --> M["insert/update DefenseSchedule"]
+  M --> N["通知学生 + 操作日志"]
+  J --> O["操作日志"]
+  N --> P["redirect /admin/defenses.jsp?msg=add_ok/edit_ok"]
+  O --> Q["redirect /admin/defenses.jsp?msg=delete_ok"]
+```
+
+字段说明：
+
+- 列表和候选学生：`WebContent/admin/defenses.jsp:6-17`。
+- 新增表单：`studentId/defenseTime/room/groupName/score/comment`，见 `WebContent/admin/defenses.jsp:81-101`。
+- 编辑表单：隐藏 `id` + 同样字段，见 `WebContent/admin/defenses.jsp:105-127`。
+- 删除表单：`action=delete/id`，见 `WebContent/admin/defenses.jsp:68-74`。
+- 日期格式：页面 `<input type="datetime-local">` 提交类似 `yyyy-MM-dd'T'HH:mm`，Controller 用相同格式解析，见 `src/controller/AdminDefenseController.java:25` 和 `src/controller/AdminDefenseController.java:88-90`。
+
+后端校验：
+
+- `isEligible` 要求目标用户存在、角色为 student、状态启用、已有 approved 选题、答辩分 0-100、终稿文档 `final` 状态为 `reviewed`，见 `src/controller/AdminDefenseController.java:102-115`。
+- 新增不允许同一学生重复安排；编辑不允许改成另一个已有安排的学生，见 `src/controller/AdminDefenseController.java:40-42` 和 `src/controller/AdminDefenseController.java:56-58`。
+- DAO 写入 `defense_schedules(student_id,defense_time,room,group_name,score,comment)`，见 `src/dao/DefenseScheduleDao.java:40-55`。
+
+老师追问点：
+
+- **为什么页面下拉只筛已通过选题，后端还校验终稿已评阅？** 前端筛选提升体验，后端校验保证数据一致性；答辩安排不应只依赖浏览器下拉。
+- **为什么新增答辩会发通知？** 成功 insert 后调用 `MessageNotifyUtil.send`，学生能收到答辩安排通知，见 `src/controller/AdminDefenseController.java:48-49`。
+
+## 7. 答辩 Excel 批量导入：multipart + POI
+
+答辩批量导入是另一条 multipart 链路，文件列顺序由页面写死：学号、答辩时间、教室、分组、备注。
 
 ```mermaid
 sequenceDiagram
-  participant B as 浏览器点击导出链接<br/>WebContent/admin/statistics.jsp:17-23
-  participant C as AdminExportController<br/>src/controller/AdminExportController.java:21-30
-  participant S as SQLHelper 查询汇总数据<br/>src/controller/AdminExportController.java:32-43<br/>src/dbutil/SQLHelper.java:52-76
-  participant P as POI XSSFWorkbook<br/>src/controller/AdminExportController.java:45-71
-  participant R as HTTP 文件响应<br/>src/controller/AdminExportController.java:73-78
+  participant B as 浏览器 defenses.jsp
+  participant C as AdminDefenseImportController
+  participant P as POI WorkbookFactory
+  participant U as UserDao
+  participant D as DefenseScheduleDao
+  participant R as Redirect
 
-  B->>C: GET /admin/export.action
-  C->>C: 校验 session 用户必须为 admin
-  C->>S: SQLHelper.queryList 查询学生、课题、教师、文档分数、答辩信息
-  S-->>C: List<Object[]> rows
-  C->>P: createSheet, header, 写每一行, autoSizeColumn
-  C->>R: setContentType Excel MIME
-  C->>R: setHeader Content-Disposition attachment
-  C->>R: wb.write(response.getOutputStream())
+  B->>C: POST /admin/defense-import.action multipart(file)
+  C->>C: 校验 admin session
+  C->>C: request.getPart("file")，空文件 -> import_empty
+  C->>P: 读取第一张 sheet，跳过表头
+  loop 每一行
+    C->>U: 第0列 studentNo -> findByStudentNo
+    U-->>C: User 或 null
+    C->>D: existsByStudent(student.id)
+    D-->>C: 是否已有答辩
+    C->>D: insert(studentId,defenseTime,room,groupName,null,comment)
+  end
+  C->>R: /admin/defenses.jsp?msg=import_ok&success=N&skipped=M
 ```
 
-### 8.1 导出 SQL 与 workbook 生成
+导入规则：
 
-- `src/controller/AdminExportController.java:21-30`：`@WebServlet("/admin/export.action")` 绑定入口；先从 session 取 `loginUser`，必须是 admin，否则 redirect 到 `/login.jsp`。
-- `src/controller/AdminExportController.java:32-43`：用一条 SQL 汇总学生学号、姓名、院系、课题、指导教师、开题/中期/终稿分数、答辩分数、答辩时间、答辩教室。这里直接使用 `SQLHelper.queryList`，没有再包一层 DAO。
-- `src/controller/AdminExportController.java:45-52`：创建 `XSSFWorkbook`，建 sheet `成绩汇总`，第一行写表头。
-- `src/controller/AdminExportController.java:54-68`：遍历 SQL 返回行，逐列写入 Excel；分数字段通过 `setScoreCell` 写成数字。
-- `src/controller/AdminExportController.java:69-71`：自动调整列宽。
-- `src/controller/AdminExportController.java:80-86`：`setScoreCell` 对 null 写空字符串，对非 null 转 `BigDecimal` 再写 double。
+- 文件 input 名称为 `file`，表单 `enctype="multipart/form-data"`，见 `WebContent/admin/defenses.jsp:28-37`。
+- Servlet 有 `@MultipartConfig(maxFileSize = 10485760, maxRequestSize = 20971520)`，单文件 10MB，请求 20MB，见 `src/controller/AdminDefenseImportController.java:31-32`。
+- 空文件 redirect `msg=import_empty`；解析异常 redirect `msg=import_error`。
+- 逐行用第 0 列学号查 `UserDao.findByStudentNo`；用户不存在或不是 student 则 skipped；已有答辩安排也 skipped。
+- 日期支持 `yyyy-MM-dd HH:mm:ss`、`yyyy-MM-dd HH:mm`、`yyyy/MM/dd HH:mm`；解析失败返回 null，不会让整行失败，见 `src/controller/AdminDefenseImportController.java:116-127`。
 
-### 8.2 为什么导出直接写 output stream
+需要注意的设计差异：
 
-Excel 是二进制文件，不是 HTML 页面。Servlet 一旦设置文件响应头并向 `response.getOutputStream()` 写 workbook，浏览器就会把响应当作下载文件处理。这里不能再 forward 到 JSP，否则 HTML 字符会混进 xlsx 二进制，文件会损坏。
+- 手工新增/编辑答辩会走 `isEligible`，要求终稿已评阅；当前 Excel 导入只检查学生存在和是否重复安排，没有检查选题/终稿资格。这是一个老师可能追问的数据质量点。
+- 导入 Controller 内部收集了 `errors`，但当前没有像用户导入那样写入 session，因此页面只显示成功数和跳过数，不显示每行错误明细。
 
-关键响应头：
+## 8. 系统开关：GET forward，POST 保存配置
 
-- `src/controller/AdminExportController.java:73`：`response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")`，告诉浏览器这是 Office Open XML xlsx。
-- `src/controller/AdminExportController.java:74`：`response.setHeader("Content-Disposition", "attachment; filename=grades_export.xlsx")`，触发附件下载并指定文件名。
-- `src/controller/AdminExportController.java:75-76`：`wb.write(response.getOutputStream())` 写入响应体，随后关闭 workbook。
+系统开关页不能直接访问 JSP；直接访问时 `systemSwitches == null` 会重定向到 `/admin/system-switch.action`，由 Controller 读取配置后 forward。
 
-成功导出时没有 `msg=...`，因为响应本身就是文件；只有未登录或非管理员时才 redirect 到登录页。
+```mermaid
+flowchart TD
+  A["GET /admin/system-switch.action"] --> B["AdminSystemSwitchController.doGet"]
+  B --> C["SystemSwitchUtil.definitions()"]
+  B --> D["SystemSwitchUtil.currentStates/currentRawStates()"]
+  D --> E["ensureDefaults 写入缺省配置"]
+  E --> F["request attributes: switchDefinitions/switchStates/systemSwitches"]
+  F --> G["forward /admin/system-switches.jsp"]
+  G --> H["JSP 根据 systemSwitches 勾选 checkbox"]
+  I["POST /admin/system-switch.action"] --> J["Controller 遍历 definitions.keySet()"]
+  J --> K["request.getParameter(key) == '1' 或 'on' 即 enabled"]
+  K --> L["SystemSwitchUtil.update(key, enabled)"]
+  L --> M["学生选题开关同时更新 switch.selection 和 legacy switch.selection_round1"]
+  M --> N["操作日志"]
+  N --> O["redirect /admin/system-switch.action?msg=switch_ok"]
+```
 
-## 9. SQLHelper 在这些流程里的共同作用
+开关键：
 
-所有 DAO 和导出查询最终都通过 `SQLHelper` 接触数据库：
+- `switch.topic_submit`：教师出题。
+- `switch.selection`：学生选题；保存时兼容更新旧键 `switch.selection_round1`。
+- `switch.upload_proposal`：开题报告上传。
+- `switch.upload_midterm`：中期检查上传。
+- `switch.upload_final`：终稿上传。
+
+代码细节：
+
+- JSP checkbox 没写 `value`，HTML 默认提交值是 `on`；Controller 同时接受 `"1"` 和 `"on"`，见 `src/controller/AdminSystemSwitchController.java:31-33`。
+- 未勾选 checkbox 不会出现在请求体中，因此后端会判定为 false 并写入 `"0"`。
+- `SystemSwitchUtil.ensureDefaults` 会给缺失配置插入默认值，避免页面第一次打开没有开关记录，见 `src/util/SystemSwitchUtil.java:66-74`。
+
+老师追问点：
+
+- **为什么学生选题要同时写两个 key？** 当前 `switch.selection` 是新统一开关；`switch.selection_round1` 是兼容旧配置，保存时一起更新，避免旧代码读到过期值。
+- **为什么要 Controller forward？** JSP 需要 `systemSwitches` attribute 才知道每个 checkbox 是否勾选；直接访问 JSP 没有这些数据，会 redirect 回 Controller。
+
+## 9. 统计 JSON：statistics.jsp + fetch + ECharts
+
+统计页先输出四个图表容器：选题情况、文档通过数、文档成绩分布、答辩安排。随后前端发 GET 请求拉 JSON。
 
 ```mermaid
 flowchart LR
-  A["Controller/JSP 调 DAO<br/>src/controller/AdminUserController.java:30-32<br/>WebContent/admin/announcements.jsp:6-8<br/>WebContent/admin/defenses.jsp:6-9"] --> B["DAO 拼 SQL 与参数<br/>src/dao/UserDao.java:69-83<br/>src/dao/AnnouncementDao.java:29-43<br/>src/dao/DefenseScheduleDao.java:40-67<br/>src/dao/StatsDao.java:11-49"]
-  B --> C["SQLHelper 获取 Druid 连接<br/>src/dbutil/SQLHelper.java:16-23,48-50"]
-  C --> D["PreparedStatement + bindParams<br/>src/dbutil/SQLHelper.java:52-60,139-143"]
-  D --> E["executeQuery/executeUpdate/executeInsert<br/>src/dbutil/SQLHelper.java:61-76,79-94,117-137"]
-  E --> F["关闭 ResultSet/Statement/Connection<br/>src/dbutil/SQLHelper.java:145-155"]
+  A["浏览器 GET /admin/statistics.jsp"] --> B["JSP 输出导出按钮和四个图表容器"]
+  B --> C["fetch('../admin/stats.action')"]
+  C --> D["AdminStatsController 设置 application/json;charset=UTF-8"]
+  D --> E["UserDao.countByRole('student')"]
+  D --> F["StatsDao.selectionStats / docPassStats / defenseStats / scoreDistribution"]
+  E --> G["Controller 手工拼 JSON"]
+  F --> G
+  G --> H["response.getWriter().print JSON"]
+  H --> I["前端 r.json()"]
+  I --> J["ECharts 渲染 selection/docPass/scores/defense"]
+  I --> K["失败则显示四个图表错误占位"]
 ```
 
-逐段看：
+JSON 结构：
 
-- `src/dbutil/SQLHelper.java:16-23`：静态初始化 Druid 连接池，配置来自 classpath 下的 `jdbc.properties`。
-- `src/dbutil/SQLHelper.java:48-50`：`getConnection()` 从连接池取连接。
-- `src/dbutil/SQLHelper.java:52-76`：`queryList` 创建 `PreparedStatement`，绑定参数，执行查询，把每行转成 `Object[]`。
-- `src/dbutil/SQLHelper.java:79-94`：`executeUpdate` 用于 UPDATE/DELETE，返回影响行数；失败返回 0。
-- `src/dbutil/SQLHelper.java:96-115`：`queryScalar` 用于 `COUNT(*)`、查重等单值查询。
-- `src/dbutil/SQLHelper.java:117-137`：`executeInsert` 用 `Statement.RETURN_GENERATED_KEYS` 返回自增 id。
-- `src/dbutil/SQLHelper.java:139-143`：所有参数统一 `ps.setObject(i + 1, params[i])`，这就是为什么上层传入的表单/query 参数不会直接拼成 SQL 字面量。
-- `src/dbutil/SQLHelper.java:145-155`：finally 中安静关闭资源，避免连接泄漏。
+```json
+{
+  "selection": {"已选题": 0, "待审批": 0, "未选题": 0},
+  "docPass": {"开题报告": 0, "中期检查": 0, "终稿": 0},
+  "defense": {"已评分": 0, "待评分": 0, "未安排": 0},
+  "scores": {"labels": ["90-100"], "values": [0]}
+}
+```
 
-## 10. Controller forward 与 JSP 直达的区别总结
+当前管理员统计是全校口径：
 
-| 页面 | 展示数据从哪里来 | 是否需要 GET Controller | 原因 |
-|---|---|---:|---|
-| 用户管理 | Controller 查询后放入 request attribute | 是 | 用户页需要分页、筛选、总数、字典、学院专业、校验规则；`users.jsp` 明确要求 `users` attribute 存在，否则 redirect 到 Controller |
-| 公告管理 | JSP 内部 new `AnnouncementDao` 查询 | 否 | 展示逻辑简单，JSP 直接查全部公告即可；写操作仍由 Servlet 处理 |
-| 答辩安排 | JSP 内部 new 多个 DAO 查询 | 否 | 页面需要直接组装答辩列表和可选学生；写操作由 Servlet 校验后处理 |
-| 数据统计 | JSP 只输出容器，数据由 fetch JSON 获得 | 否，页面本身直达；JSON 有独立 Controller | 图表数据是异步 API，适合 JSON，不适合混在 JSP 中 |
-| Excel 导出 | 不展示 JSP，直接文件响应 | 是，文件 Controller | 响应体是 xlsx 二进制，不能 forward 到 HTML |
+- `AdminStatsController` 传入的学院/专业都是 `null`，见 `src/controller/AdminStatsController.java:22-27`。
+- `StatsDao` 方法支持学院/专业 scoped overload，但 admin 统计未启用；`hasScope` 只有 `college` 和 `major` 同时非空才收窄，见 `src/dao/StatsDao.java:157-160`。
+- `ScopeUtil.adminScope` 定义 admin 是全局范围；director 才有学院/专业范围，见 `src/util/ScopeUtil.java:8-24`。
 
-## 11. 成功/失败 redirect msg 汇总
+Dashboard 也复用统计 JSON：管理员 dashboard 的迷你图请求 `admin/stats.action`，只取 `data.selection` 渲染饼图，见 `WebContent/dashboard.jsp:140-174`。
 
-| 模块 | 成功 msg | 失败/特殊 msg | 页面如何用 |
+老师追问点：
+
+- **为什么统计不用 redirect？** 前端 `fetch` 需要 JSON body；redirect 得到的是 HTML 页面或另一个 URL，不适合图表数据。
+- **为什么要设置 JSON Content-Type？** 让浏览器和调试工具明确这是 UTF-8 JSON；前端 `r.json()` 才按 JSON 解析。
+- **新变化在哪里？** JSON 现在包含 `defense`，`statistics.jsp` 也增加了答辩安排图表容器和渲染逻辑。
+
+## 10. 成绩 Excel 导出：GET 直接返回二进制文件
+
+导出入口在 `statistics.jsp` 顶部按钮，也在 dashboard 管理员卡片里出现。点击后浏览器发 GET `/admin/export.action`，Servlet 不 forward、不 redirect 成功页，而是直接写 `.xlsx`。
+
+```mermaid
+sequenceDiagram
+  participant B as 浏览器
+  participant C as AdminExportController
+  participant S as SQLHelper
+  participant P as XSSFWorkbook
+  participant R as HTTP Response
+
+  B->>C: GET /admin/export.action
+  C->>C: 校验 session loginUser.role == admin
+  C->>S: 查询学生、课题、教师、文档分数、答辩分数/时间/教室
+  S-->>C: List<Object[]> rows
+  C->>P: createSheet("成绩汇总")，写表头和数据行
+  C->>R: Content-Type = xlsx MIME
+  C->>R: Content-Disposition = attachment; filename=grades_export.xlsx
+  C->>R: wb.write(response.getOutputStream())
+```
+
+响应说明：
+
+- 成功导出没有 `msg`，响应体就是 Excel 文件。
+- 未登录或非管理员 redirect `/login.jsp`。
+- `Content-Type` 是 `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`。
+- `Content-Disposition: attachment; filename=grades_export.xlsx` 触发浏览器下载。
+
+老师追问点：
+
+- **为什么不能 forward 到 JSP？** `.xlsx` 是二进制格式；一旦写了 workbook 到 output stream，就不能再混入 HTML，否则文件会损坏。
+- **为什么导出查询没有 DAO？** 当前代码直接在 Controller 里用一条汇总 SQL 和 `SQLHelper.queryList`，它跨了 users、topic_selections、topics、documents、defense_schedules，多表报表型查询单独放 Controller 中实现。
+
+## 11. SQLHelper、操作日志、学院专业工具的共同作用
+
+```mermaid
+flowchart LR
+  A["JSP/Controller"] --> B["DAO 或 Controller 汇总 SQL"]
+  B --> C["SQLHelper.queryList/queryScalar/executeUpdate/executeInsert"]
+  C --> D["Druid DataSource getConnection"]
+  D --> E["PreparedStatement + bindParams"]
+  E --> F["ResultSet/Object[] 或影响行数/自增 id"]
+  A --> G["OperationLogUtil.log"]
+  G --> H["OperationLogDao.insert operation_logs"]
+  A --> I["CollegeUtil.getColleges/getMajorGroups"]
+  I --> J["学院/专业下拉和名称映射"]
+```
+
+关键设计：
+
+- 表单和 query 参数最终通过 `PreparedStatement` 参数绑定，不直接拼进 SQL 字面量；`SQLHelper.bindParams` 统一 `ps.setObject`，见 `src/dbutil/SQLHelper.java:139-143`。
+- 管理员新增、编辑、删除、导入、导出、开关保存都会写操作日志；工具类吞掉日志异常，避免日志失败影响主流程，见 `src/util/OperationLogUtil.java:6-10`。
+- 学院/专业下拉不是硬编码在 JSP，而是 `CollegeUtil` 查 `colleges/majors` 表生成，见 `src/util/CollegeUtil.java:16-31` 和 `src/util/CollegeUtil.java:53-66`。
+
+## 12. Redirect msg 汇总
+
+| 模块 | 成功 msg | 失败/特殊 msg | 页面行为 |
 |---|---|---|---|
-| 用户 | `add_ok`、`edit_ok`、`delete_ok` | `username_exists`、`delete_self`、`delete_failed`、`error`、`edit_self_role`、`last_admin` | `users.jsp` 本地 alert 显示其中一部分：`add_ok/edit_ok/delete_ok/delete_failed/delete_self/username_exists` |
-| 公告 | `add_ok`、`edit_ok`、`delete_ok` | 未单独判断 DAO 失败，未知 action 回列表 | Controller redirect 到 `announcements.jsp?msg=...` |
-| 答辩 | `add_ok`、`edit_ok`、`delete_ok` | `defense_ineligible`、`exists`、`error` | Controller redirect 到 `defenses.jsp?msg=...` |
-| 答辩导入 | `import_ok&success=N&skipped=M` | `import_empty`、`import_error` | `defenses.jsp` 明确读取并显示导入结果 |
-| 统计 JSON | 无 redirect | fetch 失败时前端显示错误区域 | JSON API 直接返回 JSON，不走 msg |
-| Excel 导出 | 无 redirect，直接下载 | 非 admin redirect `/login.jsp` | 文件响应不带 msg |
+| 用户增删改 | `add_ok`、`edit_ok`、`delete_ok` | `username_exists`、`delete_self`、`delete_failed`、`edit_self_role`、`last_admin`、`error` | redirect 回 `/admin/user.action`；`users.jsp` 显示其中已映射的提示 |
+| 用户导入 | `import_ok&success=N&skipped=M` | `import_empty`、`import_error`、`import_role_invalid` | 用户页 alert；错误明细从 session 取出显示最多 8 条 |
+| 用户重置密码 | `reset_ok&count=N` | `reset_password_invalid` | 用户页 alert；按筛选重置会保留过滤 query |
+| 公告 | `add_ok`、`edit_ok`、`delete_ok` | 未细分 DAO 失败 | redirect `/admin/announcements.jsp?msg=...` |
+| 答辩手工 | `add_ok`、`edit_ok`、`delete_ok` | `defense_ineligible`、`exists`、`error` | redirect `/admin/defenses.jsp?msg=...` |
+| 答辩导入 | `import_ok&success=N&skipped=M` | `import_empty`、`import_error` | `defenses.jsp` 显示成功/跳过或错误提示 |
+| 系统开关 | `switch_ok` | 当前代码未细分失败 msg | redirect `/admin/system-switch.action?msg=switch_ok` |
+| 统计 JSON | 无 redirect | fetch catch 后显示错误占位 | 返回 JSON body |
+| Excel 导出 | 无 msg，直接下载 | 非 admin redirect `/login.jsp` | 返回 xlsx 二进制 |
 
-## 12. 代码证据清单
+## 13. 代码证据清单
 
-- `WebContent/admin/users.jsp:7-31`：读取筛选 query、读取 Controller 放入的 request attribute，直接访问 JSP 时 redirect 到 `/admin/user.action`。
-- `WebContent/admin/users.jsp:43-60`：读取 `msg` 并渲染用户管理 alert。
-- `WebContent/admin/users.jsp:80-114`：渲染用户表格与分页参数。
-- `WebContent/admin/users.jsp:97-101`：用户删除表单隐藏 `action=delete`、`id`。
-- `WebContent/admin/users.jsp:120-154`：用户新增表单字段。
-- `WebContent/admin/users.jsp:161-203`：用户编辑表单字段。
-- `WebContent/admin/users.jsp:207-255`：学院专业联动和编辑 modal 回填。
-- `WebContent/admin/announcements.jsp:4-8`：公告 JSP 直接创建 DAO 并查询列表。
-- `WebContent/admin/announcements.jsp:18-37`：公告列表渲染、编辑/删除入口。
-- `WebContent/admin/announcements.jsp:40-51`：公告新增表单。
-- `WebContent/admin/announcements.jsp:55-67`：公告编辑表单。
-- `WebContent/admin/announcements.jsp:71-78`：公告编辑 modal 回填脚本。
-- `WebContent/admin/defenses.jsp:6-17`：答辩 JSP 直接创建 DAO、查询安排和可选学生。
-- `WebContent/admin/defenses.jsp:28-50`：Excel 导入表单、`msg/success/skipped` 展示。
-- `WebContent/admin/defenses.jsp:53-78`：答辩列表与删除表单。
-- `WebContent/admin/defenses.jsp:81-101`：答辩新增表单。
-- `WebContent/admin/defenses.jsp:105-126`：答辩编辑表单。
-- `WebContent/admin/defenses.jsp:130-140`：答辩编辑 modal 回填脚本。
-- `WebContent/admin/statistics.jsp:17-23`：统计页顶部导出链接。
-- `WebContent/admin/statistics.jsp:27-83`：三个图表容器。
-- `WebContent/admin/statistics.jsp:87-117`：fetch 请求统计 JSON。
-- `WebContent/admin/statistics.jsp:117-169`：JSON 数据转换为 ECharts 图表。
-- `WebContent/admin/statistics.jsp:171-188`：fetch 或渲染失败时显示错误。
-- `src/controller/AdminUserController.java:20-48`：用户 GET Controller 映射、筛选读取、DAO 查询、request attribute、forward。
-- `src/controller/AdminUserController.java:51-116`：用户 POST add/edit/delete 分支与 redirect msg。
-- `src/controller/AdminUserController.java:118-131`：用户表单字段组装为 `User`。
-- `src/controller/AdminAnnouncementController.java:16-52`：公告 POST Controller 映射、字段读取、DAO 写操作、redirect。
-- `src/controller/AdminDefenseController.java:23-33`：答辩 POST Controller 映射、UTF-8、session、action。
-- `src/controller/AdminDefenseController.java:34-78`：答辩 add/edit/delete 分支与 redirect msg。
+- `WebContent/admin/users.jsp:7-20`：读取用户筛选字段 `role/college/major/className/studentNo/realName` 和 `filterQuery`。
+- `WebContent/admin/users.jsp:22-45`：读取 Controller request attribute；直接访问 JSP 且 `users == null` 时 redirect 回 `/admin/user.action`。
+- `WebContent/admin/users.jsp:54-67`：用户页 msg 映射，包含导入、重置密码相关提示。
+- `WebContent/admin/users.jsp:79-90`：用户导入错误明细从 session 取出后显示最多 8 条。
+- `WebContent/admin/users.jsp:93-138`：用户筛选表单和导入、按筛选重置、新增按钮。
+- `WebContent/admin/users.jsp:141-149`：勾选学生批量重置隐藏表单、`newPassword` 字段和提交按钮。
+- `WebContent/admin/users.jsp:152-191`：用户表格、学生复选框、删除表单、分页参数。
+- `WebContent/admin/users.jsp:195-218`：用户 Excel 导入 modal，`multipart/form-data`，字段 `importRole/file` 和列顺序说明。
+- `WebContent/admin/users.jsp:220-239`：按当前筛选结果重置学生密码 modal，隐藏保留过滤字段。
+- `WebContent/admin/users.jsp:242-280`：新增用户表单字段。
+- `WebContent/admin/users.jsp:284-331`：编辑用户表单字段。
+- `WebContent/admin/users.jsp:334-417`：学院/专业联动、筛选专业联动、学生勾选重置确认、编辑 modal 回填脚本。
+- `WebContent/admin/announcements.jsp:4-10`：公告 JSP 直接查公告列表和学院/专业选项。
+- `WebContent/admin/announcements.jsp:20-39`：公告列表渲染、编辑/删除入口和作用域文本展示。
+- `WebContent/admin/announcements.jsp:42-67`：公告新增表单，包含 `scopeType/college/major/isTop`。
+- `WebContent/admin/announcements.jsp:71-97`：公告编辑表单，包含 `id/scopeType/college/major/isTop`。
+- `WebContent/admin/announcements.jsp:101-146`：公告作用域专业联动、字段启用/禁用和编辑回填。
+- `WebContent/admin/announcements.jsp:150-163`：公告作用域显示文本 `全校/学院/专业`。
+- `WebContent/admin/defenses.jsp:6-17`：答辩 JSP 直接查答辩安排和已通过选题学生候选。
+- `WebContent/admin/defenses.jsp:28-50`：答辩 Excel 导入表单和 `import_ok/import_empty/import_error` 展示。
+- `WebContent/admin/defenses.jsp:53-78`：答辩列表、编辑按钮、删除表单。
+- `WebContent/admin/defenses.jsp:81-101`：答辩新增表单字段。
+- `WebContent/admin/defenses.jsp:105-127`：答辩编辑表单字段。
+- `WebContent/admin/defenses.jsp:130-141`：答辩编辑 modal 回填脚本。
+- `WebContent/admin/statistics.jsp:12-15`：统计页导出成绩 Excel 链接。
+- `WebContent/admin/statistics.jsp:17-54`：统计页四个图表容器，包含新增答辩安排图表。
+- `WebContent/admin/statistics.jsp:56-115`：`fetch('../admin/stats.action')`、JSON 解析、四个 ECharts 图表渲染和错误占位。
+- `WebContent/admin/system-switches.jsp:6-10`：系统开关 JSP 依赖 `systemSwitches` attribute，缺失时 redirect 到 Controller。
+- `WebContent/admin/system-switches.jsp:18-45`：系统开关表单和五个 checkbox key。
+- `WebContent/dashboard.jsp:122-138`：管理员 dashboard 导出入口和后台功能入口。
+- `WebContent/dashboard.jsp:140-174`：管理员 dashboard 复用 `admin/stats.action` 渲染选题概况迷你图。
+- `src/controller/AdminUserController.java:23-56`：用户 Controller 映射、GET 查询、过滤字段 request attribute、字典/学院专业/配置、forward。
+- `src/controller/AdminUserController.java:59-76`：用户 POST add 分支、用户名查重、插入、日志、redirect。
+- `src/controller/AdminUserController.java:77-107`：用户 POST edit 分支、用户名查重、自保护、末管理员保护、更新、redirect。
+- `src/controller/AdminUserController.java:108-120`：用户 POST delete 分支、禁止删除自己、删除失败判断、redirect。
+- `src/controller/AdminUserController.java:121-148`：用户 POST `resetSelected/resetFiltered` 批量重置学生密码。
+- `src/controller/AdminUserController.java:154-168`：用户表单字段组装为 `User`，学生字段按角色保留。
+- `src/controller/AdminUserController.java:190-198`：构造 `UserSearchCriteria`，读取新增过滤字段。
+- `src/controller/AdminUserController.java:201-220`：解析勾选 id 和校验新密码长度。
+- `src/controller/AdminUserController.java:223-247`：构造保留筛选条件的 URL query。
+- `src/controller/AdminUserImportController.java:29-30`：用户导入 Servlet 映射和 multipart 限制。
+- `src/controller/AdminUserImportController.java:34-54`：用户导入鉴权、`importRole` 校验、文件 part 读取和空文件处理。
+- `src/controller/AdminUserImportController.java:56-60`：用户导入 DAO、formatter、success/skipped/errors 初始化。
+- `src/controller/AdminUserImportController.java:62-139`：POI 读取第一张表、跳过表头、逐行校验和插入用户。
+- `src/controller/AdminUserImportController.java:140-154`：用户导入异常处理、操作日志、session 错误明细、redirect。
+- `src/controller/AdminUserImportController.java:157-202`：用户导入空行判断、单元格读取、normalize、密码校验、默认职称。
+- `src/controller/AdminAnnouncementController.java:16-35`：公告 Controller 映射和新增分支。
+- `src/controller/AdminAnnouncementController.java:36-53`：公告编辑、删除和默认 redirect 分支。
+- `src/controller/AdminAnnouncementController.java:56-79`：公告作用域 `applyScope` 降级与规范化规则。
+- `src/controller/AdminDefenseController.java:23-32`：答辩 Controller 映射、UTF-8、session、action、DAO。
+- `src/controller/AdminDefenseController.java:34-78`：答辩 add/edit/delete 分支、资格/重复校验、通知、日志、redirect。
 - `src/controller/AdminDefenseController.java:81-99`：答辩字段解析、日期和分数转换。
-- `src/controller/AdminDefenseController.java:102-116`：答辩资格校验。
-- `src/controller/AdminDefenseImportController.java:31-33`：导入 Servlet 映射与 `@MultipartConfig`。
-- `src/controller/AdminDefenseImportController.java:40-54`：导入 POST 鉴权、`getPart("file")`、空文件处理。
-- `src/controller/AdminDefenseImportController.java:56-61`：导入 DAO、formatter、success/skipped 初始化。
-- `src/controller/AdminDefenseImportController.java:63-96`：POI 打开 workbook、跳过表头、逐行导入、success/skipped 计数。
-- `src/controller/AdminDefenseImportController.java:97-105`：导入异常和成功 redirect。
-- `src/controller/AdminDefenseImportController.java:108-127`：单元格文本格式化和日期解析。
-- `src/controller/AdminStatsController.java:15-20`：统计 JSON Servlet 映射与 JSON Content-Type。
-- `src/controller/AdminStatsController.java:20-33`：统计 DAO 调用与 `response.getWriter()` 写 JSON。
-- `src/controller/AdminStatsController.java:36-77`：JSON 字符串构造与转义。
-- `src/controller/AdminExportController.java:21-30`：导出 Servlet 映射与管理员鉴权。
-- `src/controller/AdminExportController.java:32-43`：导出 SQL 汇总查询。
-- `src/controller/AdminExportController.java:45-71`：POI 创建 workbook、表头、数据行、列宽。
-- `src/controller/AdminExportController.java:73-78`：Excel MIME、`Content-Disposition`、输出流写出。
-- `src/controller/AdminExportController.java:80-87`：分数字段写入逻辑。
-- `src/dao/UserDao.java:16-41`：按用户名、学号、id 查询用户。
-- `src/dao/UserDao.java:69-105`：用户分页查询与总数统计。
-- `src/dao/UserDao.java:108-133`：用户 insert/update/delete。
-- `src/dao/UserDao.java:144-163`：按角色计数、管理员计数、用户名查重。
-- `src/dao/UserDao.java:166-191`：用户结果集映射和学院专业名称转换。
-- `src/dao/AnnouncementDao.java:10-15`：公告列表查询。
-- `src/dao/AnnouncementDao.java:29-43`：公告 insert/update/delete。
-- `src/dao/AnnouncementDao.java:58-68`：公告结果集映射。
-- `src/dao/DefenseScheduleDao.java:11-22`：答辩安排基础联表 SQL 与列表查询。
-- `src/dao/DefenseScheduleDao.java:40-67`：答辩安排 insert/update/delete/重复检测。
+- `src/controller/AdminDefenseController.java:102-115`：答辩资格校验：学生启用、已通过选题、分数范围、终稿 reviewed。
+- `src/controller/AdminDefenseImportController.java:31-32`：答辩导入 Servlet 映射和 multipart 限制。
+- `src/controller/AdminDefenseImportController.java:40-54`：答辩导入鉴权、文件 part 和空文件处理。
+- `src/controller/AdminDefenseImportController.java:56-61`：答辩导入 DAO、formatter、计数器和 errors 初始化。
+- `src/controller/AdminDefenseImportController.java:63-96`：答辩 Excel 读取、跳过表头、按学号查用户、重复检测、插入和通知。
+- `src/controller/AdminDefenseImportController.java:97-105`：答辩导入异常和成功 redirect。
+- `src/controller/AdminDefenseImportController.java:108-127`：答辩导入单元格文本格式化和日期解析。
+- `src/controller/AdminStatsController.java:15-19`：统计 JSON Servlet 映射和 JSON Content-Type。
+- `src/controller/AdminStatsController.java:20-36`：统计 DAO 调用、`selection/docPass/defense/scores` JSON 输出。
+- `src/controller/AdminStatsController.java:39-79`：JSON 字符串构造、labels/values 和转义。
+- `src/controller/AdminExportController.java:21-30`：导出 Servlet 映射和管理员鉴权。
+- `src/controller/AdminExportController.java:32-44`：导出成绩汇总 SQL。
+- `src/controller/AdminExportController.java:46-72`：POI workbook/sheet/header/data/autoSize 生成。
+- `src/controller/AdminExportController.java:74-78`：Excel MIME、`Content-Disposition`、输出流写出和导出日志。
+- `src/controller/AdminExportController.java:81-86`：分数字段写入数字或空字符串。
+- `src/controller/AdminSystemSwitchController.java:15-22`：系统开关 Controller 映射、GET 设置属性并 forward。
+- `src/controller/AdminSystemSwitchController.java:25-38`：系统开关 POST 遍历 key、读取 checkbox、更新配置、日志、redirect。
+- `src/dao/UserDao.java:17-45`：用户基础查询列、按用户名/学号/id 查询。
+- `src/dao/UserDao.java:47-109`：用户列表和分页查询、总数统计。
+- `src/dao/UserDao.java:112-138`：用户 insert/update/delete。
+- `src/dao/UserDao.java:168-197`：角色计数、管理员计数、用户名/学号查重。
+- `src/dao/UserDao.java:199-242`：按筛选找学生 id、批量重置学生密码。
+- `src/dao/UserDao.java:244-279`：用户过滤条件拼接，新增字段和模糊查询逻辑。
+- `src/dao/UserDao.java:281-307`：用户结果集映射和学院/专业名称翻译。
+- `src/dao/AnnouncementDao.java:11-22`：公告列表查询列、作用域字段和排序。
+- `src/dao/AnnouncementDao.java:24-32`：公告可见范围过滤 `global/college/major`。
+- `src/dao/AnnouncementDao.java:45-62`：公告 insert/update/delete，包含作用域字段。
+- `src/dao/AnnouncementDao.java:77-96`：公告结果集映射、学院/专业名称翻译。
+- `src/dao/DefenseScheduleDao.java:10-22`：答辩安排联表查询和列表排序。
+- `src/dao/DefenseScheduleDao.java:40-68`：答辩安排 insert/update/delete 和重复检测。
 - `src/dao/DefenseScheduleDao.java:78-93`：答辩安排结果集映射。
-- `src/dao/StatsDao.java:11-23`：选题统计。
-- `src/dao/StatsDao.java:25-31`：文档通过统计。
-- `src/dao/StatsDao.java:33-49`：成绩分布统计。
-- `src/dbutil/SQLHelper.java:16-23`：Druid 连接池初始化。
-- `src/dbutil/SQLHelper.java:48-76`：查询列表 `queryList`。
-- `src/dbutil/SQLHelper.java:79-94`：更新/删除 `executeUpdate`。
-- `src/dbutil/SQLHelper.java:96-115`：单值查询 `queryScalar`。
-- `src/dbutil/SQLHelper.java:117-143`：插入并取自增 id、参数绑定。
+- `src/dao/StatsDao.java:15-49`：选题统计和 scoped overload。
+- `src/dao/StatsDao.java:51-60`：文档通过数统计。
+- `src/dao/StatsDao.java:63-106`：答辩统计 `已评分/待评分/未安排`。
+- `src/dao/StatsDao.java:108-136`：成绩分布统计。
+- `src/dao/StatsDao.java:142-160`：文档 reviewed 计数和 scope 判断。
+- `src/dao/OperationLogDao.java:15-18`：操作日志写入 `operation_logs`。
+- `src/dbutil/SQLHelper.java:19-28`：Druid 连接池初始化。
+- `src/dbutil/SQLHelper.java:48-76`：`queryList` 查询列表。
+- `src/dbutil/SQLHelper.java:79-94`：`executeUpdate` 更新/删除。
+- `src/dbutil/SQLHelper.java:96-115`：`queryScalar` 单值查询。
+- `src/dbutil/SQLHelper.java:117-143`：`executeInsert` 和参数绑定。
 - `src/dbutil/SQLHelper.java:145-155`：数据库资源关闭。
+- `src/util/SystemSwitchUtil.java:7-12`：系统开关 key 常量。
+- `src/util/SystemSwitchUtil.java:14-22`：系统开关定义。
+- `src/util/SystemSwitchUtil.java:24-40`：当前开关状态和 raw 状态读取。
+- `src/util/SystemSwitchUtil.java:42-47`：开关启用状态读取，学生选题兼容 legacy key。
+- `src/util/SystemSwitchUtil.java:56-64`：系统开关更新，学生选题同步写 legacy key。
+- `src/util/SystemSwitchUtil.java:66-74`：系统开关默认配置插入。
+- `src/util/ScopeUtil.java:8-24`：admin 全局范围、director 学院/专业范围。
+- `src/util/ScopeUtil.java:34-47`：范围文字和空值清洗。
+- `src/util/CollegeUtil.java:16-31`：学院列表和学院-专业分组读取。
+- `src/util/CollegeUtil.java:35-66`：学院/专业名称查询和专业列表读取。
+- `src/util/PageUtil.java:8-23`：分页 query 解析和 offset 计算。
+- `src/util/PageUtil.java:26-50`：总页数和默认 pageSize。

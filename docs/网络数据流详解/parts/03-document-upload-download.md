@@ -1,119 +1,101 @@
-# 03 学生文档提交上传 / 教师文档审核 / 文件下载网络数据流详解
+# 03 学生文档提交上传 / 教师文档审核 / 文件下载 / 模板下载网络数据流详解
 
-本部分只解释毕业设计文档模块的网络请求与后端处理链路，不包含 AI 模块。涉及的核心入口有三个：
+本部分只解释毕业设计管理系统中的文档与文件模板网络数据流，不包含 AI 模块。当前代码把“毕业设计文档”和“文件模板”分成两组入口：
 
-1. 学生文档页：`GET /student/document.action?type=proposal|midterm|final`
-2. 学生提交文档：`POST /student/document.action`，`Content-Type: multipart/form-data`
-3. 教师审核文档：`GET /teacher/document.action` 与 `POST /teacher/document.action`
-4. 文件下载：`GET /download.action?path=uploads/用户ID/文件名`
+- 毕业设计文档：学生提交开题 / 中期 / 终稿，教师审核，附件通过 `download.action?path=...` 下载。
+- 文件模板：管理员上传和删除模板，学生 / 教师 / 管理员查看模板列表，模板通过 `file-template-download.action?id=...` 下载。
 
-## 1. 接口总览与字段表
+## 1. 接口总览
 
-| 流程 | URL | 方法 | 请求 Content-Type | 主要参数 / 字段 | 响应 |
+| 流程 | URL | 方法 | 请求体类型 | 关键参数 / 字段 | 响应 |
 |---|---|---|---|---|---|
-| 学生打开文档提交页 | `/student/document.action?type=proposal` | GET | 无请求体 | `type`: 文档阶段，非法或缺省时归一化为 `proposal` | 转发到 `/student/documents.jsp`，响应 HTML |
-| 学生提交文档与附件 | `/student/document.action` | POST | `multipart/form-data` | `docType`, `title`, `content`, `file` | 成功或失败后 302 重定向回学生文档页，并带 `msg` 与 `type` |
-| 教师打开文档审核页 | `/teacher/document.action?type=proposal&status=submitted` | GET | 无请求体 | `type`, `status`；`status` 缺省为 `submitted`，`all` 表示不过滤状态 | 转发到 `/teacher/documents.jsp`，响应 HTML |
-| 教师提交审核结果 | `/teacher/document.action` | POST | `application/x-www-form-urlencoded` | `id`, `docType`, `action=review|reject`, `score`, `feedback` | 成功或失败后 302 重定向回教师文档页 |
-| 下载附件 | `/download.action?path=uploads/4/proposal_xxxx.pdf` | GET | 无请求体 | `path`: 数据库中保存的相对路径 | 通过校验后返回 `application/octet-stream` 文件流；失败返回 400/403/404 或跳转登录 |
+| 学生打开文档提交页 | `/student/document.action?type=proposal|midterm|final` | GET | 无 | `type`：文档阶段，非法值归一化为 `proposal` | forward 到 `/student/documents.jsp` |
+| 学生提交文档 | `/student/document.action` | POST | `multipart/form-data` | `docType`, `title`, `content`, `file` | 302 回学生文档页，带 `msg` 和 `type` |
+| 教师打开文档审核页 | `/teacher/document.action?type=proposal&status=submitted` | GET | 无 | `type`, `status`；`status=all` 表示不过滤 | forward 到 `/teacher/documents.jsp` |
+| 教师提交审核 | `/teacher/document.action` | POST | `application/x-www-form-urlencoded` | `id`, `docType`, `action=review|reject`, `score`, `feedback` | 302 回教师文档页 |
+| 下载学生文档附件 | `/download.action?path=uploads/4/proposal_xxxx.pdf` | GET | 无 | `path`：数据库保存的相对文件路径 | 通过权限和路径校验后输出文件流 |
+| 学生模板列表 | `/student/file-template.action?type=proposal&page=1&pageSize=10` | GET | 无 | `type`, `page`, `pageSize` | forward 到 `/student/file-templates.jsp` |
+| 教师模板列表 | `/teacher/file-template.action?type=proposal&page=1&pageSize=10` | GET | 无 | `type`, `page`, `pageSize` | forward 到 `/teacher/file-templates.jsp` |
+| 管理员模板管理页 | `/admin/file-template.action?type=proposal&page=1&pageSize=10` | GET | 无 | `type`, `page`, `pageSize`, `msg` | forward 到 `/admin/file-templates.jsp` |
+| 管理员上传模板 | `/admin/file-template.action` | POST | `multipart/form-data` | `action=upload`, `templateName`, `docType`, `file`, `description` | 302 回管理员模板页 |
+| 管理员删除模板 | `/admin/file-template.action` | POST | `application/x-www-form-urlencoded` | `action=delete`, `id` | 删除数据库记录和物理文件后 302 |
+| 下载模板文件 | `/file-template-download.action?id=12` | GET | 无 | `id`：`file_templates.id` | 通过登录和路径校验后输出文件流 |
 
-### 1.1 字段与约定解释
+几个参数约定：
 
-| 名称 | 含义 | 代码约定 |
-|---|---|---|
-| `proposal` | 开题报告阶段 | 第一阶段，不需要前置文档通过 |
-| `midterm` | 中期检查阶段 | 必须已有 `proposal` 且状态为 `reviewed` |
-| `final` | 终稿阶段 | 必须已有 `midterm` 且状态为 `reviewed` |
-| `submitted` | 学生已提交，等待教师审核 | 首次提交或被退回后重新提交都会进入该状态 |
-| `reviewed` | 教师审核通过并可评分 | 通过后不能再被学生覆盖提交 |
-| `rejected` | 教师驳回 | 只有该状态允许学生修改后重新提交 |
-| `multipart/form-data` | 浏览器将普通字段和文件字段按 multipart 边界分段上传 | 必须配合表单 `enctype="multipart/form-data"` 和 Servlet `@MultipartConfig`，后端才能用 `request.getPart("file")` 读取文件段 |
-| `uploads/用户ID/文件名` | 数据库存储的附件相对路径 | 例如 `uploads/4/proposal_ab12cd34.pdf`；不保存绝对磁盘路径，便于迁移和下载权限校验 |
-| `path` | 下载接口查询参数 | 来自 `documents.file_path` 或 `document_versions.file_path`，下载时禁止包含 `..` |
-| `..` 目录穿越 | 攻击者尝试访问上传目录外文件的路径片段 | `DownloadController` 先拦截包含 `..` 的参数，再用 canonical path 二次确认文件仍在 `uploads` 目录内 |
-| `application/octet-stream` | 通用二进制下载响应类型 | 浏览器通常按附件保存，不直接按页面渲染 |
-| `Content-Disposition` | 告诉浏览器以附件方式下载，并指定文件名 | 同时设置 `filename` 和 `filename*`，后者按 RFC 5987 风格承载 UTF-8 文件名 |
+- `docType` / `type`：必须存在于 `document_type` 字典；学生文档 Controller 对非法值默认使用 `proposal`，模板 Controller 对非法值按 `null` 处理，表示全部 / 通用。
+- `path`：只用于学生文档附件下载，浏览器传的是相对路径，后端会拒绝 `..` 并做 canonical path 校验。
+- `id`：模板下载不让浏览器传文件路径，只传模板主键；后端先查数据库拿 `file_path`，再校验文件系统路径。
+- `uploadOpen`：当前文档阶段上传开关。它不是只控制页面按钮，后端 POST 也会再次校验，防止手工构造请求绕过页面禁用。
 
-## 2. 学生 GET 文档页：从浏览器到 JSP 表单
+## 2. 学生 GET 文档页：打开页面时的数据准备
 
-### 2.1 浏览器发出的请求
-
-学生点击“文档提交”或切换开题 / 中期 / 终稿标签时，浏览器发出 GET 请求：
+学生点击“文档提交”或切换开题 / 中期 / 终稿标签时，浏览器发出无请求体 GET：
 
 ```http
 GET /student/document.action?type=proposal HTTP/1.1
 Cookie: JSESSIONID=...
 ```
 
-这里没有请求体，也没有上传文件。`type` 表示当前要查看或提交的文档阶段。后端会用字典校验该值，非法值不会直接进入 SQL 或页面，而是被归一化为 `proposal`。
+后端处理顺序：
 
-### 2.2 Controller 如何准备页面数据
-
-`StudentDocumentController` 的 GET 入口读取 session 中的登录用户，再读取并规范化 `type` 参数。随后它做三件事：
-
-1. 查询学生是否已有通过审批的选题。
-2. 如果已有通过选题，则查询当前阶段已有文档。
-3. 如果已有文档，则查询历史版本，并把所有页面需要的数据放入 request attribute，最后 forward 到 JSP。
-
-关键代码逻辑：
-
-- `src/controller/StudentDocumentController.java:33-34`：从 session 取 `loginUser`，从 URL 取 `type` 并规范化。
-- `src/controller/StudentDocumentController.java:35-42`：查已通过选题、当前文档、历史版本。
-- `src/controller/StudentDocumentController.java:44-52`：把 `approvedSelection`、`currentDocument`、`documentVersions`、`activeType`、`typeNames`、`uploadAccept` 放入 request，然后 forward。
-- `src/util/SystemConfigUtil.java:10-17`：`uploadAccept` 背后的扩展名配置来自 `system_configs` 表，查不到则使用默认值。
+1. `StudentDocumentController` 从 session 取当前学生，读取 URL 中的 `type` 并归一化。
+2. 查询该学生是否有已通过审批的选题；没有通过选题时，页面只显示“无法提交文档”。
+3. 如果有通过选题，再查询当前阶段文档和历史版本。
+4. 读取系统上传开关 `uploadOpen` 和允许扩展名 `uploadAccept`，放入 request attribute。
+5. forward 到 `/student/documents.jsp`，由 JSP 渲染阶段标签、当前状态、上传表单、历史版本和下载链接。
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant B as 浏览器
-    participant C as src/controller/StudentDocumentController.java:31-52
-    participant DD as src/dao/DocumentDao.java:103-110
-    participant VD as src/dao/DocumentVersionDao.java:10-20
-    participant CFG as src/util/SystemConfigUtil.java:10-17
-    participant JSP as WebContent/student/documents.jsp:37-123
+    participant C as StudentDocumentController<br/>src/controller/StudentDocumentController.java:32-55
+    participant DD as DocumentDao<br/>src/dao/DocumentDao.java:103-110
+    participant VD as DocumentVersionDao<br/>src/dao/DocumentVersionDao.java:10-20
+    participant SW as SystemSwitchUtil<br/>src/util/SystemSwitchUtil.java:42-54
+    participant CFG as SystemConfigUtil<br/>src/util/SystemConfigUtil.java:10-17
+    participant JSP as student/documents.jsp<br/>WebContent/student/documents.jsp:11-24
 
     B->>C: GET /student/document.action?type=proposal
-    C->>C: 读取 loginUser 与 type<br/>StudentDocumentController.java:33-34
+    C->>C: normalizeDocType(type)
     C->>DD: findByStudentAndType(studentId, docType)
     DD-->>C: currentDocument 或 null
     C->>VD: findByDocument(current.id)
     VD-->>C: documentVersions
+    C->>SW: isEnabled(uploadKey(docType))
+    SW-->>C: uploadOpen
     C->>CFG: getString(upload.allowed_extensions,...)
-    CFG-->>C: .pdf,.doc,.docx,.zip,.rar
+    CFG-->>C: uploadAccept
     C->>JSP: forward /student/documents.jsp
-    JSP-->>B: HTML 表单、阶段标签、已有附件下载链接
+    JSP-->>B: HTML 页面
 ```
 
-### 2.3 JSP 如何渲染“能不能提交”
+### 2.1 uploadOpen 在页面和后端分别做什么
 
-`WebContent/student/documents.jsp` 并不自己查数据库，它只消费 Controller 放好的 request attribute：
+`uploadOpen` 是“当前阶段是否允许上传”的运行期开关：
 
-- `WebContent/student/documents.jsp:11-19`：读取 `typeNames`、`approvedSelection`、`activeType`、`currentDocument`、`documentVersions`、`uploadAccept`。
-- `WebContent/student/documents.jsp:20-23`：如果这些关键属性没有准备好，说明不是从 Controller 正常 forward 进来，于是重定向到 `/student/document.action`。
-- `WebContent/student/documents.jsp:37-49`：如果没有通过选题，页面显示“无法提交文档”，不给上传表单。
-- `WebContent/student/documents.jsp:57-63`：按字典中的文档类型生成阶段标签，每个标签都是一次 GET 请求。
-- `WebContent/student/documents.jsp:73-83`：如果当前文档不是 `draft`，展示已提交状态、分数和反馈。
-- `WebContent/student/documents.jsp:87-123`：真正的上传表单，表单方法是 POST，编码类型是 `multipart/form-data`。
-- `WebContent/student/documents.jsp:129-159`：如果有历史版本，则展示版本号、标题、提交时间和下载链接。
+- Controller 的 GET 阶段用 `SystemSwitchUtil.uploadKey(docType)` 把 `proposal/midterm/final` 映射到 `switch.upload_proposal/switch.upload_midterm/switch.upload_final`，再读取开关值。
+- JSP 如果发现 `uploadOpen=false`，显示黄色提示，并把标题输入框、正文、文件选择框、提交按钮都置为 `disabled`。
+- Controller 的 POST 阶段仍然再次检查同一个开关；即使攻击者绕过前端禁用手工提交 multipart 请求，也会得到 `upload_closed`。
 
-页面中的上传表单非常关键：
+设计原因是：文档提交通常受毕业设计时间节点控制。页面禁用负责用户体验，后端开关负责真实安全边界。开关默认值由 `SystemConfigUtil.isEnabled(key, true)` 支持，配置缺失时按开启处理；`SystemSwitchUtil.ensureDefaults()` 会补齐默认开关项。
+
+## 3. 学生 multipart POST 文档上传
+
+学生提交文档表单时，JSP 表单使用：
 
 ```jsp
 <form action="../student/document.action" method="post" enctype="multipart/form-data">
-  <input type="hidden" name="docType" value="...">
+  <input type="hidden" name="docType" value="proposal">
   <input name="title" ...>
   <textarea name="content" ...></textarea>
   <input type="file" name="file" ...>
 </form>
 ```
 
-其中 `enctype="multipart/form-data"` 决定浏览器不会把表单编码成普通的 `a=b&c=d`，而是把每个字段拆成 multipart 的一个 part；`name="file"` 决定后端必须用 `request.getPart("file")` 才能取到这个文件字段。
+`multipart/form-data` 的意义是：浏览器不会把所有字段拼成普通 `a=b&c=d`，而是按 boundary 把每个字段拆成一个 part。普通字段仍可用 `request.getParameter("docType")`、`request.getParameter("title")`、`request.getParameter("content")` 读取；文件字段必须用 `request.getPart("file")` 读取。`StudentDocumentController` 标注了 `@MultipartConfig`，Servlet 容器才会解析 multipart 请求并提供 `Part` 对象。
 
-## 3. 学生 POST 上传：multipart/form-data 如何进入 request.getPart("file")
-
-### 3.1 浏览器发出的 multipart 请求
-
-学生填写标题、正文并选择附件后，浏览器发出类似请求：
+典型请求形态：
 
 ```http
 POST /student/document.action HTTP/1.1
@@ -129,211 +111,135 @@ Content-Disposition: form-data; name="title"
 
 开题报告
 ------WebKitFormBoundary...
-Content-Disposition: form-data; name="content"
-
-正文内容
-------WebKitFormBoundary...
 Content-Disposition: form-data; name="file"; filename="proposal.pdf"
 Content-Type: application/pdf
 
-...二进制文件内容...
+...二进制文件...
 ------WebKitFormBoundary...--
 ```
-
-普通字段 `docType/title/content` 仍可用 `request.getParameter(...)` 读取；文件字段不会出现在普通参数里，而是作为 `Part` 存在，所以代码使用 `request.getPart("file")`。
-
-### 3.2 为什么 Servlet 必须写 @MultipartConfig
-
-`StudentDocumentController` 类上有：
-
-- `src/controller/StudentDocumentController.java:28-30`：`@WebServlet("/student/document.action")` 与 `@MultipartConfig`。
-
-`@MultipartConfig` 是 Servlet 容器解析 multipart 请求的开关。没有这个注解或等价 web.xml 配置时，容器不会把上传体解析成 `Part`，`request.getPart("file")` 通常会失败或无法取得文件。也就是说：
-
-- JSP 的 `enctype="multipart/form-data"` 是浏览器端约定。
-- Servlet 的 `@MultipartConfig` 是服务器端约定。
-- `input type="file" name="file"` 的 `name` 必须和 `request.getPart("file")` 完全一致。
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant B as 浏览器 multipart/form-data
-    participant JSP as WebContent/student/documents.jsp:87-112
-    participant C as src/controller/StudentDocumentController.java:28-30,55-118
-    participant FU as src/util/FileUploadUtil.java:13-33
-    participant DAO as src/dao/DocumentDao.java:112-206
+    participant B as 浏览器
+    participant JSP as 上传表单<br/>WebContent/student/documents.jsp:95-130
+    participant C as StudentDocumentController<br/>src/controller/StudentDocumentController.java:58-125
+    participant FU as FileUploadUtil<br/>src/util/FileUploadUtil.java:13-33
+    participant DAO as DocumentDao.submit<br/>src/dao/DocumentDao.java:112-206
 
-    B->>JSP: 用户提交表单
-    JSP->>C: POST /student/document.action<br/>Content-Type=multipart/form-data
-    C->>C: @MultipartConfig 让容器解析 multipart<br/>StudentDocumentController.java:28-30
-    C->>C: getParameter(docType/title/content)<br/>StudentDocumentController.java:65-87
-    C->>C: request.getPart("file")<br/>StudentDocumentController.java:91
-    C->>FU: saveFile(filePart, realPath(/uploads/userId), docType)
+    B->>JSP: 选择文件并提交
+    JSP->>C: POST /student/document.action<br/>multipart/form-data
+    C->>C: @MultipartConfig 解析 multipart<br/>src/controller/StudentDocumentController.java:29-31
+    C->>C: 校验已通过选题 / docType / uploadOpen
+    C->>C: 校验阶段锁和状态锁
+    C->>C: request.getPart("file")
+    C->>FU: saveFile(part, realPath("/uploads/" + userId), docType)
     FU-->>C: proposal_xxxxxxxx.pdf
     C->>DAO: submit(document)
-    DAO-->>C: 1 或错误码 -1/-2/-3/0
+    DAO-->>C: 1 / -1 / -2 / -3 / 0
     C-->>B: redirect /student/document.action?msg=...&type=...
 ```
 
-### 3.3 Controller 上传前的业务校验
+### 3.1 上传前的业务校验
 
-上传不是一收到文件就直接入库。`StudentDocumentController.doPost` 先做业务校验：
+学生 POST 不是“先落库再说”，而是先做业务校验：
 
-1. `src/controller/StudentDocumentController.java:57-58`：设置请求编码 UTF-8，并取当前登录用户。
-2. `src/controller/StudentDocumentController.java:59-63`：必须存在“已通过”的选题，否则返回 `no_topic`。设计原因是文档必须挂在具体课题下，不能让没有课题的学生产生孤儿文档。
-3. `src/controller/StudentDocumentController.java:65-69`：`docType` 必须存在于 `document_type` 字典中，非法阶段直接拒绝。
-4. `src/controller/StudentDocumentController.java:71-76`：调用 `documentDao.isStageAvailable(...)` 做阶段锁。中期必须等开题 `reviewed`，终稿必须等中期 `reviewed`。
-5. `src/controller/StudentDocumentController.java:77-80`：如果已有同阶段文档，且状态不是 `rejected`，拒绝覆盖。设计原因是 `submitted` 正在等教师审，`reviewed` 已通过归档，都不应该被学生随意覆盖。
+1. 必须存在已通过选题，否则文档没有合法 `topic_id`，返回 `no_topic`。
+2. `docType` 必须在 `document_type` 字典中，否则返回 `error`。
+3. 当前阶段上传开关必须开启，否则返回 `upload_closed`。
+4. 阶段锁必须满足：`proposal` 无前置；`midterm` 需要 `proposal` 已 `reviewed`；`final` 需要 `midterm` 已 `reviewed`。
+5. 状态锁必须满足：同阶段已有文档时，只有 `rejected` 允许重交；`submitted` 正在等待审核，`reviewed` 已通过归档，都不允许被学生覆盖。
 
-这两把锁可以概括为：
+Controller 先做一次校验是为了及时给出重定向消息；DAO 在事务里再做一次锁定校验，才是并发场景下的最终约束。
 
-- 阶段锁：控制 `proposal -> midterm -> final` 的顺序。
-- 状态锁：控制同一阶段只有 `rejected` 才能重交。
+### 3.2 文件保存路径、文件名和数据库路径
 
-### 3.4 文件保存目录与相对路径
+文档附件保存路径分两层：
 
-通过校验后，Controller 构造 `Document` 对象并处理附件：
+- 物理目录：`getServletContext().getRealPath("/uploads/" + user.getId())`，即 Web 应用部署目录下的 `uploads/学生ID`。
+- 数据库路径：`uploads/学生ID/保存后文件名`，例如 `uploads/4/proposal_ab12cd34.pdf`。
 
-- `src/controller/StudentDocumentController.java:82-88`：填充 `studentId/topicId/docType/title/content`。
-- `src/controller/StudentDocumentController.java:89`：如果是驳回后重交，先沿用旧附件路径。
-- `src/controller/StudentDocumentController.java:91-92`：读取 `request.getPart("file")`，只有确实上传了文件才保存。
-- `src/controller/StudentDocumentController.java:93`：真实保存目录是 Web 应用部署目录下的 `/uploads/用户ID`。
-- `src/controller/StudentDocumentController.java:95-99`：`FileUploadUtil.saveFile(...)` 返回保存后的文件名，数据库路径拼成 `uploads/用户ID/文件名`。
-- `src/controller/StudentDocumentController.java:105`：把相对路径放进 `document.filePath`。
+代码不保存绝对磁盘路径，原因是部署目录变化时数据库不用改，同时下载接口可以统一按相对路径做权限和目录边界校验。
 
-这里刻意保存相对路径，而不是 `D:\...\webapps\...\uploads\4\proposal_xxx.pdf` 这种绝对路径。原因是：
+`FileUploadUtil.saveFile(...)` 对文件做这些处理：
 
-1. 数据库记录更短、更稳定。
-2. 项目部署目录变化时不用迁移数据库。
-3. 下载接口可以统一检查 `path` 是否在 `uploads/` 之下。
+1. 空文件返回 `null`。
+2. 读取 `upload.max_size_bytes`，默认最大 10MB，超限抛出 `IOException`。
+3. 从 multipart part 的 `content-disposition` 中解析原始 `filename`。
+4. 去掉浏览器可能带上的 Windows 反斜杠路径或 Unix 斜杠路径，只保留文件名本体。
+5. 提取并小写化扩展名，要求在 `upload.allowed_extensions` 内，同时不能在 `upload.blocked_extensions` 内。
+6. 创建上传目录。
+7. 用 `docType_UUID前8位.ext` 生成保存名，再调用 `Part.write(...)` 写入磁盘。
 
-### 3.5 FileUploadUtil 对文件的逐段处理
+这意味着用户上传的原始文件名不能决定最终目录，也不能构造 `../../xxx.jsp` 这类路径写入；目录由 Controller 固定，文件名由后端随机生成。
 
-`FileUploadUtil.saveFile` 做的是“文件级安全和落盘”：
+### 3.3 DocumentDao.submit 的事务与版本历史
 
-- `src/util/FileUploadUtil.java:13-16`：空文件直接返回 `null`。
-- `src/util/FileUploadUtil.java:17-20`：从系统配置读取最大上传大小，默认 10MB，超过则抛出 `IOException`。
-- `src/util/FileUploadUtil.java:21-24`：从 multipart part 的 `content-disposition` 头里解析原始文件名。
-- `src/util/FileUploadUtil.java:25-26`：提取扩展名并校验。
-- `src/util/FileUploadUtil.java:27-30`：如果 `/uploads/用户ID` 目录不存在，就创建目录。
-- `src/util/FileUploadUtil.java:31-33`：保存名采用 `docType_UUID前8位.ext`，例如 `proposal_ab12cd34.pdf`，然后调用 `filePart.write(...)` 写入磁盘。
+`DocumentDao.submit` 是文档状态变化的核心：
 
-文件名解析也做了路径剥离：
-
-- `src/util/FileUploadUtil.java:36-51`：从 `content-disposition` 中找 `filename=...`，并去掉浏览器可能带上的 Windows 反斜杠路径或 Unix 斜杠路径，只保留最终文件名。
-
-扩展名校验来自配置：
-
-- `src/util/FileUploadUtil.java:62-75`：空扩展名拒绝，阻止 `exe/jsp/jspx/bat/cmd/sh` 等危险扩展名，并要求扩展名在允许列表内。
-- `src/util/SystemConfigUtil.java:37-47`：CSV 配置会被拆分、trim、转小写后放入集合。
-
-### 3.6 DocumentDao.submit 如何改变状态
-
-文件保存只是磁盘动作，真正的业务状态由 `DocumentDao.submit` 写入数据库。该方法使用事务：
-
-- `src/dao/DocumentDao.java:112-117`：拿连接并关闭自动提交。
-- `src/dao/DocumentDao.java:118-129`：用 `FOR UPDATE` 锁住已通过的选题记录，确认学生确实对该课题有 `approved` 选题；没有则回滚并返回 `-1`。
-- `src/dao/DocumentDao.java:131-140`：计算前置阶段并查询前置文档是否 `reviewed`；不满足则返回 `-2`，对应阶段锁。
-- `src/dao/DocumentDao.java:142-165`：用 `FOR UPDATE` 锁住当前学生当前阶段的文档记录，读取旧状态、旧标题、旧正文、旧附件路径。
-- `src/dao/DocumentDao.java:168-172`：如果已有记录但不是 `rejected`，回滚并返回 `-3`，对应文档状态锁。
-- `src/dao/DocumentDao.java:173-183`：如果是 `rejected` 重交，先保存旧版本，再把同一条 documents 记录更新为 `submitted`，并清空旧的分数、反馈、审核时间和审核人。
-- `src/dao/DocumentDao.java:184-195`：如果没有旧记录，则插入新 documents 记录，初始状态直接是 `submitted`。
-- `src/dao/DocumentDao.java:197-205`：提交事务；异常时回滚并返回 0。
-
-为什么上传失败后要删除刚上传文件？因为 Controller 的顺序是“先把文件写到磁盘，再调用 DAO 入库”。如果 DAO 返回 `-2`、`-3` 或 0，数据库不会引用这个新文件。`src/controller/StudentDocumentController.java:107-114` 会调用 `deleteUploadedFile(newFilePath)` 清理刚写入但未被数据库采用的附件，避免产生孤儿文件。
+- 事务开始后，先用 `FOR UPDATE` 锁定该学生对该课题的 approved 选题，保证文档确实挂在合法课题下。
+- 中期 / 终稿会检查前置阶段是否已有 `reviewed` 文档；不满足时返回 `-2`。
+- 对当前学生当前阶段已有文档记录加 `FOR UPDATE`，读取旧状态、旧标题、旧正文和旧附件。
+- 如果已有记录但状态不是 `rejected`，返回 `-3`，阻止覆盖。
+- 如果是 `rejected` 后重交，先把旧内容写入 `document_versions`，再更新同一条 `documents` 主记录为 `submitted`，并清空旧分数、反馈、审核时间和审核人。
+- 如果没有旧记录，插入一条新 `documents`，初始状态为 `submitted`。
 
 ```mermaid
 flowchart TD
-    A["浏览器 POST multipart<br/>WebContent/student/documents.jsp:87-112"] --> B["@MultipartConfig 解析 Part<br/>src/controller/StudentDocumentController.java:28-30"]
-    B --> C["业务校验：已通过选题 / docType / 阶段锁 / 状态锁<br/>src/controller/StudentDocumentController.java:59-80"]
-    C --> D["request.getPart('file')<br/>src/controller/StudentDocumentController.java:91-92"]
-    D --> E["保存到 getRealPath('/uploads/' + userId)<br/>src/controller/StudentDocumentController.java:93-99"]
-    E --> F["FileUploadUtil 校验大小、扩展名、文件名并 write<br/>src/util/FileUploadUtil.java:13-33"]
-    F --> G["DocumentDao.submit 开启事务<br/>src/dao/DocumentDao.java:112-117"]
-    G --> H{"是否已有同阶段文档？<br/>src/dao/DocumentDao.java:142-165"}
-    H -- "无" --> I["INSERT status='submitted'<br/>src/dao/DocumentDao.java:184-195"]
-    H -- "有且 rejected" --> J["保存旧版本后 UPDATE status='submitted'<br/>src/dao/DocumentDao.java:173-183"]
-    H -- "有且非 rejected" --> K["返回 -3 document_locked<br/>src/dao/DocumentDao.java:168-172"]
-    I --> L["commit 并 redirect submit_ok<br/>src/dao/DocumentDao.java:197-198"]
-    J --> L
-    K --> M["删除刚上传文件并 redirect<br/>src/controller/StudentDocumentController.java:107-114"]
+    A["POST multipart<br/>WebContent/student/documents.jsp:95-130"] --> B["Controller 校验选题、docType、uploadOpen<br/>src/controller/StudentDocumentController.java:60-76"]
+    B --> C["Controller 校验阶段锁、状态锁<br/>src/controller/StudentDocumentController.java:78-87"]
+    C --> D["request.getPart('file')<br/>src/controller/StudentDocumentController.java:96-111"]
+    D --> E["保存到 /uploads/学生ID<br/>src/util/FileUploadUtil.java:13-33"]
+    E --> F["DocumentDao.submit 开启事务<br/>src/dao/DocumentDao.java:112-117"]
+    F --> G["锁定 approved 选题<br/>src/dao/DocumentDao.java:118-129"]
+    G --> H{"前置阶段是否 reviewed？<br/>src/dao/DocumentDao.java:131-140"}
+    H -- "否" --> I["返回 -2 stage_locked"]
+    H -- "是或无前置" --> J{"同阶段是否已有文档？<br/>src/dao/DocumentDao.java:142-165"}
+    J -- "无" --> K["INSERT status='submitted'<br/>src/dao/DocumentDao.java:184-195"]
+    J -- "有且 rejected" --> L["保存旧版本并 UPDATE submitted<br/>src/dao/DocumentDao.java:173-183"]
+    J -- "有且非 rejected" --> M["返回 -3 document_locked<br/>src/dao/DocumentDao.java:168-172"]
+    K --> N["commit<br/>src/dao/DocumentDao.java:197-198"]
+    L --> N
+    I --> O["Controller 删除刚上传但未入库文件<br/>src/controller/StudentDocumentController.java:114-119"]
+    M --> O
 ```
 
-### 3.7 版本历史如何形成
+失败时删除刚上传文件的原因：文件先写磁盘，数据库后提交。如果 DAO 返回失败码或异常，数据库不会引用这个新文件，Controller 必须清理 `newFilePath`，避免产生孤儿附件。
 
-当文档被教师驳回后，学生重新提交同阶段文档，`DocumentDao.submit` 不会新建第二条 documents 主记录，而是：
+## 4. 教师审核文档：列表、弹窗、状态更新
 
-1. 把旧标题、旧正文、旧附件路径保存到 `document_versions`。
-2. 更新原 documents 主记录为新内容，并把状态重新置为 `submitted`。
-
-证据：
-
-- `src/dao/DocumentDao.java:256-270`：在事务内计算下一个 `version_no`，插入 `document_versions`。
-- `src/dao/DocumentVersionDao.java:10-20`：学生 GET 页面按 `version_no DESC` 查询历史版本。
-- `WebContent/student/documents.jsp:129-159`：JSP 展示历史版本，并给每个历史附件生成下载链接。
-
-这个设计能保证“当前文档”永远在 `documents` 表里只有一条，同时保留每次被退回前的历史快照。
-
-## 4. 教师 GET 审核页：按教师、阶段、状态查询文档
-
-### 4.1 浏览器发出的请求
-
-教师进入文档审核页或点击状态筛选按钮时，浏览器发出 GET 请求：
+教师打开审核列表时：
 
 ```http
 GET /teacher/document.action?type=proposal&status=submitted HTTP/1.1
 Cookie: JSESSIONID=...
 ```
 
-`type` 是文档阶段；`status` 是筛选状态。`status=all` 表示不过滤状态。
+处理链路：
 
-### 4.2 Controller 与 DAO 查询链路
-
-`TeacherDocumentController.doGet` 的处理：
-
-- `src/controller/TeacherDocumentController.java:24-29`：取登录教师、规范化 `type`，`status` 缺省为 `submitted`。
-- `src/controller/TeacherDocumentController.java:31-38`：调用 `DocumentDao.findByTeacher`，把列表、阶段、状态筛选和字典项放入 request，forward 到 JSP。
-
-`DocumentDao.findByTeacher` 的 SQL 限制：
-
-- `src/dao/DocumentDao.java:42-45`：基础条件是 `WHERE t.teacher_id=?`，即只查该教师指导课题下的文档。
-- `src/dao/DocumentDao.java:46-53`：如果传了 `docType` 和 `status`，继续追加过滤条件。
-- `src/dao/DocumentDao.java:54-56`：按提交时间倒序返回。
+- Controller 读取教师、规范化文档阶段，`status` 缺省为 `submitted`。
+- `DocumentDao.findByTeacher` 基础条件是 `topics.teacher_id = 当前教师ID`，再按 `doc_type` 和 `status` 追加过滤；`status=all` 时 Controller 传 `null`，表示不过滤状态。
+- JSP 渲染阶段标签、状态筛选按钮、文档表格和审核 modal。
+- 审核 modal 的 POST 表单提交 `id/docType/action/score/feedback`。
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant B as 浏览器
-    participant C as src/controller/TeacherDocumentController.java:22-38
-    participant DAO as src/dao/DocumentDao.java:42-57
-    participant JSP as WebContent/teacher/documents.jsp:21-74
+    participant B as 教师浏览器
+    participant C as TeacherDocumentController<br/>src/controller/TeacherDocumentController.java:22-38
+    participant DAO as DocumentDao.findByTeacher<br/>src/dao/DocumentDao.java:42-57
+    participant JSP as teacher/documents.jsp<br/>WebContent/teacher/documents.jsp:31-85
 
     B->>C: GET /teacher/document.action?type=proposal&status=submitted
-    C->>C: 读取 teacher loginUser / type / status<br/>TeacherDocumentController.java:24-29
+    C->>C: status 缺省为 submitted
     C->>DAO: findByTeacher(teacherId, docType, status)
-    DAO->>DAO: WHERE t.teacher_id=? AND d.doc_type=? AND d.status=?<br/>DocumentDao.java:42-53
+    DAO->>DAO: WHERE t.teacher_id=? AND d.doc_type=? AND d.status=?
     DAO-->>C: documents
     C->>JSP: forward /teacher/documents.jsp
-    JSP-->>B: 文档列表、筛选按钮、审核弹窗表单
+    JSP-->>B: 列表 + 查看/审核弹窗
 ```
 
-### 4.3 JSP 如何生成审核操作
-
-教师页面同样只消费 request attribute：
-
-- `WebContent/teacher/documents.jsp:6-14`：读取 `docType`、`statusFilter`、`documents`、`typeNames`；如果不是从 Controller 正常 forward 进入，则重定向回 `/teacher/document.action`。
-- `WebContent/teacher/documents.jsp:21-30`：生成阶段标签和 `submitted/reviewed/all` 状态筛选按钮。
-- `WebContent/teacher/documents.jsp:37-52`：渲染文档列表，每行有“查看/审核”按钮。
-- `WebContent/teacher/documents.jsp:56-74`：页面内有一个审核 modal，提交目标是 `../teacher/document.action`，方法是 POST。
-- `WebContent/teacher/documents.jsp:79-87`：点击按钮后把当前行数据填入 modal；只有状态为 `submitted` 时显示“通过并评分 / 驳回”按钮。
-
-注意：当前教师 JSP 的附件区域是 `span id="docFile"`，脚本将文件路径作为纯文本填进去；它没有像学生页面那样直接生成 `<a href="../download.action?...">`。但是下载接口本身支持教师权限校验，只要请求的 `path` 精确等于该教师名下某个文档的 `file_path`，就允许下载。
-
-## 5. 教师 POST 审核：review / reject 如何改变状态
-
-### 5.1 浏览器发出的表单请求
-
-教师在 modal 中点击“通过并评分”或“驳回”时，浏览器提交普通表单：
+教师点击“通过并评分”或“驳回”时，浏览器发出普通表单 POST：
 
 ```http
 POST /teacher/document.action HTTP/1.1
@@ -343,281 +249,363 @@ Cookie: JSESSIONID=...
 id=12&docType=proposal&action=review&score=88&feedback=...
 ```
 
-与学生上传不同，这里没有文件字段，所以不需要 `multipart/form-data`，也不需要 `@MultipartConfig`。字段含义：
+这里没有文件字段，所以不需要 `multipart/form-data`。审核规则：
 
-| 字段 | 来源 | 含义 |
-|---|---|---|
-| `id` | hidden input | 要审核的 documents 主键 |
-| `docType` | hidden input | 审核完成后重定向回哪个阶段标签 |
-| `action` | submit button value | `review` 表示通过并评分，`reject` 表示驳回 |
-| `score` | number input | 通过时必须是 0-100；驳回时 DAO 会置空 |
-| `feedback` | textarea | 教师反馈意见 |
+- `action=review` 映射为 `status=reviewed`，必须提供 0-100 分。
+- `action=reject` 映射为 `status=rejected`，DAO 会强制把分数置空。
+- DAO 的更新 SQL 要求 `d.status='submitted'`，所以已审核通过或已驳回的记录不能被重复审核。
+- DAO 的更新 SQL `JOIN topics` 并要求 `t.teacher_id=?`，所以教师只能审核自己指导课题下的文档。
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant B as 浏览器审核弹窗
-    participant JSP as WebContent/teacher/documents.jsp:58-73
-    participant C as src/controller/TeacherDocumentController.java:41-84
-    participant DAO as src/dao/DocumentDao.java:208-225
+    participant B as 教师浏览器
+    participant JSP as 审核 modal<br/>WebContent/teacher/documents.jsp:67-99
+    participant C as TeacherDocumentController<br/>src/controller/TeacherDocumentController.java:41-85
+    participant DAO as DocumentDao.review<br/>src/dao/DocumentDao.java:208-225
 
-    B->>JSP: 点击 action=review 或 action=reject
-    JSP->>C: POST /teacher/document.action<br/>application/x-www-form-urlencoded
-    C->>C: 读取 id/action/score/feedback<br/>TeacherDocumentController.java:45-67
-    C->>C: 校验通过评分必须 0-100<br/>TeacherDocumentController.java:51-65
+    B->>JSP: 点击 review 或 reject
+    JSP->>C: POST /teacher/document.action
+    C->>C: 解析 id/action/score/feedback
+    C->>C: review 时校验 score 在 0-100
     C->>DAO: review(id, teacherId, reviewed/rejected, score, feedback)
-    DAO->>DAO: UPDATE documents JOIN topics<br/>WHERE d.status='submitted' AND t.teacher_id=?<br/>DocumentDao.java:220-224
+    DAO->>DAO: UPDATE documents JOIN topics<br/>WHERE d.status='submitted' AND t.teacher_id=?
     DAO-->>C: update count
-    C-->>B: redirect /teacher/document.action?msg=reviewed|rejected&type=...
+    C-->>B: redirect /teacher/document.action?msg=...&type=...
 ```
 
-### 5.2 Controller 的审核校验
+当前教师 JSP 的附件区域只是把 `filePath` 填成文本，没有直接渲染下载链接；但 `download.action` 支持教师权限校验：只要请求路径等于该教师名下某个文档的 `file_path`，即可下载。
 
-`TeacherDocumentController.doPost` 的核心处理：
+## 5. download.action 文件流：path 参数、权限和防目录穿越
 
-- `src/controller/TeacherDocumentController.java:43-46`：设置 UTF-8，取登录教师和 `action`。
-- `src/controller/TeacherDocumentController.java:48-50`：只有 `action=review` 或 `action=reject` 才进入审核分支；`review` 映射为 `reviewed`，`reject` 映射为 `rejected`。
-- `src/controller/TeacherDocumentController.java:51-59`：解析 `score`，格式不对直接返回 `invalid_score`。
-- `src/controller/TeacherDocumentController.java:60-65`：通过审核必须给 0-100 分；驳回可以不给分。
-- `src/controller/TeacherDocumentController.java:67-73`：读取反馈，先查文档，再调用 DAO 更新；更新失败或文档不存在则返回 `error`。
-- `src/controller/TeacherDocumentController.java:75-81`：审核成功后给学生发通知、记录操作日志，并重定向回列表。
-
-### 5.3 DocumentDao.review 的状态锁和教师权限
-
-真正防止越权和重复审核的是 SQL：
-
-- `src/dao/DocumentDao.java:208-216`：只接受 `reviewed/rejected` 两种状态；`reviewed` 必须有 0-100 分。
-- `src/dao/DocumentDao.java:217-219`：驳回时强制把分数置空，避免“已驳回但有分数”的歧义。
-- `src/dao/DocumentDao.java:220-224`：更新语句 `JOIN topics`，并要求 `d.status='submitted' AND t.teacher_id=?`。
-
-这条 SQL 同时承担两件事：
-
-1. 状态锁：只有 `submitted` 能被审核。已经 `reviewed` 或 `rejected` 的记录再次提交审核请求，`executeUpdate` 会返回 0。
-2. 权限锁：教师只能更新自己指导课题下的文档。即使前端篡改了 `id`，只要该文档的 topic 不属于当前教师，`t.teacher_id=?` 条件不成立。
-
-## 6. download.action 文件流：为什么不直接暴露 /uploads
-
-### 6.1 下载链接从哪里来
-
-学生页面会为当前附件和历史版本附件生成下载链接：
-
-- `WebContent/student/documents.jsp:113-116`：当前附件链接指向 `../download.action?path=...`。
-- `WebContent/student/documents.jsp:149-152`：历史版本附件也指向 `../download.action?path=...`。
-
-JSP 生成链接时会把数据库中的相对路径 URL 编码，并去掉可能存在的开头 `/`。例如数据库路径为：
-
-```text
-uploads/4/proposal_ab12cd34.pdf
-```
-
-页面链接会变成：
+学生文档页会为当前附件和历史版本附件生成链接：
 
 ```text
 ../download.action?path=uploads%2F4%2Fproposal_ab12cd34.pdf
 ```
 
-### 6.2 为什么不直接访问 /uploads/4/xxx.pdf
-
-如果页面直接暴露 `/uploads/4/proposal.pdf`，Web 容器可能只按静态文件返回，绕过业务权限。现在统一走 `/download.action`，可以在返回文件前做：
-
-1. 是否登录校验。
-2. `path` 参数合法性校验。
-3. 学生 / 教师 / 管理员角色权限校验。
-4. canonical path 校验，防止目录穿越。
-5. 统一设置下载响应头。
+`path` 来自数据库中保存的相对路径。下载不直接暴露 `/uploads/4/xxx.pdf`，而是统一走 Controller，原因是静态文件服务无法判断“当前登录用户是否有权下载这个文件”。
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant B as 浏览器
-    participant JSP as WebContent/student/documents.jsp:113-116,149-152
-    participant C as src/controller/DownloadController.java:21-65
-    participant ACL as src/controller/DownloadController.java:68-85
-    participant DAO as src/dao/DocumentDao.java:42-57
-    participant FS as Web应用/uploads 目录
+    participant JSP as student/documents.jsp<br/>WebContent/student/documents.jsp:121-124,157-160
+    participant C as DownloadController<br/>src/controller/DownloadController.java:22-67
+    participant ACL as canAccess<br/>src/controller/DownloadController.java:69-86
+    participant DAO as DocumentDao<br/>src/dao/DocumentDao.java:42-57
+    participant FS as Web应用 uploads 目录
 
-    B->>JSP: 点击附件下载链接
-    JSP-->>B: ../download.action?path=uploads%2F4%2Fproposal.pdf
+    B->>JSP: 点击附件下载
+    JSP-->>B: download.action?path=uploads%2F4%2Fproposal.pdf
     B->>C: GET /download.action?path=uploads/4/proposal.pdf
-    C->>C: 检查 session loginUser<br/>DownloadController.java:23-28
-    C->>C: 拒绝 null path 或包含 .. 的 path<br/>DownloadController.java:30-37
-    C->>ACL: canAccess(user,path)
-    ACL->>DAO: 教师角色时 findByTeacher(...) 比对 filePath
+    C->>C: 检查 loginUser
+    C->>C: 拒绝空 path 或包含 ..
+    C->>ACL: canAccess(user, path)
+    ACL->>DAO: 教师角色时查询其指导文档并比对 filePath
     ACL-->>C: true / false
-    C->>FS: canonical path 必须位于 uploads 下且文件存在<br/>DownloadController.java:44-51
+    C->>FS: canonical path 必须仍在 uploads 下
     C-->>B: application/octet-stream + Content-Disposition + bytes
 ```
 
-### 6.3 path 参数与目录穿越防护
+下载校验分四层：
 
-`DownloadController.doGet` 首先处理登录和路径：
+1. 登录校验：没有 session 或没有 `loginUser` 时跳转登录页。
+2. 字符串路径校验：`path == null` 或包含 `..` 立即返回 400；开头 `/` 会被去掉，统一成相对路径。
+3. 角色权限校验：
+   - 管理员：允许访问 `uploads/` 下文件。
+   - 教师：必须是 `uploads/` 下路径，并且路径等于该教师指导文档中的某个 `file_path`。
+   - 学生：只能访问 `uploads/自己的用户ID/` 前缀下文件。
+4. canonical path 校验：目标文件 canonical path 必须位于 Web 根目录下的 `uploads` canonical path 内，并且真实存在且是普通文件。
 
-- `src/controller/DownloadController.java:23-28`：如果没有 session 或没有 `loginUser`，重定向到登录页。
-- `src/controller/DownloadController.java:30-34`：`path` 为空或包含 `..`，直接返回 400。
-- `src/controller/DownloadController.java:35-37`：如果 `path` 以 `/` 开头，去掉开头的 `/`，统一变成相对路径。
+防目录穿越的关键是两道门：
 
-`..` 是目录穿越攻击中最常见的片段。例如攻击者可能构造：
+- 第一门：拒绝 `../../WEB-INF/web.xml` 这类包含 `..` 的参数。
+- 第二门：即使路径经过分隔符、符号链接或编码变形，`getCanonicalFile()` 后仍必须以 `uploads` 目录 canonical path 加分隔符开头。
 
-```text
-/download.action?path=../../WEB-INF/web.xml
-```
+文件流响应：
 
-Servlet 容器解码参数后，`path.contains("..")` 会先拦截这类请求。随后代码还做 canonical path 校验：
-
-- `src/controller/DownloadController.java:44-46`：计算 Web 根目录、`uploads` 目录 canonical path、目标文件 canonical path。
-- `src/controller/DownloadController.java:47-51`：目标文件必须以 `uploads` canonical path 加分隔符开头，且必须存在并且是普通文件，否则返回 404。
-
-这相当于两层防护：
-
-1. 字符串层：拒绝包含 `..` 的参数。
-2. 文件系统层：即使出现符号链接、路径变形，也必须经过 canonical path 后仍在 uploads 目录内。
-
-### 6.4 按角色校验文件权限
-
-权限逻辑在 `canAccess`：
-
-- `src/controller/DownloadController.java:68-71`：管理员可以访问所有 `uploads/` 下文件。
-- `src/controller/DownloadController.java:72-83`：教师必须先满足 `path.startsWith("uploads/")`，然后查询自己指导课题下的所有文档，只有 `path.equals(d.getFilePath())` 才允许。
-- `src/controller/DownloadController.java:84`：学生只能访问 `uploads/自己的用户ID/` 前缀下的文件。
-
-这说明下载权限不是单纯看文件是否存在，而是结合登录角色和数据库关系判断。教师下载尤其严格：不是“任意教师可以下任意学生文件”，而是必须是该教师指导课题下文档的 `file_path`。
-
-### 6.5 Content-Disposition、filename* 与 bytes 写出
-
-权限和文件存在性都通过后，下载响应这样构造：
-
-- `src/controller/DownloadController.java:53`：`Content-Type` 设置为 `application/octet-stream`，表示通用二进制流。
-- `src/controller/DownloadController.java:54-56`：取真实文件名，UTF-8 URL 编码后同时写入 `filename` 和 `filename*`。
-- `src/controller/DownloadController.java:57-65`：打开 `FileInputStream` 和 `response.getOutputStream()`，每次读 4096 bytes 写给浏览器，最后 flush。
-
-`Content-Disposition` 的意义是让浏览器下载而不是当页面打开：
-
-```http
-Content-Type: application/octet-stream
-Content-Disposition: attachment; filename="proposal_ab12cd34.pdf"; filename*=UTF-8''proposal_ab12cd34.pdf
-```
-
-其中：
-
-- `attachment`：提示浏览器按附件下载。
-- `filename`：传统文件名字段。
-- `filename*`：支持 UTF-8 编码文件名，避免中文或空格文件名在不同浏览器中乱码。
+- `Content-Type: application/octet-stream`：按通用二进制流返回。
+- `Content-Disposition: attachment; filename="..."; filename*=UTF-8''...`：提示浏览器下载而不是渲染，并兼容 UTF-8 文件名。
+- 通过 `FileInputStream` 每次读取 4096 bytes 写入 `response.getOutputStream()`。
 
 ```mermaid
 flowchart TD
-    A["GET /download.action?path=uploads/4/proposal.pdf<br/>src/controller/DownloadController.java:21-22"] --> B{"是否已登录？<br/>src/controller/DownloadController.java:23-28"}
-    B -- "否" --> C["redirect /login.jsp<br/>src/controller/DownloadController.java:25-27"]
-    B -- "是" --> D{"path 是否为空或包含 '..'?<br/>src/controller/DownloadController.java:30-34"}
-    D -- "非法" --> E["400 invalid path<br/>src/controller/DownloadController.java:31-33"]
-    D -- "合法" --> F["去掉开头 /<br/>src/controller/DownloadController.java:35-37"]
-    F --> G{"canAccess(user,path)<br/>src/controller/DownloadController.java:39-42,68-85"}
-    G -- "无权限" --> H["403 forbidden<br/>src/controller/DownloadController.java:39-41"]
-    G -- "有权限" --> I{"canonical file 在 uploads 内且存在？<br/>src/controller/DownloadController.java:44-51"}
-    I -- "否" --> J["404 file not found<br/>src/controller/DownloadController.java:47-50"]
-    I -- "是" --> K["设置 application/octet-stream<br/>src/controller/DownloadController.java:53"]
-    K --> L["设置 Content-Disposition filename/filename*<br/>src/controller/DownloadController.java:54-56"]
-    L --> M["4096 bytes 循环写出<br/>src/controller/DownloadController.java:57-65"]
+    A["GET /download.action?path=uploads/4/file.pdf<br/>src/controller/DownloadController.java:20-22"] --> B{"是否已登录？<br/>src/controller/DownloadController.java:24-29"}
+    B -- "否" --> C["redirect /login.jsp"]
+    B -- "是" --> D{"path 为空或包含 '..'?<br/>src/controller/DownloadController.java:31-38"}
+    D -- "是" --> E["400 invalid path"]
+    D -- "否" --> F{"canAccess(user,path)?<br/>src/controller/DownloadController.java:40-43,69-86"}
+    F -- "否" --> G["403 forbidden"]
+    F -- "是" --> H{"canonical file 在 uploads 内且存在？<br/>src/controller/DownloadController.java:45-52"}
+    H -- "否" --> I["404 file not found"]
+    H -- "是" --> J["设置 octet-stream 和 Content-Disposition<br/>src/controller/DownloadController.java:54-57"]
+    J --> K["4096 bytes 循环写出<br/>src/controller/DownloadController.java:58-66"]
 ```
 
-## 7. 状态与阶段锁总图
+## 6. 文件模板列表：学生、教师、管理员共用 Controller
 
-文档阶段顺序和状态变化可以合并理解为：阶段控制“能不能提交下一类文档”，状态控制“当前这类文档能不能再提交或被审核”。
+模板列表由同一个 `FileTemplateController` 处理三个 URL：
+
+- `/student/file-template.action`
+- `/teacher/file-template.action`
+- `/admin/file-template.action`
+
+GET 请求读取 `type/page/pageSize`，调用 `FileTemplateDao.findAll(type, page, pageSize)` 和 `countAll(type)`，再根据 servlet path 选择不同 JSP：
+
+- `/admin/`：`/admin/file-templates.jsp`
+- `/student/`：`/student/file-templates.jsp`
+- 其他：`/teacher/file-templates.jsp`
+
+DAO 查询只返回 `status=1` 的模板，并按 `created_at DESC, id DESC` 排序；带分页时拼接 `LIMIT ? OFFSET ?`。因此学生、教师看到的是可用模板列表，管理员当前管理页也展示可用模板，删除操作是物理删除数据库记录。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as 浏览器
+    participant C as FileTemplateController<br/>src/controller/FileTemplateController.java:26-51
+    participant DAO as FileTemplateDao<br/>src/dao/FileTemplateDao.java:20-58
+    participant JSP1 as student/file-templates.jsp<br/>WebContent/student/file-templates.jsp:33-65
+    participant JSP2 as teacher/file-templates.jsp<br/>WebContent/teacher/file-templates.jsp:33-65
+    participant JSP3 as admin/file-templates.jsp<br/>WebContent/admin/file-templates.jsp:49-90
+
+    B->>C: GET /student|teacher|admin/file-template.action?type=proposal&page=1
+    C->>DAO: findAll(type, page, pageSize)
+    DAO-->>C: status=1 templates
+    C->>DAO: countAll(type)
+    DAO-->>C: total
+    C->>C: 按 servletPath 选择 JSP
+    C-->>JSP1: student 路径
+    C-->>JSP2: teacher 路径
+    C-->>JSP3: admin 路径
+```
+
+学生和教师模板 JSP 的结构基本一致：顶部按文档类型过滤，表格展示模板名称、类型、原文件名、大小、上传人、上传时间、说明，并通过 `../file-template-download.action?id=模板ID` 下载。管理员 JSP 多了消息提示、上传按钮、删除表单和上传 modal。
+
+## 7. 管理员模板上传 / 删除管理
+
+管理员上传模板的表单也使用 `multipart/form-data`，因为它同样包含文件字段：
+
+```jsp
+<form action="../admin/file-template.action" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="action" value="upload">
+  <input name="templateName" ...>
+  <select name="docType">...</select>
+  <input type="file" name="file" ...>
+  <textarea name="description"></textarea>
+</form>
+```
+
+后端处理：
+
+1. `FileTemplateController` 映射了管理员 / 教师 / 学生三个模板 URL，并标注 `@MultipartConfig`。
+2. POST 入口首先检查当前用户角色必须是 `admin`，非管理员直接 403。
+3. `action=upload` 时：
+   - `templateName` 不能为空。
+   - `request.getPart("file")` 必须存在且大小大于 0。
+   - 上传目录固定为 `/uploads/templates`。
+   - 使用 `FileUploadUtil.getFileName(part)` 记录原始文件名。
+   - 使用 `FileUploadUtil.saveFile(part, uploadDir, "template")` 生成随机保存名，例如 `template_ab12cd34.docx`。
+   - 数据库保存 `file_path=uploads/templates/保存名`、`original_filename=原文件名`、`file_size`、`uploader_id` 等字段。
+4. `action=delete` 时：
+   - 从请求中解析 `id`。
+   - 先按 id 查询模板记录。
+   - 删除数据库记录。
+   - 再按记录中的 `file_path` 删除物理文件；删除物理文件前会拒绝包含 `..` 的路径。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as 管理员浏览器
+    participant JSP as admin/file-templates.jsp<br/>WebContent/admin/file-templates.jsp:93-113
+    participant C as FileTemplateController<br/>src/controller/FileTemplateController.java:54-119
+    participant FU as FileUploadUtil<br/>src/util/FileUploadUtil.java:13-33
+    participant DAO as FileTemplateDao<br/>src/dao/FileTemplateDao.java:70-80
+    participant FS as uploads/templates
+
+    A->>JSP: 打开上传 modal
+    JSP->>C: POST /admin/file-template.action<br/>multipart/form-data action=upload
+    C->>C: 校验 user.role == admin
+    C->>C: request.getPart("file")
+    C->>FU: saveFile(part, realPath("/uploads/templates"), "template")
+    FU->>FS: 写入 template_xxxxxxxx.ext
+    FU-->>C: 保存后文件名
+    C->>DAO: insert(file_path, original_filename, file_size, uploader_id)
+    DAO-->>C: generated id
+    C-->>A: redirect ?msg=upload_ok
+
+    A->>C: POST action=delete&id=...
+    C->>DAO: findById(id) 后 delete(id)
+    C->>FS: deleteUploadedFile(template.filePath)
+    C-->>A: redirect ?msg=delete_ok
+```
+
+模板上传和学生文档上传复用同一套 `FileUploadUtil`，所以大小限制、允许扩展名、禁止扩展名、文件名路径剥离、随机保存名逻辑一致。管理员 JSP 文件选择框写死了 `accept=".pdf,.doc,.docx,.zip,.rar"`，但真正的安全边界仍在后端 `FileUploadUtil.validateExtension(...)` 和系统配置。
+
+## 8. 模板下载流：id 参数到文件流
+
+模板下载链接不把 `file_path` 暴露给浏览器，而是只传主键：
+
+```text
+../file-template-download.action?id=12
+```
+
+后端流程：
+
+1. 必须已登录，否则跳转登录页。
+2. 将 `id` 解析为整数，失败返回 400。
+3. 通过 `FileTemplateDao.findById(id)` 查询模板记录。
+4. 记录不存在、`file_path` 为空或包含 `..` 时返回 404。
+5. 计算 Web 根目录、`uploads/templates` canonical path、模板文件 canonical path。
+6. 文件 canonical path 必须位于 `uploads/templates` 下，且真实存在并为普通文件。
+7. `Content-Type` 设为 `application/octet-stream`。
+8. 下载文件名优先使用数据库中的 `original_filename`，为空时才使用磁盘保存名。
+9. 设置 `Content-Disposition` 的 `filename` 和 `filename*`，再循环写出文件 bytes。
+
+```mermaid
+flowchart TD
+    A["点击模板下载<br/>WebContent/student/file-templates.jsp:44-55<br/>WebContent/teacher/file-templates.jsp:44-55<br/>WebContent/admin/file-templates.jsp:63-80"] --> B["GET /file-template-download.action?id=12<br/>src/controller/FileTemplateDownloadController.java:19-22"]
+    B --> C{"是否登录？<br/>src/controller/FileTemplateDownloadController.java:23-28"}
+    C -- "否" --> D["redirect /login.jsp"]
+    C -- "是" --> E{"id 是否为整数？<br/>src/controller/FileTemplateDownloadController.java:30-36"}
+    E -- "否" --> F["400 invalid template id"]
+    E -- "是" --> G["FileTemplateDao.findById(id)<br/>src/dao/FileTemplateDao.java:60-62"]
+    G --> H{"记录存在且 file_path 不含 '..'?<br/>src/controller/FileTemplateDownloadController.java:38-43"}
+    H -- "否" --> I["404 template not found"]
+    H -- "是" --> J{"canonical file 在 uploads/templates 内？<br/>src/controller/FileTemplateDownloadController.java:45-53"}
+    J -- "否" --> K["404 file not found"]
+    J -- "是" --> L["使用 original_filename 设置 Content-Disposition<br/>src/controller/FileTemplateDownloadController.java:55-62"]
+    L --> M["4096 bytes 循环写出<br/>src/controller/FileTemplateDownloadController.java:63-71"]
+```
+
+模板下载用 `id` 而不是 `path` 的设计理由：模板文件是公共资源，不需要像学生文档那样按学生 / 指导教师关系逐个比对；但仍然不能让浏览器任意指定文件路径。因此让客户端只提供数据库主键，由服务端根据记录反查 `file_path`，再限定在 `uploads/templates` 目录内。
+
+## 9. 状态锁、阶段锁、系统开关和路径安全的整体关系
 
 ```mermaid
 stateDiagram-v2
-    [*] --> proposal: 已通过选题<br/>StudentDocumentController.java:59-63
-    proposal --> midterm: proposal reviewed<br/>DocumentDao.java:227-241
-    midterm --> final: midterm reviewed<br/>DocumentDao.java:227-241
+    [*] --> proposal: 已通过选题
+    proposal --> midterm: proposal reviewed
+    midterm --> final: midterm reviewed
 
-    state "单个 docType 内部状态<br/>DocumentDao.java:168-187,208-225" as S {
-        [*] --> submitted: 首次 INSERT 或 rejected 后 UPDATE
-        submitted --> reviewed: 教师 action=review
-        submitted --> rejected: 教师 action=reject
-        rejected --> submitted: 学生修改后重交
+    state "单个 docType 内部状态" as S {
+        [*] --> submitted: 首次提交
+        submitted --> reviewed: 教师 review
+        submitted --> rejected: 教师 reject
+        rejected --> submitted: 学生重交
         reviewed --> [*]
     }
 ```
 
-几个答辩时容易被追问的点：
+- 阶段锁解决“毕业设计流程顺序”问题：没有通过开题不能交中期，没有通过中期不能交终稿。
+- 状态锁解决“同一阶段能不能覆盖”问题：等待审核和已通过不能被学生覆盖，只有退回后才能重交。
+- 教师审核锁解决“谁能审、能不能重复审”问题：只有指导教师能审，且只有 `submitted` 能变成 `reviewed/rejected`。
+- 系统开关解决“当前时间段是否允许上传”问题：页面禁用只是提示，POST 校验才是硬限制。
+- 上传路径安全解决“客户端文件名不能控制服务器路径”问题：目录由 Controller 固定，保存名由后端随机生成，原文件名只用于展示或模板下载名。
+- 下载路径安全解决“不能越权读文件”问题：学生文档下载用 `path` 但有角色权限和 canonical path 双重校验；模板下载用 `id` 间接定位文件，并限定在 `uploads/templates` 内。
 
-1. **为什么提交时先查是否通过选题？**
-   因为文档必须绑定 `topic_id`，且只有通过选题的学生才有合法课题上下文。否则会出现没有课题却能提交文档的脏数据。
+## 10. 代码证据清单
 
-2. **为什么有阶段锁？**
-   毕业设计流程有先后关系：没有通过开题就不能交中期，没有通过中期就不能交终稿。代码用 `prerequisiteType` 和 `status='reviewed'` 强制保证顺序。
-
-3. **为什么有状态锁？**
-   `submitted` 表示教师还没审，学生不能反复覆盖；`reviewed` 表示已归档通过，也不能覆盖；只有 `rejected` 才代表教师要求修改，允许重交。
-
-4. **为什么 DAO 里还要重复校验 Controller 已经校验过的锁？**
-   Controller 校验负责用户体验，DAO 事务内 `FOR UPDATE` 和 `WHERE status='submitted'` 负责并发安全。两个浏览器窗口同时提交或审核时，最终以数据库锁和 SQL 条件为准。
-
-5. **为什么失败要删除刚上传文件？**
-   文件先落盘、数据库后提交。如果数据库提交失败但不删除文件，就会留下没有任何 documents 记录引用的孤儿附件。
-
-6. **为什么下载走 Controller 而不是静态目录？**
-   静态目录只能判断文件存在，不能判断“这个登录用户是否有权下载这个文件”。`download.action` 可以结合 session、角色、数据库关系、canonical path 决定是否输出 bytes。
-
-## 8. 代码证据清单
-
-- `WebContent/student/documents.jsp:11-23`：学生页面读取 Controller 注入的属性，属性缺失时重定向回 Controller。
-- `WebContent/student/documents.jsp:37-49`：未通过选题时不给上传表单。
-- `WebContent/student/documents.jsp:57-63`：学生文档阶段标签 GET 切换。
-- `WebContent/student/documents.jsp:73-83`：显示当前文档状态、分数、反馈。
-- `WebContent/student/documents.jsp:87-112`：上传表单使用 `method="post"`、`enctype="multipart/form-data"`，文件字段名为 `file`。
-- `WebContent/student/documents.jsp:113-116`：当前附件下载链接使用 `download.action?path=...`。
-- `WebContent/student/documents.jsp:129-159`：历史版本列表和历史附件下载链接。
-- `WebContent/teacher/documents.jsp:6-14`：教师页面读取文档列表与筛选属性，属性缺失时回到 Controller。
-- `WebContent/teacher/documents.jsp:21-30`：教师阶段和状态筛选链接。
-- `WebContent/teacher/documents.jsp:37-52`：教师文档列表与“查看/审核”按钮。
-- `WebContent/teacher/documents.jsp:56-74`：教师审核 modal 的 POST 表单、隐藏字段、评分、反馈、review/reject 按钮。
-- `WebContent/teacher/documents.jsp:79-87`：前端填充 modal，并仅在 `submitted` 状态显示审核动作。
-- `src/controller/StudentDocumentController.java:28-30`：学生文档 Controller 映射和 `@MultipartConfig`。
-- `src/controller/StudentDocumentController.java:31-52`：学生 GET 文档页的数据准备与 forward。
-- `src/controller/StudentDocumentController.java:55-80`：学生 POST 的编码、已通过选题、文档类型、阶段锁、状态锁校验。
-- `src/controller/StudentDocumentController.java:82-105`：构造 Document、读取 `request.getPart("file")`、保存到 `/uploads/用户ID`、生成相对路径。
-- `src/controller/StudentDocumentController.java:107-118`：调用 `DocumentDao.submit`，失败清理刚上传文件，成功记录日志并重定向。
-- `src/controller/StudentDocumentController.java:121-132`：学生重定向 URL 与文档类型归一化。
-- `src/controller/StudentDocumentController.java:135-143`：删除刚上传但未成功入库的文件。
-- `src/controller/TeacherDocumentController.java:20-21`：教师文档 Controller 映射。
-- `src/controller/TeacherDocumentController.java:22-38`：教师 GET 审核列表，默认 `submitted`，调用 DAO 并 forward。
-- `src/controller/TeacherDocumentController.java:41-65`：教师 POST 审核入口、action 映射、score 解析和 0-100 校验。
-- `src/controller/TeacherDocumentController.java:67-84`：读取反馈、调用 DAO 审核、通知、日志、重定向。
+- `WebContent/student/documents.jsp:11-24`：学生文档页读取 Controller 注入的属性，缺少关键属性时重定向回 `/student/document.action`。
+- `WebContent/student/documents.jsp:18-21`：读取 `uploadAccept` 和 `uploadOpen`，并设置默认允许扩展名和默认开启上传。
+- `WebContent/student/documents.jsp:39-55`：没有通过选题时显示空状态，不渲染上传表单。
+- `WebContent/student/documents.jsp:59-64`：按文档类型生成学生阶段切换 GET 链接。
+- `WebContent/student/documents.jsp:75-79`：`uploadOpen=false` 时显示上传关闭提示。
+- `WebContent/student/documents.jsp:81-91`：显示当前文档提交状态、分数和反馈。
+- `WebContent/student/documents.jsp:95-130`：学生文档上传表单使用 POST、`multipart/form-data`、隐藏 `docType`、文件字段 `file`，并按 `uploadOpen` 禁用输入和提交按钮。
+- `WebContent/student/documents.jsp:121-124`：当前附件下载链接使用 `download.action?path=...` 并对相对路径做 URL 编码。
+- `WebContent/student/documents.jsp:137-167`：历史版本列表和历史版本附件下载链接。
+- `WebContent/teacher/documents.jsp:6-14`：教师文档页读取 `docType/statusFilter/documents/typeNames`，缺失时重定向回 Controller。
+- `WebContent/teacher/documents.jsp:31-42`：教师阶段标签和 `submitted/reviewed/rejected/all` 状态筛选链接。
+- `WebContent/teacher/documents.jsp:48-63`：教师文档表格和“查看/审核”按钮。
+- `WebContent/teacher/documents.jsp:67-85`：教师审核 modal 表单，提交 `id/docType/action/score/feedback`。
+- `WebContent/teacher/documents.jsp:89-99`：前端脚本填充 modal，并且只有 `submitted` 状态显示审核按钮。
+- `WebContent/student/file-templates.jsp:13-20`：学生模板页读取模板列表、类型字典、分页和过滤条件，缺失时重定向回 Controller。
+- `WebContent/student/file-templates.jsp:33-37`：学生模板页按文档类型生成过滤链接。
+- `WebContent/student/file-templates.jsp:44-55`：学生模板列表展示模板信息并用 `file-template-download.action?id=...` 下载。
+- `WebContent/student/file-templates.jsp:60-64`：学生模板页复用分页组件。
+- `WebContent/teacher/file-templates.jsp:13-20`：教师模板页读取模板列表、类型字典、分页和过滤条件，缺失时重定向回 Controller。
+- `WebContent/teacher/file-templates.jsp:33-37`：教师模板页按文档类型生成过滤链接。
+- `WebContent/teacher/file-templates.jsp:44-55`：教师模板列表展示模板信息并用 `file-template-download.action?id=...` 下载。
+- `WebContent/teacher/file-templates.jsp:60-64`：教师模板页复用分页组件。
+- `WebContent/admin/file-templates.jsp:28-36`：管理员模板页根据 `msg` 参数生成上传、删除、校验失败等提示。
+- `WebContent/admin/file-templates.jsp:49-57`：管理员模板页生成类型过滤链接和“上传模板”按钮。
+- `WebContent/admin/file-templates.jsp:63-80`：管理员模板表格展示下载按钮和删除表单，删除提交 `action=delete&id=...`。
+- `WebContent/admin/file-templates.jsp:93-113`：管理员上传模板 modal，表单使用 POST、`multipart/form-data`、`action=upload` 和文件字段 `file`。
+- `src/controller/StudentDocumentController.java:29-31`：学生文档 Controller 映射 `/student/document.action` 并启用 `@MultipartConfig`。
+- `src/controller/StudentDocumentController.java:32-55`：学生 GET 文档页准备通过选题、当前文档、版本历史、`uploadOpen`、`uploadAccept` 并 forward 到 JSP。
+- `src/controller/StudentDocumentController.java:50-54`：按文档阶段读取上传开关和允许扩展名。
+- `src/controller/StudentDocumentController.java:58-76`：学生 POST 设置编码、校验已通过选题、校验 `docType`、校验上传开关。
+- `src/controller/StudentDocumentController.java:78-87`：学生 POST 校验阶段锁和状态锁。
+- `src/controller/StudentDocumentController.java:89-112`：构造 Document，读取 `request.getPart("file")`，保存到 `/uploads/用户ID` 并生成相对路径。
+- `src/controller/StudentDocumentController.java:114-125`：调用 `DocumentDao.submit`，失败清理刚上传文件，成功记录日志并重定向。
+- `src/controller/StudentDocumentController.java:128-140`：学生文档重定向、文档类型归一化和字典项读取。
+- `src/controller/StudentDocumentController.java:142-149`：删除刚上传但未成功入库的物理文件。
+- `src/controller/TeacherDocumentController.java:20-21`：教师文档 Controller 映射 `/teacher/document.action`。
+- `src/controller/TeacherDocumentController.java:22-38`：教师 GET 审核页读取阶段和状态，查询文档列表并 forward。
+- `src/controller/TeacherDocumentController.java:41-65`：教师 POST 审核入口，解析 action 和 score，并校验通过评分为 0-100。
+- `src/controller/TeacherDocumentController.java:67-84`：教师 POST 调用 DAO 审核，发送通知，记录日志并重定向。
 - `src/controller/TeacherDocumentController.java:87-100`：教师审核后的重定向和文档类型归一化。
-- `src/controller/DownloadController.java:19-20`：下载 Controller 映射 `/download.action`。
-- `src/controller/DownloadController.java:21-28`：下载请求必须有登录用户，否则跳转登录。
-- `src/controller/DownloadController.java:30-37`：校验 `path`，拒绝空路径和包含 `..` 的目录穿越路径，并去掉开头 `/`。
-- `src/controller/DownloadController.java:39-42`：下载前做角色权限校验。
-- `src/controller/DownloadController.java:44-51`：canonical path 限制目标文件必须在 uploads 下且真实存在。
-- `src/controller/DownloadController.java:53-65`：设置 `application/octet-stream`、`Content-Disposition`，并循环写出 bytes。
-- `src/controller/DownloadController.java:68-85`：管理员、教师、学生三类下载权限判断。
-- `src/dao/DocumentDao.java:15-20`：文档基础查询关联 users 和 topics。
-- `src/dao/DocumentDao.java:42-57`：教师按指导课题、文档类型、状态查询文档。
+- `src/controller/DownloadController.java:20-22`：学生文档附件下载 Controller 映射 `/download.action`。
+- `src/controller/DownloadController.java:24-29`：下载前必须存在登录用户，否则跳转登录。
+- `src/controller/DownloadController.java:31-38`：校验 `path`，拒绝空路径和包含 `..` 的路径，并去掉开头 `/`。
+- `src/controller/DownloadController.java:40-43`：下载前调用角色权限校验。
+- `src/controller/DownloadController.java:45-52`：canonical path 限定目标文件必须位于 `uploads` 目录下且真实存在。
+- `src/controller/DownloadController.java:54-66`：设置 `application/octet-stream`、`Content-Disposition`，并循环写出文件 bytes。
+- `src/controller/DownloadController.java:69-86`：管理员、教师、学生三类附件下载权限规则。
+- `src/controller/FileTemplateController.java:23-25`：模板 Controller 同时映射管理员、教师、学生模板 URL，并启用 `@MultipartConfig`。
+- `src/controller/FileTemplateController.java:26-51`：模板 GET 列表读取过滤和分页，查询模板和总数，并按 servlet path 选择 JSP。
+- `src/controller/FileTemplateController.java:54-71`：模板 POST 只允许管理员，并按 `action=upload|delete` 分发。
+- `src/controller/FileTemplateController.java:73-119`：管理员模板上传校验名称和文件，保存到 `/uploads/templates`，插入 `file_templates` 并记录日志。
+- `src/controller/FileTemplateController.java:121-145`：管理员模板删除按 id 查询记录、删除数据库记录、删除物理文件并记录日志。
+- `src/controller/FileTemplateController.java:147-163`：模板文档类型归一化、字符串 trim、删除物理文件时拒绝包含 `..` 的路径。
+- `src/controller/FileTemplateDownloadController.java:19-22`：模板下载 Controller 映射 `/file-template-download.action`。
+- `src/controller/FileTemplateDownloadController.java:23-28`：模板下载必须已登录，否则跳转登录。
+- `src/controller/FileTemplateDownloadController.java:30-36`：模板下载解析 `id`，非法 id 返回 400。
+- `src/controller/FileTemplateDownloadController.java:38-43`：按 id 查询模板，拒绝不存在、空路径或包含 `..` 的模板路径。
+- `src/controller/FileTemplateDownloadController.java:45-53`：canonical path 限定模板文件必须在 `uploads/templates` 下且真实存在。
+- `src/controller/FileTemplateDownloadController.java:55-62`：模板下载使用原始文件名设置 `Content-Disposition`。
+- `src/controller/FileTemplateDownloadController.java:63-71`：模板下载循环读取 4096 bytes 写入响应流。
+- `src/dao/DocumentDao.java:15-20`：文档基础查询关联 documents、users、topics。
+- `src/dao/DocumentDao.java:42-57`：教师按指导课题、文档类型和状态查询文档。
 - `src/dao/DocumentDao.java:95-110`：按 id 或学生加文档类型查询单个文档。
-- `src/dao/DocumentDao.java:112-117`：学生提交文档时开启事务。
-- `src/dao/DocumentDao.java:118-140`：事务内锁定已通过选题并检查前置阶段是否 reviewed。
-- `src/dao/DocumentDao.java:142-172`：锁定已有文档，非 rejected 时拒绝覆盖。
-- `src/dao/DocumentDao.java:173-195`：rejected 重交时保存旧版本并更新为 submitted；首次提交时插入 submitted。
-- `src/dao/DocumentDao.java:197-205`：提交、回滚和关闭连接。
-- `src/dao/DocumentDao.java:208-225`：教师 review/reject 的状态校验、分数校验、JOIN topics 权限更新。
-- `src/dao/DocumentDao.java:227-243`：阶段锁规则：proposal 无前置，midterm 依赖 proposal，final 依赖 midterm。
-- `src/dao/DocumentDao.java:256-270`：保存旧文档版本到 `document_versions`。
+- `src/dao/DocumentDao.java:112-117`：学生提交文档时开启数据库事务。
+- `src/dao/DocumentDao.java:118-140`：事务内锁定 approved 选题并检查前置阶段是否 reviewed。
+- `src/dao/DocumentDao.java:142-172`：锁定同阶段已有文档，非 `rejected` 时拒绝覆盖。
+- `src/dao/DocumentDao.java:173-195`：`rejected` 重交时保存旧版本并更新为 `submitted`，首次提交时插入 `submitted`。
+- `src/dao/DocumentDao.java:197-205`：提交事务，异常时回滚并关闭连接。
+- `src/dao/DocumentDao.java:208-225`：教师 review/reject 的状态校验、分数校验和 `JOIN topics` 权限更新。
+- `src/dao/DocumentDao.java:227-243`：阶段锁规则：`proposal` 无前置，`midterm` 依赖 `proposal`，`final` 依赖 `midterm`。
+- `src/dao/DocumentDao.java:256-270`：把旧文档内容保存到 `document_versions`。
 - `src/dao/DocumentDao.java:296-323`：数据库行映射到 Document 对象，包括 `filePath/status/score/feedback`。
 - `src/dao/DocumentVersionDao.java:10-20`：按文档查询历史版本并按版本号倒序。
-- `src/dao/DocumentVersionDao.java:22-30`：独立的历史版本保存方法。
+- `src/dao/DocumentVersionDao.java:22-30`：独立保存历史版本的方法。
 - `src/dao/DocumentVersionDao.java:32-42`：数据库行映射到 DocumentVersion。
-- `src/util/FileUploadUtil.java:13-20`：空文件和最大上传大小校验。
-- `src/util/FileUploadUtil.java:21-33`：解析原文件名、校验扩展名、创建目录、生成随机保存名并写文件。
-- `src/util/FileUploadUtil.java:36-51`：从 multipart `content-disposition` 解析 `filename` 并去掉路径。
+- `src/dao/FileTemplateDao.java:11-14`：模板基础查询关联 file_templates 和 users。
+- `src/dao/FileTemplateDao.java:20-35`：模板分页查询入口和总数统计入口。
+- `src/dao/FileTemplateDao.java:37-58`：模板查询按类型过滤、只取 `status=1`、排序并分页。
+- `src/dao/FileTemplateDao.java:60-68`：按 id 或 path 查询模板记录。
+- `src/dao/FileTemplateDao.java:70-77`：插入模板记录并写入文件路径、原始文件名、大小和上传人。
+- `src/dao/FileTemplateDao.java:79-86`：删除模板记录或更新模板状态。
+- `src/dao/FileTemplateDao.java:96-110`：数据库行映射到 FileTemplate 对象。
+- `src/util/FileUploadUtil.java:13-20`：上传文件为空或超过最大大小时拒绝。
+- `src/util/FileUploadUtil.java:21-33`：解析原文件名、校验扩展名、创建目录、生成随机保存名并写入磁盘。
+- `src/util/FileUploadUtil.java:36-51`：从 multipart `content-disposition` 中解析 `filename` 并剥离客户端路径。
 - `src/util/FileUploadUtil.java:54-60`：提取并小写化扩展名。
-- `src/util/FileUploadUtil.java:62-75`：允许扩展名与禁止扩展名校验。
+- `src/util/FileUploadUtil.java:62-75`：按允许扩展名和禁止扩展名配置校验文件类型。
 - `src/util/SystemConfigUtil.java:10-17`：从 `system_configs` 读取字符串配置。
 - `src/util/SystemConfigUtil.java:28-35`：读取 long 类型配置，例如上传大小。
 - `src/util/SystemConfigUtil.java:37-47`：读取 CSV 配置并转成小写集合。
-- `src/dbutil/SQLHelper.java:16-28`：Druid 数据源初始化。
+- `src/util/SystemConfigUtil.java:49-57`：读取布尔开关配置并支持默认值。
+- `src/util/SystemConfigUtil.java:64-80`：更新、插入或补齐系统配置。
+- `src/util/SystemSwitchUtil.java:6-13`：定义选题和三类文档上传开关 key。
+- `src/util/SystemSwitchUtil.java:14-21`：系统开关展示名称定义。
+- `src/util/SystemSwitchUtil.java:42-54`：读取开关状态并把 `docType` 映射到上传开关 key。
+- `src/util/SystemSwitchUtil.java:56-74`：更新开关并补齐默认开关配置。
+- `src/dbutil/SQLHelper.java:16-28`：初始化 Druid 数据源。
 - `src/dbutil/SQLHelper.java:30-46`：从 `jdbc.properties` 加载数据库连接配置。
 - `src/dbutil/SQLHelper.java:48-50`：获取数据库连接。
-- `src/dbutil/SQLHelper.java:52-77`：查询列表并映射为 `Object[]`。
+- `src/dbutil/SQLHelper.java:52-77`：执行列表查询并映射为 `Object[]`。
 - `src/dbutil/SQLHelper.java:79-94`：执行更新 SQL。
 - `src/dbutil/SQLHelper.java:96-115`：执行标量查询。
 - `src/dbutil/SQLHelper.java:117-137`：执行插入并返回自增主键。
