@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import bean.DefenseSchedule;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 import util.DateUtil;
 
 public class DefenseScheduleDao {

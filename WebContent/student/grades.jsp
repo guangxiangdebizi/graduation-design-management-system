@@ -1,16 +1,17 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.DictionaryUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
-  request.setAttribute("pageTitle", "我的成绩");
+  if (request.getAttribute("pageTitle") == null) request.setAttribute("pageTitle", "我的成绩");
   User loginUser = (User) session.getAttribute("loginUser");
-  DocumentDao docDao = new DocumentDao();
-  DefenseScheduleDao defDao = new DefenseScheduleDao();
-  List<Document> docs = docDao.findByStudent(loginUser.getId());
-  DefenseSchedule defense = defDao.findByStudent(loginUser.getId());
+  List<Document> docs = (List<Document>) request.getAttribute("docs");
+  DefenseSchedule defense = (DefenseSchedule) request.getAttribute("defense");
+  java.util.Map<String,String> typeNames = (java.util.Map<String,String>) request.getAttribute("typeNames");
+  java.util.Map<String, Document> docMap = (java.util.Map<String, Document>) request.getAttribute("docMap");
+  if (docs == null || typeNames == null || docMap == null) {
+    response.sendRedirect(request.getContextPath() + "/student/grades.action");
+    return;
+  }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-  java.util.Map<String,String> typeNames = DictionaryUtil.items("document_type");
-  java.util.Map<String, Document> docMap = new java.util.HashMap<String, Document>();
-  for (Document d : docs) { docMap.put(d.getDocType(), d); }
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <div class="app-layout">
@@ -37,7 +38,7 @@
     <div class="empty-state"><div class="icon">&#128200;</div><p>暂无成绩记录，请先提交文档</p></div>
   <% } else { %>
     <table class="table-modern">
-      <tr><th>阶段</th><th>标题</th><th>提交时间</th><th>状态</th><th>分数</th><th>教师反馈</th></tr>
+      <tr><th>阶段</th><th>标题</th><th>提交时间</th><th>状态</th><th>分数</th><th>教师反馈</th><th>自评意见</th><th>互评意见</th></tr>
       <% for (Document d : docs) { %>
       <tr>
         <td><%= typeNames.get(d.getDocType()) %></td>
@@ -46,6 +47,8 @@
         <td><% request.setAttribute("status", d.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %></td>
         <td><% if (d.getScore()!=null) { %><%= d.getScore() %> 分<% } else { %><span class="text-muted">待评分</span><% } %></td>
         <td><%= d.getFeedback()==null?"—":EscapeUtil.html(d.getFeedback()) %></td>
+        <td><%= d.getSelfReview()==null?"—":EscapeUtil.html(d.getSelfReview()) %></td>
+        <td><%= d.getPeerReview()==null?"—":EscapeUtil.html(d.getPeerReview()) %></td>
       </tr>
       <% } %>
       <% if (defense != null) { %>
@@ -56,6 +59,8 @@
         <td><span class="badge-status badge-reviewed">已安排</span></td>
         <td><% if (defense.getScore()!=null) { %><%= defense.getScore() %> 分<% } else { %><span class="text-muted">待评定</span><% } %></td>
         <td><%= defense.getComment()==null?"—":EscapeUtil.html(defense.getComment()) %></td>
+        <td>—</td>
+        <td>—</td>
       </tr>
       <% } %>
     </table>

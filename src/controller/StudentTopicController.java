@@ -77,7 +77,7 @@ public class StudentTopicController extends HttpServlet {
             }
             OperationLogUtil.log(user.getId(), "APPLY", "topic_selection",
                 "申请选题 topicId=" + topicId);
-            WebUtil.redirect(request, response, "/student/my-selection.jsp?msg=apply_ok");
+            WebUtil.redirect(request, response, "/student/my-selection.action?msg=apply_ok");
         } else {
             WebUtil.redirect(request, response, "/student/topic.action");
         }

@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 
 public class SystemConfigUtil {
     public static String getString(String key, String defaultValue) {

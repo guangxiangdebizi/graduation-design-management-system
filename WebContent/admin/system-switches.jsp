@@ -27,6 +27,10 @@
         <td><input class="form-check-input" type="checkbox" name="switch.selection" <%= "1".equals(switches.get("switch.selection"))?"checked":"" %>></td>
       </tr>
       <tr>
+        <td>第二轮选题</td><td>开启后学生新提交的选题申请记为第二轮，用于第一轮确认后再次开放选题；关闭则回到第一轮</td>
+        <td><input class="form-check-input" type="checkbox" name="switch.selection_round2" <%= "1".equals(switches.get("switch.selection_round2"))?"checked":"" %>></td>
+      </tr>
+      <tr>
         <td>开题报告上传</td><td>控制学生开题报告提交</td>
         <td><input class="form-check-input" type="checkbox" name="switch.upload_proposal" <%= "1".equals(switches.get("switch.upload_proposal"))?"checked":"" %>></td>
       </tr>

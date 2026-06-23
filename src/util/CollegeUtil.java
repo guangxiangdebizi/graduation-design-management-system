@@ -15,7 +15,7 @@ public class CollegeUtil {
 
     public static Map<String, String> getColleges() {
         Map<String, String> map = new LinkedHashMap<String, String>();
-        java.util.List<Object[]> rows = dbutil.SQLHelper.queryList(
+        java.util.List<Object[]> rows = SQLHelper.queryList(
             "SELECT code,name FROM colleges WHERE status=1 ORDER BY sort_order,code");
         for (Object[] row : rows) {
             map.put((String) row[0], (String) row[1]);
@@ -36,7 +36,7 @@ public class CollegeUtil {
         if (code == null || code.trim().isEmpty()) {
             return "";
         }
-        Object val = dbutil.SQLHelper.queryScalar(
+        Object val = SQLHelper.queryScalar(
             "SELECT name FROM colleges WHERE code=? AND status=1", code);
         return val == null ? code : String.valueOf(val);
     }
@@ -56,7 +56,7 @@ public class CollegeUtil {
         if (collegeCode == null || collegeCode.trim().isEmpty()) {
             return map;
         }
-        java.util.List<Object[]> rows = dbutil.SQLHelper.queryList(
+        java.util.List<Object[]> rows = SQLHelper.queryList(
             "SELECT major_code,major_name FROM majors "
             + "WHERE college_code=? AND status=1 ORDER BY sort_order,id",
             collegeCode);

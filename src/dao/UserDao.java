@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Set;
 import bean.User;
 import bean.UserSearchCriteria;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 import util.PasswordUtil;
 import util.DateUtil;
 import util.PageUtil;

@@ -14,7 +14,7 @@
     <div style="font-size:4rem;line-height:1">500</div>
     <h1 class="h4 mt-2">服务器内部错误</h1>
     <p class="text-muted">系统暂时无法处理您的请求，请稍后重试</p>
-    <a href="<%= request.getContextPath() %>/dashboard.jsp" class="btn btn-primary btn-sm">返回首页</a>
+    <a href="<%= request.getContextPath() %>/dashboard.action" class="btn btn-primary btn-sm">返回首页</a>
     <a href="javascript:location.reload()" class="btn btn-outline-secondary btn-sm ms-2">重新加载</a>
   </div>
 </div>

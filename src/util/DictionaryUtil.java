@@ -3,7 +3,7 @@ package util;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 
 public class DictionaryUtil {
     public static Map<String, String> items(String dictType) {

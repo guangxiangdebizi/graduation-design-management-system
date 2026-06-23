@@ -11,6 +11,7 @@ public class TopicSelection {
     private String topicTitle;
     private String teacherName;
     private String status;
+    private int round = 1;
     private String applyReason;
     private String reviewComment;
     private Date applyTime;
@@ -32,6 +33,8 @@ public class TopicSelection {
     public void setTeacherName(String teacherName) { this.teacherName = teacherName; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public int getRound() { return round; }
+    public void setRound(int round) { this.round = round; }
     public String getApplyReason() { return applyReason; }
     public void setApplyReason(String applyReason) { this.applyReason = applyReason; }
     public String getReviewComment() { return reviewComment; }

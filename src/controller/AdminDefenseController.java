@@ -2,6 +2,8 @@ package controller;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import javax.servlet.ServletException;
@@ -24,6 +26,30 @@ import util.WebUtil;
 public class AdminDefenseController extends HttpServlet {
     private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm");
 
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        DefenseScheduleDao dao = new DefenseScheduleDao();
+        UserDao userDao = new UserDao();
+        SelectionDao selectionDao = new SelectionDao();
+        DocumentDao documentDao = new DocumentDao();
+        List<User> approvedStudents = new ArrayList<User>();
+        for (User student : userDao.findAll("student")) {
+            Document finalDoc = documentDao.findByStudentAndType(student.getId(), "final");
+            if (selectionDao.findApprovedByStudent(student.getId()) != null
+                    && finalDoc != null && "reviewed".equals(finalDoc.getStatus())) {
+                approvedStudents.add(student);
+            }
+        }
+
+        request.setAttribute("pageTitle", "答辩安排");
+        request.setAttribute("schedules", dao.findAll());
+        request.setAttribute("approvedStudents", approvedStudents);
+        request.setAttribute("msg", request.getParameter("msg"));
+        request.setAttribute("importSuccess", parseInt(request.getParameter("success"), 0));
+        request.setAttribute("importSkipped", parseInt(request.getParameter("skipped"), 0));
+        request.getRequestDispatcher("/admin/defenses.jsp").forward(request, response);
+    }
+
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         request.setCharacterEncoding("UTF-8");
@@ -34,47 +60,47 @@ public class AdminDefenseController extends HttpServlet {
         if ("add".equals(action)) {
             DefenseSchedule ds = buildSchedule(request);
             if (!isEligible(ds)) {
-                WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=defense_ineligible");
+                WebUtil.redirect(request, response, "/admin/defense.action?msg=defense_ineligible");
                 return;
             }
             if (dao.existsByStudent(ds.getStudentId())) {
-                WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=exists");
+                WebUtil.redirect(request, response, "/admin/defense.action?msg=exists");
                 return;
             }
             if (dao.insert(ds) <= 0) {
-                WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=error");
+                WebUtil.redirect(request, response, "/admin/defense.action?msg=error");
                 return;
             }
             MessageNotifyUtil.send(ds.getStudentId(), "答辩安排通知",
                 "您的答辩已安排，时间: " + ds.getDefenseTime() + "，地点: " + ds.getRoom());
             OperationLogUtil.log(user.getId(), "ADD", "defense_schedule",
                 "安排答辩: studentId=" + ds.getStudentId());
-            WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=add_ok");
+            WebUtil.redirect(request, response, "/admin/defense.action?msg=add_ok");
         } else if ("edit".equals(action)) {
             DefenseSchedule ds = buildSchedule(request);
             ds.setId(Integer.parseInt(request.getParameter("id")));
             if (!isEligible(ds) || dao.existsByStudentExceptId(ds.getStudentId(), ds.getId())) {
-                WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=defense_ineligible");
+                WebUtil.redirect(request, response, "/admin/defense.action?msg=defense_ineligible");
                 return;
             }
             if (dao.update(ds) <= 0) {
-                WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=error");
+                WebUtil.redirect(request, response, "/admin/defense.action?msg=error");
                 return;
             }
             OperationLogUtil.log(user.getId(), "UPDATE", "defense_schedule",
                 "更新答辩安排 id=" + ds.getId());
-            WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=edit_ok");
+            WebUtil.redirect(request, response, "/admin/defense.action?msg=edit_ok");
         } else if ("delete".equals(action)) {
             int id = Integer.parseInt(request.getParameter("id"));
             if (dao.delete(id) <= 0) {
-                WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=error");
+                WebUtil.redirect(request, response, "/admin/defense.action?msg=error");
                 return;
             }
             OperationLogUtil.log(user.getId(), "DELETE", "defense_schedule",
                 "删除答辩安排 id=" + id);
-            WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=delete_ok");
+            WebUtil.redirect(request, response, "/admin/defense.action?msg=delete_ok");
         } else {
-            WebUtil.redirect(request, response, "/admin/defenses.jsp");
+            WebUtil.redirect(request, response, "/admin/defense.action");
         }
     }
 
@@ -113,5 +139,16 @@ public class AdminDefenseController extends HttpServlet {
         }
         Document finalDoc = new DocumentDao().findByStudentAndType(student.getId(), "final");
         return finalDoc != null && "reviewed".equals(finalDoc.getStatus());
+    }
+
+    private int parseInt(String value, int defaultValue) {
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
     }
 }

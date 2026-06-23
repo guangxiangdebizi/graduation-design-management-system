@@ -3,7 +3,7 @@ package dao;
 import java.util.ArrayList;
 import java.util.List;
 import bean.Message;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 import util.DateUtil;
 import util.PageUtil;
 

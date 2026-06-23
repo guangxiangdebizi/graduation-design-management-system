@@ -10,11 +10,21 @@ import javax.servlet.http.HttpSession;
 import bean.Announcement;
 import bean.User;
 import dao.AnnouncementDao;
+import util.CollegeUtil;
 import util.OperationLogUtil;
 import util.WebUtil;
 
 @WebServlet("/admin/announcement.action")
 public class AdminAnnouncementController extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        request.setAttribute("pageTitle", "公告管理");
+        request.setAttribute("announcements", new AnnouncementDao().findAll());
+        request.setAttribute("collegeOptions", CollegeUtil.getColleges());
+        request.setAttribute("majorGroups", CollegeUtil.getMajorGroups());
+        request.getRequestDispatcher("/admin/announcements.jsp").forward(request, response);
+    }
+
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         request.setCharacterEncoding("UTF-8");
@@ -32,7 +42,7 @@ public class AdminAnnouncementController extends HttpServlet {
             applyScope(a, request);
             dao.insert(a);
             OperationLogUtil.log(user.getId(), "ADD", "announcement", "发布公告: " + a.getTitle());
-            WebUtil.redirect(request, response, "/admin/announcements.jsp?msg=add_ok");
+            WebUtil.redirect(request, response, "/admin/announcement.action?msg=add_ok");
         } else if ("edit".equals(action)) {
             Announcement a = new Announcement();
             a.setId(Integer.parseInt(request.getParameter("id")));
@@ -42,14 +52,14 @@ public class AdminAnnouncementController extends HttpServlet {
             applyScope(a, request);
             dao.update(a);
             OperationLogUtil.log(user.getId(), "UPDATE", "announcement", "编辑公告 id=" + a.getId());
-            WebUtil.redirect(request, response, "/admin/announcements.jsp?msg=edit_ok");
+            WebUtil.redirect(request, response, "/admin/announcement.action?msg=edit_ok");
         } else if ("delete".equals(action)) {
             int id = Integer.parseInt(request.getParameter("id"));
             dao.delete(id);
             OperationLogUtil.log(user.getId(), "DELETE", "announcement", "删除公告 id=" + id);
-            WebUtil.redirect(request, response, "/admin/announcements.jsp?msg=delete_ok");
+            WebUtil.redirect(request, response, "/admin/announcement.action?msg=delete_ok");
         } else {
-            WebUtil.redirect(request, response, "/admin/announcements.jsp");
+            WebUtil.redirect(request, response, "/admin/announcement.action");
         }
     }
 

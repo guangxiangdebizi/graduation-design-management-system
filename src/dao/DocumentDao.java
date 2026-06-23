@@ -7,14 +7,15 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import bean.Document;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 import util.DateUtil;
 import util.PageUtil;
 
 public class DocumentDao {
     private static final String BASE_SQL =
         "SELECT d.id,d.student_id,d.topic_id,d.doc_type,d.title,d.content,d.file_path,d.status,d.score,"
-        + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title "
+        + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title,"
+        + "d.self_review,d.peer_review "
         + "FROM documents d "
         + "JOIN users u ON d.student_id=u.id "
         + "JOIN topics t ON d.topic_id=t.id ";
@@ -173,7 +174,8 @@ public class DocumentDao {
                 saveVersion(conn, existingId, oldTitle, oldContent, oldFilePath);
                 try (PreparedStatement ps = conn.prepareStatement(
                         "UPDATE documents SET title=?,content=?,file_path=?,status='submitted',"
-                        + "score=NULL,feedback=NULL,review_time=NULL,reviewer_id=NULL,submit_time=NOW() "
+                        + "score=NULL,feedback=NULL,self_review=NULL,peer_review=NULL,"
+                        + "review_time=NULL,reviewer_id=NULL,submit_time=NOW() "
                         + "WHERE id=? AND status='rejected'")) {
                     ps.setString(1, doc.getTitle());
                     ps.setString(2, doc.getContent());
@@ -205,7 +207,8 @@ public class DocumentDao {
         }
     }
 
-    public int review(int id, int teacherId, String status, BigDecimal score, String feedback) {
+    public int review(int id, int teacherId, String status, BigDecimal score, String feedback,
+            String selfReview, String peerReview) {
         if (!"reviewed".equals(status) && !"rejected".equals(status)) {
             return 0;
         }
@@ -216,12 +219,15 @@ public class DocumentDao {
         }
         if ("rejected".equals(status)) {
             score = null;
+            selfReview = null;
+            peerReview = null;
         }
         return SQLHelper.executeUpdate(
             "UPDATE documents d JOIN topics t ON d.topic_id=t.id "
-            + "SET d.status=?,d.score=?,d.feedback=?,d.review_time=NOW(),d.reviewer_id=? "
+            + "SET d.status=?,d.score=?,d.feedback=?,d.self_review=?,d.peer_review=?,"
+            + "d.review_time=NOW(),d.reviewer_id=? "
             + "WHERE d.id=? AND d.status='submitted' AND t.teacher_id=?",
-            status, score, feedback, teacherId, id, teacherId);
+            status, score, feedback, selfReview, peerReview, teacherId, id, teacherId);
     }
 
     public boolean isStageAvailable(int studentId, String docType) {
@@ -319,6 +325,8 @@ public class DocumentDao {
         d.setStudentName((String) row[13]);
         d.setStudentNo((String) row[14]);
         d.setTopicTitle((String) row[15]);
+        d.setSelfReview(row.length > 16 ? (String) row[16] : null);
+        d.setPeerReview(row.length > 17 ? (String) row[17] : null);
         return d;
     }
 }

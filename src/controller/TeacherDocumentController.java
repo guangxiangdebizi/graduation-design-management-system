@@ -65,8 +65,10 @@ public class TeacherDocumentController extends HttpServlet {
             }
 
             String feedback = request.getParameter("feedback");
+            String selfReview = request.getParameter("selfReview");
+            String peerReview = request.getParameter("peerReview");
             Document document = dao.findById(id);
-            int result = dao.review(id, user.getId(), status, score, feedback);
+            int result = dao.review(id, user.getId(), status, score, feedback, selfReview, peerReview);
             if (result <= 0 || document == null) {
                 redirectToList(request, response, "error");
                 return;

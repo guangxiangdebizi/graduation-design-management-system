@@ -37,13 +37,14 @@
     <span class="text-muted small">选题系统关闭后，系主任可在这里确认本轮匹配结果。</span>
   </div>
   <table class="table-modern">
-    <tr><th>学生</th><th>学号</th><th>申请题目</th><th>指导教师</th><th>申请理由</th><th>状态/意见</th><th>操作</th></tr>
+    <tr><th>学生</th><th>学号</th><th>轮次</th><th>申请题目</th><th>指导教师</th><th>申请理由</th><th>状态/意见</th><th>操作</th></tr>
     <% if (selections.isEmpty()) { %>
-      <tr><td colspan="7" class="text-center text-muted py-4">暂无本专业选题申请</td></tr>
+      <tr><td colspan="8" class="text-center text-muted py-4">暂无本专业选题申请</td></tr>
     <% } else { for (TopicSelection s : selections) { %>
       <tr>
         <td><%= EscapeUtil.html(s.getStudentName()) %></td>
         <td><%= EscapeUtil.html(s.getStudentNo()) %></td>
+        <td><span class="badge bg-secondary">第<%= s.getRound() %>轮</span></td>
         <td><%= EscapeUtil.html(s.getTopicTitle()) %><br><span class="text-muted small"><%= s.getApplyTime()==null?"":sdf.format(s.getApplyTime()) %></span></td>
         <td><%= EscapeUtil.html(s.getTeacherName()) %></td>
         <td><%= EscapeUtil.html(s.getApplyReason()) %></td>

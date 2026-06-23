@@ -56,7 +56,7 @@
         <td><% request.setAttribute("status", d.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %></td>
         <td><%= d.getScore()!=null?d.getScore():"—" %></td>
         <td>
-          <button class="btn btn-sm btn-outline-primary" onclick="viewDoc(<%= d.getId() %>,'<%= d.getStudentName() %>','<%= d.getTitle().replace("'","\\'") %>','<%= d.getContent()==null?"":d.getContent().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getFilePath()==null?"":d.getFilePath() %>','<%= d.getStatus() %>','<%= d.getScore()!=null?d.getScore():"" %>','<%= d.getFeedback()==null?"":d.getFeedback().replace("'","\\'").replace("\n","\\n").replace("\r","") %>')">查看/审核</button>
+          <button class="btn btn-sm btn-outline-primary" onclick="viewDoc(<%= d.getId() %>,'<%= d.getStudentName() %>','<%= d.getTitle().replace("'","\\'") %>','<%= d.getContent()==null?"":d.getContent().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getFilePath()==null?"":d.getFilePath() %>','<%= d.getStatus() %>','<%= d.getScore()!=null?d.getScore():"" %>','<%= d.getFeedback()==null?"":d.getFeedback().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getSelfReview()==null?"":d.getSelfReview().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getPeerReview()==null?"":d.getPeerReview().replace("'","\\'").replace("\n","\\n").replace("\r","") %>')">查看/审核</button>
         </td>
       </tr>
       <% } %>
@@ -77,6 +77,10 @@
           <div class="col-4"><label class="form-label">分数 (0-100)</label><input name="score" id="docScore" type="number" min="0" max="100" step="0.5" class="form-control form-control-sm" oninput="validateScore(this)"></div>
           <div class="col-8"><label class="form-label">反馈意见</label><textarea name="feedback" id="docFeedback" class="form-control form-control-sm" rows="2"></textarea></div>
         </div>
+        <div class="row g-2 mt-1">
+          <div class="col-6"><label class="form-label">自评意见</label><textarea name="selfReview" id="docSelfReview" class="form-control form-control-sm" rows="2" placeholder="指导教师自评意见"></textarea></div>
+          <div class="col-6"><label class="form-label">互评意见</label><textarea name="peerReview" id="docPeerReview" class="form-control form-control-sm" rows="2" placeholder="评阅（互评）教师意见"></textarea></div>
+        </div>
       </div>
       <div class="modal-footer" id="docActions">
         <button type="submit" name="action" value="review" class="btn btn-success btn-sm">通过并评分</button>
@@ -87,13 +91,15 @@
 </div>
 
 <script>
-function viewDoc(id,student,title,content,file,status,score,feedback) {
+function viewDoc(id,student,title,content,file,status,score,feedback,selfReview,peerReview) {
   document.getElementById('docId').value = id;
   document.getElementById('docTitle').textContent = student + ' - ' + title;
   document.getElementById('docContent').textContent = content || '无内容';
   document.getElementById('docFile').textContent = file || '无附件';
   document.getElementById('docScore').value = score;
   document.getElementById('docFeedback').value = feedback;
+  document.getElementById('docSelfReview').value = selfReview || '';
+  document.getElementById('docPeerReview').value = peerReview || '';
   document.getElementById('docActions').style.display = (status === 'submitted') ? 'flex' : 'none';
   new bootstrap.Modal(document.getElementById('docModal')).show();
 }

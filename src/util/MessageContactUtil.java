@@ -5,7 +5,7 @@ import java.util.List;
 import bean.User;
 import bean.UserSearchCriteria;
 import dao.UserDao;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 
 public class MessageContactUtil {
     public static List<User> contactsFor(User sender) {

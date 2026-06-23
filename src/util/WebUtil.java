@@ -12,7 +12,7 @@ public class WebUtil {
     public static void redirect(HttpServletRequest request, HttpServletResponse response, String path)
             throws IOException {
         if (path == null || path.isEmpty()) {
-            response.sendRedirect(ctx(request) + "/dashboard.jsp");
+            response.sendRedirect(ctx(request) + "/dashboard.action");
             return;
         }
         if (path.startsWith("http://") || path.startsWith("https://")) {

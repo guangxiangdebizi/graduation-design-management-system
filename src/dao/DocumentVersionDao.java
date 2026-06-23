@@ -3,7 +3,7 @@ package dao;
 import java.util.ArrayList;
 import java.util.List;
 import bean.DocumentVersion;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 import util.DateUtil;
 
 public class DocumentVersionDao {

@@ -14,6 +14,8 @@ public class Document {
     private String status;
     private BigDecimal score;
     private String feedback;
+    private String selfReview;
+    private String peerReview;
     private Date submitTime;
     private Date reviewTime;
     private Integer reviewerId;
@@ -41,6 +43,10 @@ public class Document {
     public void setScore(BigDecimal score) { this.score = score; }
     public String getFeedback() { return feedback; }
     public void setFeedback(String feedback) { this.feedback = feedback; }
+    public String getSelfReview() { return selfReview; }
+    public void setSelfReview(String selfReview) { this.selfReview = selfReview; }
+    public String getPeerReview() { return peerReview; }
+    public void setPeerReview(String peerReview) { this.peerReview = peerReview; }
     public Date getSubmitTime() { return submitTime; }
     public void setSubmitTime(Date submitTime) { this.submitTime = submitTime; }
     public Date getReviewTime() { return reviewTime; }

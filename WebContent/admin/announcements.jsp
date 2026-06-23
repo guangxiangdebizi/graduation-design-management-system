@@ -1,12 +1,15 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.CollegeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
-  request.setAttribute("pageTitle", "公告管理");
+  if (request.getAttribute("pageTitle") == null) request.setAttribute("pageTitle", "公告管理");
   User loginUser = (User) session.getAttribute("loginUser");
-  AnnouncementDao dao = new AnnouncementDao();
-  List<Announcement> list = dao.findAll();
-  Map<String, String> collegeOptions = CollegeUtil.getColleges();
-  Map<String, Map<String, String>> majorGroups = CollegeUtil.getMajorGroups();
+  List<Announcement> list = (List<Announcement>) request.getAttribute("announcements");
+  Map<String, String> collegeOptions = (Map<String, String>) request.getAttribute("collegeOptions");
+  Map<String, Map<String, String>> majorGroups = (Map<String, Map<String, String>>) request.getAttribute("majorGroups");
+  if (list == null || collegeOptions == null || majorGroups == null) {
+    response.sendRedirect(request.getContextPath() + "/admin/announcement.action");
+    return;
+  }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>

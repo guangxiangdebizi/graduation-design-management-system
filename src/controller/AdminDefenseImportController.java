@@ -49,7 +49,7 @@ public class AdminDefenseImportController extends HttpServlet {
 
         Part filePart = request.getPart("file");
         if (filePart == null || filePart.getSize() == 0) {
-            WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=import_empty");
+            WebUtil.redirect(request, response, "/admin/defense.action?msg=import_empty");
             return;
         }
 
@@ -95,14 +95,14 @@ public class AdminDefenseImportController extends HttpServlet {
                 success++;
             }
         } catch (Exception ex) {
-            WebUtil.redirect(request, response, "/admin/defenses.jsp?msg=import_error");
+            WebUtil.redirect(request, response, "/admin/defense.action?msg=import_error");
             return;
         }
 
         OperationLogUtil.log(user.getId(), "IMPORT", "defense_schedule",
             "批量导入答辩: 成功" + success + "条, 跳过" + skipped + "条");
         WebUtil.redirect(request, response,
-            "/admin/defenses.jsp?msg=import_ok&success=" + success + "&skipped=" + skipped);
+            "/admin/defense.action?msg=import_ok&success=" + success + "&skipped=" + skipped);
     }
 
     private String cellText(Cell cell, DataFormatter formatter) {

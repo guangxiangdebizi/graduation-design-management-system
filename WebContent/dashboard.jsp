@@ -1,10 +1,14 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.StatusUtil,util.ScopeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.StatusUtil" %>
 <%
   request.setAttribute("pageTitle", "仪表盘");
   User loginUser = (User) session.getAttribute("loginUser");
   String role = loginUser.getRole();
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+  if (request.getAttribute("announcements") == null && request.getAttribute("mySelections") == null) {
+    response.sendRedirect(request.getContextPath() + "/dashboard.action");
+    return;
+  }
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
 <div class="app-layout">
@@ -12,53 +16,16 @@
 
 <% if ("admin".equals(role) || "director".equals(role)) {
     boolean director = "director".equals(role);
-    UserScope directorScope = director ? ScopeUtil.directorScope(loginUser) : null;
-    if (director && directorScope == null) {
-      response.sendError(403, "director scope missing");
-      return;
-    }
-    UserDao userDao = new UserDao();
-    TopicDao topicDao = new TopicDao();
-    SelectionDao selDao = new SelectionDao();
-    AnnouncementDao annDao = new AnnouncementDao();
-    int teacherCount;
-    int studentCount;
-    int topicCount;
-    int selectedCount;
-    if (director) {
-      UserSearchCriteria teacherCriteria = new UserSearchCriteria();
-      teacherCriteria.setRole("teacher");
-      teacherCriteria.setCollege(directorScope.getCollege());
-      teacherCriteria.setMajor(directorScope.getMajor());
-      UserSearchCriteria studentCriteria = new UserSearchCriteria();
-      studentCriteria.setRole("student");
-      studentCriteria.setCollege(directorScope.getCollege());
-      studentCriteria.setMajor(directorScope.getMajor());
-      teacherCount = userDao.countAll(teacherCriteria);
-      studentCount = userDao.countAll(studentCriteria);
-      topicCount = topicDao.countByMajor(directorScope.getCollege(), directorScope.getMajor());
-      selectedCount = selDao.countApprovedStudents(directorScope.getCollege(), directorScope.getMajor());
-    } else {
-      teacherCount = userDao.countByRole("teacher");
-      studentCount = userDao.countByRole("student");
-      topicCount = topicDao.countAll();
-      selectedCount = selDao.countApprovedStudents();
-    }
-    List<Announcement> announcements = director
-      ? annDao.findVisible(directorScope.getCollege(), directorScope.getMajor())
-      : annDao.findAll();
-    int myTopics = 0;
-    int pendingSel = 0;
-    int pendingDirectorSel = 0;
-    int pendingDoc = 0;
-    List<TopicSelection> pendingList = new ArrayList<TopicSelection>();
-    if (director) {
-      myTopics = topicDao.findByTeacher(loginUser.getId()).size();
-      pendingSel = selDao.countPendingByTeacher(loginUser.getId());
-      pendingDirectorSel = selDao.countPendingByDirector(directorScope.getCollege(), directorScope.getMajor());
-      pendingDoc = new DocumentDao().countPendingByTeacher(loginUser.getId());
-      pendingList = selDao.findByTeacher(loginUser.getId(), "pending");
-    }
+    int teacherCount = ((Integer) request.getAttribute("teacherCount")).intValue();
+    int studentCount = ((Integer) request.getAttribute("studentCount")).intValue();
+    int topicCount = ((Integer) request.getAttribute("topicCount")).intValue();
+    int selectedCount = ((Integer) request.getAttribute("selectedCount")).intValue();
+    List<Announcement> announcements = (List<Announcement>) request.getAttribute("announcements");
+    int myTopics = ((Integer) request.getAttribute("myTopics")).intValue();
+    int pendingSel = ((Integer) request.getAttribute("pendingSel")).intValue();
+    int pendingDirectorSel = ((Integer) request.getAttribute("pendingDirectorSel")).intValue();
+    int pendingDoc = ((Integer) request.getAttribute("pendingDoc")).intValue();
+    List<TopicSelection> pendingList = (List<TopicSelection>) request.getAttribute("pendingList");
 %>
 <% if (director) { %>
 <div class="alert alert-info py-2">
@@ -94,7 +61,7 @@
       <a href="teacher/topic.action" class="btn btn-outline-primary btn-sm">我的课题</a>
       <a href="teacher/selection.action" class="btn btn-outline-primary btn-sm">选题建议</a>
       <a href="teacher/document.action" class="btn btn-outline-primary btn-sm">文档审核</a>
-      <a href="teacher/students.jsp" class="btn btn-outline-primary btn-sm">学生进度</a>
+      <a href="teacher/students.action" class="btn btn-outline-primary btn-sm">学生进度</a>
     </div>
   </div>
   <div class="stat-cards">
@@ -130,10 +97,10 @@
     <a href="director/statistics.jsp" class="btn btn-outline-primary btn-sm">本专业项目统计</a>
     <% } else { %>
     <a href="admin/statistics.jsp" class="btn btn-outline-primary btn-sm">ECharts 统计</a>
-    <a href="admin/announcements.jsp" class="btn btn-outline-primary btn-sm">公告管理</a>
-    <a href="admin/defenses.jsp" class="btn btn-outline-primary btn-sm">答辩安排</a>
-    <a href="admin/messages.jsp" class="btn btn-outline-primary btn-sm">站内消息</a>
-    <a href="admin/logs.jsp" class="btn btn-outline-primary btn-sm">操作日志</a>
+    <a href="admin/announcement.action" class="btn btn-outline-primary btn-sm">公告管理</a>
+    <a href="admin/defense.action" class="btn btn-outline-primary btn-sm">答辩安排</a>
+    <a href="admin/messages.action" class="btn btn-outline-primary btn-sm">站内消息</a>
+    <a href="admin/logs.action" class="btn btn-outline-primary btn-sm">操作日志</a>
     <% } %>
   </div>
 </div>
@@ -174,15 +141,11 @@
 </script>
 
 <% } else if ("teacher".equals(role)) {
-    TopicDao topicDao = new TopicDao();
-    SelectionDao selDao = new SelectionDao();
-    DocumentDao docDao = new DocumentDao();
-    AnnouncementDao annDao = new AnnouncementDao();
-    int myTopics = topicDao.findByTeacher(loginUser.getId()).size();
-    int pendingSel = selDao.countPendingByTeacher(loginUser.getId());
-    int pendingDoc = docDao.countPendingByTeacher(loginUser.getId());
-    List<TopicSelection> pendingList = selDao.findByTeacher(loginUser.getId(), "pending");
-    List<Announcement> announcements = annDao.findVisible(loginUser.getCollege(), loginUser.getMajor());
+    int myTopics = ((Integer) request.getAttribute("myTopics")).intValue();
+    int pendingSel = ((Integer) request.getAttribute("pendingSel")).intValue();
+    int pendingDoc = ((Integer) request.getAttribute("pendingDoc")).intValue();
+    List<TopicSelection> pendingList = (List<TopicSelection>) request.getAttribute("pendingList");
+    List<Announcement> announcements = (List<Announcement>) request.getAttribute("announcements");
 %>
 <div class="stat-cards">
   <div class="stat-card"><span class="icon">&#128221;</span><div class="label">我的课题</div><div class="value"><%= myTopics %></div></div>
@@ -225,26 +188,11 @@
 </div>
 
 <% } else {
-    SelectionDao selDao = new SelectionDao();
-    DocumentDao docDao = new DocumentDao();
-    AnnouncementDao annDao = new AnnouncementDao();
-    DefenseScheduleDao defDao = new DefenseScheduleDao();
-    TopicSelection approved = selDao.findApprovedByStudent(loginUser.getId());
-    List<TopicSelection> mySelections = selDao.findByStudent(loginUser.getId());
-    List<Document> myDocs = docDao.findByStudent(loginUser.getId());
-    List<Announcement> announcements = annDao.findVisible(loginUser.getCollege(), loginUser.getMajor());
-    DefenseSchedule defense = defDao.findByStudent(loginUser.getId());
-    String selectionStatusText = "未选题";
-    if (approved != null) {
-      selectionStatusText = "已通过";
-    } else if (!mySelections.isEmpty()) {
-      String latestStatus = mySelections.get(0).getStatus();
-      if ("pending".equals(latestStatus)) {
-        selectionStatusText = "待审核";
-      } else if ("rejected".equals(latestStatus)) {
-        selectionStatusText = "已驳回";
-      }
-    }
+    List<TopicSelection> mySelections = (List<TopicSelection>) request.getAttribute("mySelections");
+    List<Document> myDocs = (List<Document>) request.getAttribute("myDocs");
+    List<Announcement> announcements = (List<Announcement>) request.getAttribute("announcements");
+    DefenseSchedule defense = (DefenseSchedule) request.getAttribute("defense");
+    String selectionStatusText = (String) request.getAttribute("selectionStatusText");
     SimpleDateFormat defSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <div class="stat-cards">
@@ -284,7 +232,7 @@
           <tr><th>分组</th><td><%= defense.getGroupName()==null?"—":EscapeUtil.html(defense.getGroupName()) %></td></tr>
           <tr><th>成绩</th><td><%= defense.getScore()==null?"待评定":defense.getScore() %></td></tr>
         </table>
-        <a href="student/defense.jsp" class="btn btn-sm btn-outline-primary">查看详情</a>
+        <a href="student/defense.action" class="btn btn-sm btn-outline-primary">查看详情</a>
       <% } %>
     </div>
   </div>

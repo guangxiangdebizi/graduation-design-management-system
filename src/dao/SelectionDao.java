@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import bean.TopicSelection;
 import bean.User;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 import util.DateUtil;
 import util.PageUtil;
 import util.SystemSwitchUtil;
@@ -16,7 +16,7 @@ import util.SystemSwitchUtil;
 public class SelectionDao {
     private static final String SELECT_SQL =
         "SELECT s.id,s.student_id,s.topic_id,u.real_name,u.student_no,t.title,ut.real_name,s.status,"
-        + "s.apply_reason,s.review_comment,s.apply_time,s.review_time "
+        + "s.apply_reason,s.review_comment,s.apply_time,s.review_time,s.round "
         + "FROM topic_selections s "
         + "JOIN users u ON s.student_id=u.id "
         + "JOIN topics t ON s.topic_id=t.id "
@@ -146,11 +146,12 @@ public class SelectionDao {
 
             int id;
             try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO topic_selections(student_id,topic_id,status,apply_reason) "
-                    + "VALUES(?,?,'pending',?)", Statement.RETURN_GENERATED_KEYS)) {
+                    "INSERT INTO topic_selections(student_id,topic_id,status,round,apply_reason) "
+                    + "VALUES(?,?,'pending',?,?)", Statement.RETURN_GENERATED_KEYS)) {
                 ps.setInt(1, studentId);
                 ps.setInt(2, topicId);
-                ps.setString(3, reason);
+                ps.setInt(3, SystemSwitchUtil.currentRound());
+                ps.setString(4, reason);
                 ps.executeUpdate();
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     id = rs.next() ? rs.getInt(1) : 0;
@@ -345,11 +346,12 @@ public class SelectionDao {
 
             int inserted;
             try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO topic_selections(student_id,topic_id,status,apply_reason,review_comment,review_time) "
-                    + "VALUES(?,?,'approved','系主任手动分配',?,NOW())")) {
+                    "INSERT INTO topic_selections(student_id,topic_id,status,round,apply_reason,review_comment,review_time) "
+                    + "VALUES(?,?,'approved',?,'系主任手动分配',?,NOW())")) {
                 ps.setInt(1, studentId);
                 ps.setInt(2, topicId);
-                ps.setString(3, appendReviewComment(null, "系主任分配", comment));
+                ps.setInt(3, SystemSwitchUtil.currentRound());
+                ps.setString(4, appendReviewComment(null, "系主任分配", comment));
                 inserted = ps.executeUpdate();
             }
             if (inserted != 1) {
@@ -390,6 +392,7 @@ public class SelectionDao {
         s.setReviewComment((String) row[9]);
         s.setApplyTime(DateUtil.toDate(row[10]));
         s.setReviewTime(DateUtil.toDate(row[11]));
+        s.setRound(row[12] == null ? 1 : ((Number) row[12]).intValue());
         return s;
     }
 

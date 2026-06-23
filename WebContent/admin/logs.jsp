@@ -1,65 +1,35 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
 
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil,util.PageUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 
 <%
 
-  request.setAttribute("pageTitle", "操作日志");
+  if (request.getAttribute("pageTitle") == null) {
+    request.setAttribute("pageTitle", "操作日志");
+  }
 
   User loginUser = (User) session.getAttribute("loginUser");
 
-  OperationLogDao dao = new OperationLogDao();
-
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
+  Integer filterUserId = (Integer) request.getAttribute("filterUserId");
 
+  String filterAction = (String) request.getAttribute("filterAction");
 
-  int currentPageNum = PageUtil.getPage(request);
-  int pageSize = PageUtil.getPageSize(request);
+  String dateFrom = (String) request.getAttribute("dateFrom");
 
-  Integer filterUserId = null;
+  String dateTo = (String) request.getAttribute("dateTo");
 
-  try {
+  List<OperationLog> logs = (List<OperationLog>) request.getAttribute("logs");
 
-    String uid = request.getParameter("userId");
+  Integer totalObj = (Integer) request.getAttribute("total");
 
-    if (uid != null && uid.trim().length() > 0) filterUserId = Integer.parseInt(uid.trim());
+  int total = totalObj == null ? 0 : totalObj.intValue();
 
-  } catch (Exception ignored) {}
-
-  String filterAction = request.getParameter("action");
-
-  if (filterAction != null && filterAction.trim().isEmpty()) filterAction = null;
-
-  String dateFrom = request.getParameter("dateFrom");
-
-  if (dateFrom != null && dateFrom.trim().isEmpty()) dateFrom = null;
-
-  String dateTo = request.getParameter("dateTo");
-
-  if (dateTo != null && dateTo.trim().isEmpty()) dateTo = null;
-
-
-
-  List<OperationLog> logs = dao.findFiltered(filterUserId, filterAction, dateFrom, dateTo, currentPageNum, pageSize);
-
-  int total = dao.countFiltered(filterUserId, filterAction, dateFrom, dateTo);
-
-
-
-  StringBuilder baseUrl = new StringBuilder("logs.jsp?");
-
-  if (filterUserId != null) baseUrl.append("userId=").append(filterUserId).append("&");
-
-  if (filterAction != null) baseUrl.append("action=").append(filterAction).append("&");
-
-  if (dateFrom != null) baseUrl.append("dateFrom=").append(dateFrom).append("&");
-
-  if (dateTo != null) baseUrl.append("dateTo=").append(dateTo).append("&");
-
-  String pagBase = baseUrl.toString();
-
-  if (pagBase.endsWith("?") || pagBase.endsWith("&")) pagBase = pagBase.substring(0, pagBase.length() - 1);
+  if (logs == null) {
+    response.sendRedirect(request.getContextPath() + "/admin/logs.action");
+    return;
+  }
 
 %>
 
@@ -73,7 +43,7 @@
 
 <div class="content-card mb-3">
 
-  <form method="get" class="row g-2 align-items-end">
+  <form action="<%= request.getContextPath() %>/admin/logs.action" method="get" class="row g-2 align-items-end">
 
     <div class="col-md-2">
 
@@ -111,7 +81,7 @@
 
       <button type="submit" class="btn btn-primary btn-sm">筛选</button>
 
-      <a href="logs.jsp" class="btn btn-outline-secondary btn-sm">重置</a>
+      <a href="<%= request.getContextPath() %>/admin/logs.action" class="btn btn-outline-secondary btn-sm">重置</a>
 
     </div>
 
@@ -158,14 +128,6 @@
     <% }} %>
 
   </table>
-
-  <% request.setAttribute("baseUrl", pagBase);
-
-     request.setAttribute("page", currentPageNum);
-
-     request.setAttribute("pageSize", pageSize);
-
-     request.setAttribute("total", total); %>
 
   <%@ include file="/WEB-INF/includes/pagination.jsp" %>
 

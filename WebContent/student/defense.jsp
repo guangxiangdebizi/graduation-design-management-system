@@ -1,10 +1,13 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
+<%@ page import="bean.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
-  request.setAttribute("pageTitle", "我的答辩");
+  if (request.getAttribute("pageTitle") == null) request.setAttribute("pageTitle", "我的答辩");
   User loginUser = (User) session.getAttribute("loginUser");
-  DefenseScheduleDao dao = new DefenseScheduleDao();
-  DefenseSchedule schedule = dao.findByStudent(loginUser.getId());
+  DefenseSchedule schedule = (DefenseSchedule) request.getAttribute("schedule");
+  if (!Boolean.TRUE.equals(request.getAttribute("scheduleLoaded"))) {
+    response.sendRedirect(request.getContextPath() + "/student/defense.action");
+    return;
+  }
   SimpleDateFormat display = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>

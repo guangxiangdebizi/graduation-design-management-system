@@ -1,10 +1,13 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
-  request.setAttribute("pageTitle", "我的选题");
+  if (request.getAttribute("pageTitle") == null) request.setAttribute("pageTitle", "我的选题");
   User loginUser = (User) session.getAttribute("loginUser");
-  SelectionDao dao = new SelectionDao();
-  List<TopicSelection> list = dao.findByStudent(loginUser.getId());
+  List<TopicSelection> list = (List<TopicSelection>) request.getAttribute("selections");
+  if (list == null) {
+    response.sendRedirect(request.getContextPath() + "/student/my-selection.action");
+    return;
+  }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
