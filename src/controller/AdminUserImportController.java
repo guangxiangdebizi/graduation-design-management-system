@@ -80,6 +80,7 @@ public class AdminUserImportController extends HttpServlet {
                 String email = normalize(cellText(row.getCell(7), formatter));
                 String phone = normalize(cellText(row.getCell(8), formatter));
                 String password = normalize(cellText(row.getCell(9), formatter));
+                String title = normalize(cellText(row.getCell(10), formatter));
 
                 if (username == null) {
                     username = "student".equals(importRole) ? studentNo : null;
@@ -119,6 +120,7 @@ public class AdminUserImportController extends HttpServlet {
                 u.setPassword(password);
                 u.setRole(importRole);
                 u.setRealName(realName);
+                u.setTitle(title != null ? title : defaultTitle(importRole));
                 u.setStudentNo("student".equals(importRole) ? studentNo : null);
                 u.setCollege(college);
                 u.setMajor(major);
@@ -153,7 +155,7 @@ public class AdminUserImportController extends HttpServlet {
     }
 
     private boolean isEmptyRow(Row row, DataFormatter formatter) {
-        for (int i = 0; i <= 9; i++) {
+        for (int i = 0; i <= 10; i++) {
             if (normalize(cellText(row.getCell(i), formatter)) != null) {
                 return false;
             }
@@ -187,5 +189,15 @@ public class AdminUserImportController extends HttpServlet {
             return null;
         }
         return CollegeUtil.getCollegeName(college);
+    }
+
+    private String defaultTitle(String role) {
+        if ("student".equals(role)) {
+            return "学生";
+        }
+        if ("teacher".equals(role)) {
+            return "教师";
+        }
+        return null;
     }
 }

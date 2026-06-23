@@ -32,7 +32,7 @@
       </div>
       <form id="aiForm" class="ai-input-area" data-action="<%= aiAction %>">
         <textarea id="aiMessage" class="form-control" rows="3" maxlength="2000"
-          placeholder="请输入你的问题，例如：帮我检查当前流程有什么风险、生成一段公告、优化选题申请理由..."></textarea>
+          placeholder="请输入你的问题，例如：帮我检查当前流程有什么风险、生成一段公告、优化选题申请理由；也可以要求 AI 用 Mermaid 流程图输出。"></textarea>
         <div class="d-flex justify-content-between align-items-center mt-2">
           <div class="text-muted small">权限隔离：<%= EscapeUtil.html(aiRole) %> / userId=<%= aiUser.getId() %></div>
           <div>
@@ -54,6 +54,15 @@
       </div>
     </div>
     <div class="content-card">
+      <h5>图示输出</h5>
+      <p class="small text-muted mb-2">AI 回复中如果包含 Mermaid 代码块，前端会自动渲染成流程图、时序图或状态图。</p>
+      <pre class="ai-mermaid-sample"><code>```mermaid
+graph TD
+  A[提交问题] --> B[AI 分析]
+  B --> C[输出图示]
+```</code></pre>
+    </div>
+    <div class="content-card">
       <h5>隔离规则</h5>
       <ul class="small text-muted mb-0">
         <li>管理员、教师、学生分别访问各自路径和后端接口；系主任按教师角色继承教师端能力。</li>
@@ -70,3 +79,4 @@ window.GDMS_AI_CONFIG = {
   action: '<%= EscapeUtil.js(aiAction) %>'
 };
 </script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>

@@ -146,6 +146,15 @@ function initAiAssistant() {
   var action = form.getAttribute('data-action') || (window.GDMS_AI_CONFIG && window.GDMS_AI_CONFIG.action) || 'ai.action';
   var csrfMeta = document.querySelector('meta[name="csrf-token"]');
   var csrf = csrfMeta ? csrfMeta.getAttribute('content') : '';
+  var mermaidSeq = 0;
+
+  if (window.mermaid) {
+    window.mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'default'
+    });
+  }
 
   function appendMessage(role, text) {
     var wrap = document.createElement('div');
@@ -155,12 +164,87 @@ function initAiAssistant() {
     avatar.textContent = role === 'user' ? '我' : 'AI';
     var body = document.createElement('div');
     body.className = 'ai-msg-body';
-    body.textContent = text;
+    setPlainMessage(body, text);
     wrap.appendChild(avatar);
     wrap.appendChild(body);
     chatBox.appendChild(wrap);
     chatBox.scrollTop = chatBox.scrollHeight;
     return wrap;
+  }
+
+  function setPlainMessage(body, text) {
+    body.textContent = text || '';
+    body.dataset.rawText = text || '';
+  }
+
+  function appendPlainText(container, text) {
+    if (!text) return;
+    container.appendChild(document.createTextNode(text));
+  }
+
+  function renderAssistantMessage(body, text) {
+    body.dataset.rawText = text || '';
+    body.textContent = '';
+
+    var source = text || '';
+    var blockRegex = /```mermaid\s*([\s\S]*?)```/gi;
+    var lastIndex = 0;
+    var match;
+    var hasMermaid = false;
+
+    while ((match = blockRegex.exec(source)) !== null) {
+      appendPlainText(body, source.substring(lastIndex, match.index));
+      appendMermaidBlock(body, match[1]);
+      hasMermaid = true;
+      lastIndex = blockRegex.lastIndex;
+    }
+    appendPlainText(body, source.substring(lastIndex));
+
+    if (!hasMermaid) {
+      setPlainMessage(body, source);
+    }
+  }
+
+  function appendMermaidBlock(container, code) {
+    var normalized = (code || '').trim();
+    var block = document.createElement('div');
+    block.className = 'ai-mermaid-block';
+    var title = document.createElement('div');
+    title.className = 'ai-mermaid-title';
+    title.textContent = 'Mermaid 图示';
+    var canvas = document.createElement('div');
+    canvas.className = 'ai-mermaid-canvas';
+    var fallback = document.createElement('pre');
+    fallback.className = 'ai-mermaid-fallback';
+    fallback.textContent = normalized;
+    block.appendChild(title);
+    block.appendChild(canvas);
+    container.appendChild(block);
+
+    if (!normalized) {
+      canvas.textContent = 'Mermaid 内容为空。';
+      return;
+    }
+    if (!window.mermaid) {
+      block.appendChild(fallback);
+      canvas.textContent = 'Mermaid 脚本未加载，已保留源码。';
+      return;
+    }
+
+    var id = 'ai-mermaid-' + Date.now() + '-' + (++mermaidSeq);
+    window.mermaid.render(id, normalized).then(function(result) {
+      canvas.innerHTML = result.svg;
+      if (result.bindFunctions) {
+        result.bindFunctions(canvas);
+      }
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }).catch(function(err) {
+      canvas.textContent = 'Mermaid 渲染失败，已保留源码。';
+      block.appendChild(fallback);
+      if (window.console && console.warn) {
+        console.warn('Mermaid render failed:', err);
+      }
+    });
   }
 
   function postJson(data) {
@@ -282,20 +366,24 @@ function initAiAssistant() {
     var aiMessage = appendMessage('assistant', '');
     var aiBody = aiMessage.querySelector('.ai-msg-body');
     var received = false;
-    aiBody.textContent = '正在连接 AI...';
+    var fullReply = '';
+    setPlainMessage(aiBody, '正在连接 AI...');
     postAiStream(text, function(delta) {
       if (!received) {
-        aiBody.textContent = '';
+        setPlainMessage(aiBody, '');
         received = true;
       }
-      aiBody.textContent += delta;
+      fullReply += delta;
+      setPlainMessage(aiBody, fullReply);
       chatBox.scrollTop = chatBox.scrollHeight;
     }).then(function() {
       if (!received) {
-        aiBody.textContent = 'AI 没有返回内容。';
+        setPlainMessage(aiBody, 'AI 没有返回内容。');
+      } else {
+        renderAssistantMessage(aiBody, fullReply);
       }
     }).catch(function(err) {
-      aiBody.textContent = err.message || 'AI 服务调用失败。';
+      setPlainMessage(aiBody, err.message || 'AI 服务调用失败。');
     }).finally(function() {
       sendBtn.disabled = false;
       sendBtn.textContent = '发送';

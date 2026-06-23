@@ -15,6 +15,24 @@ password=VALUES(password), role=VALUES(role), real_name=VALUES(real_name), colle
 major=VALUES(major), class_name=VALUES(class_name), department=VALUES(department),
 email=VALUES(email), phone=VALUES(phone), status=VALUES(status);
 
+SET @has_user_title_role_seed := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'title'
+);
+SET @add_user_title_role_seed_sql := IF(
+    @has_user_title_role_seed = 0,
+    'ALTER TABLE users ADD COLUMN title VARCHAR(50) DEFAULT NULL COMMENT ''身份/职称，如教授、副教授、系主任、学生'' AFTER real_name',
+    'SELECT 1'
+);
+PREPARE add_user_title_role_seed_stmt FROM @add_user_title_role_seed_sql;
+EXECUTE add_user_title_role_seed_stmt;
+DEALLOCATE PREPARE add_user_title_role_seed_stmt;
+
+UPDATE users SET real_name='程安', title='审计管理员' WHERE username='admin_audit';
+UPDATE users SET real_name='叶舟', title='运维管理员' WHERE username='admin_ops';
+UPDATE users SET real_name='陆景行', title='系主任' WHERE username='director_ee_power';
+UPDATE users SET real_name='顾清宁', title='系主任' WHERE username='director_arts_history';
+
 -- 2. 教师账号：一个有完整流程数据，一个有待审核数据，一个完全空数据。
 INSERT INTO users(username, password, role, real_name, student_no, college, major, class_name, department, email, phone, status) VALUES
 ('teacher_test_cs', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '测试计算机教师', NULL, 'ai', 'cs', NULL, '人工智能学部', 'teacher_test_cs@school.edu', '13800000111', 1),
@@ -24,6 +42,10 @@ ON DUPLICATE KEY UPDATE
 password=VALUES(password), role=VALUES(role), real_name=VALUES(real_name), college=VALUES(college),
 major=VALUES(major), class_name=VALUES(class_name), department=VALUES(department),
 email=VALUES(email), phone=VALUES(phone), status=VALUES(status);
+
+UPDATE users SET real_name='陈若松', title='教师' WHERE username='teacher_test_cs';
+UPDATE users SET real_name='林知远', title='教师' WHERE username='teacher_test_ai';
+UPDATE users SET real_name='王安和', title='教师' WHERE username='teacher_empty_cs';
 
 -- 3. 学生账号：完整流程、待审核、无选题、驳回后空状态、跨专业空范围测试。
 INSERT INTO users(username, password, role, real_name, student_no, college, major, class_name, department, email, phone, status) VALUES

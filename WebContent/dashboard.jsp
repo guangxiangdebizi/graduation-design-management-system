@@ -121,9 +121,11 @@
     <a href="<%= director ? "director" : "admin" %>/export.action" class="btn btn-success btn-sm">导出成绩 Excel</a>
   </div>
   <div class="d-flex flex-wrap gap-2">
-    <a href="<%= director ? "director" : "admin" %>/topic-review.action" class="btn btn-outline-primary btn-sm"><%= director ? "本专业课题审核" : "课题审核" %></a>
-    <a href="<%= director ? "director" : "admin" %>/statistics.jsp" class="btn btn-outline-primary btn-sm"><%= director ? "本专业项目统计" : "ECharts 统计" %></a>
-    <% if (!director) { %>
+    <% if (director) { %>
+    <a href="director/topic-review.action" class="btn btn-outline-primary btn-sm">本专业课题审核</a>
+    <a href="director/statistics.jsp" class="btn btn-outline-primary btn-sm">本专业项目统计</a>
+    <% } else { %>
+    <a href="admin/statistics.jsp" class="btn btn-outline-primary btn-sm">ECharts 统计</a>
     <a href="admin/announcements.jsp" class="btn btn-outline-primary btn-sm">公告管理</a>
     <a href="admin/defenses.jsp" class="btn btn-outline-primary btn-sm">答辩安排</a>
     <a href="admin/messages.jsp" class="btn btn-outline-primary btn-sm">站内消息</a>

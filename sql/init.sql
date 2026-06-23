@@ -58,6 +58,7 @@ CREATE TABLE users (
     password VARCHAR(128) NOT NULL,
     role ENUM('admin','director','teacher','student') NOT NULL,
     real_name VARCHAR(50) NOT NULL,
+    title VARCHAR(50) DEFAULT NULL COMMENT '身份/职称，如教授、副教授、系主任、学生',
     student_no VARCHAR(20) DEFAULT NULL UNIQUE,
     college VARCHAR(50) DEFAULT NULL COMMENT '学院/学部代码',
     major VARCHAR(50) DEFAULT NULL COMMENT '专业代码',
@@ -280,23 +281,23 @@ INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('switch.upload_final', '1', '终稿上传开关');
 
 -- 密码: admin123 / 123456 (MD5)
-INSERT INTO users (username, password, role, real_name, student_no, college, major, class_name, department, email, phone) VALUES
-('admin', '0192023a7bbd73250516f069df18b500', 'admin', '系统管理员', NULL, NULL, NULL, NULL, '教务处', 'admin@school.edu', '13800000001'),
-('teacher01', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '张教授', NULL, 'ai', 'cs', NULL, '人工智能学部', 'zhang@school.edu', '13800000002'),
-('teacher02', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '李副教授', NULL, 'ee', 'ee', NULL, '电气工程学部', 'li@school.edu', '13800000003'),
-('student01', 'e10adc3949ba59abbe56e057f20f883e', 'student', '王小明', '2022001001', 'ai', 'cs', '计算机科学与技术2022级1班', '人工智能学部', 'wang@stu.edu', '13900000001'),
-('student02', 'e10adc3949ba59abbe56e057f20f883e', 'student', '刘小红', '2022001002', 'ai', 'se', '软件工程2022级1班', '人工智能学部', 'liu@stu.edu', '13900000002'),
-('student03', 'e10adc3949ba59abbe56e057f20f883e', 'student', '陈小刚', '2022001003', 'ai', 'se', '软件工程2022级2班', '人工智能学部', 'chen@stu.edu', '13900000003'),
-('student04', 'e10adc3949ba59abbe56e057f20f883e', 'student', '赵小芳', '2022001004', 'ee', 'ee', '电气工程及其自动化2022级1班', '电气工程学部', 'zhao@stu.edu', '13900000004'),
-('student05', 'e10adc3949ba59abbe56e057f20f883e', 'student', '孙小亮', '2022001005', 'ai', 'ai', '人工智能2022级1班', '人工智能学部', 'sun@stu.edu', '13900000005'),
-('student06', 'e10adc3949ba59abbe56e057f20f883e', 'student', '周小丽', '2022001006', 'ba', 'ba', '工商管理2022级1班', '经管学院', 'zhou@stu.edu', '13900000006'),
-('student07', 'e10adc3949ba59abbe56e057f20f883e', 'student', '吴小强', '2022001007', 'arts', 'chinese', '汉语言文学2022级1班', '文科学部', 'wu@stu.edu', '13900000007'),
-('student08', 'e10adc3949ba59abbe56e057f20f883e', 'student', '郑小华', '2022001008', 'mech_energy', 'mech', '机械设计制造及其自动化2022级1班', '能源与机械动力学院', 'zheng@stu.edu', '13900000008'),
-('director_ai_cs', 'e10adc3949ba59abbe56e057f20f883e', 'director', '计算机科学与技术系主任', NULL, 'ai', 'cs', NULL, '人工智能学部', 'director_ai_cs@school.edu', '13800000011'),
-('director_ai_se', 'e10adc3949ba59abbe56e057f20f883e', 'director', '软件工程系主任', NULL, 'ai', 'se', NULL, '人工智能学部', 'director_ai_se@school.edu', '13800000012'),
-('director_ai_ds', 'e10adc3949ba59abbe56e057f20f883e', 'director', '数据科学与大数据技术系主任', NULL, 'ai', 'ds', NULL, '人工智能学部', 'director_ai_ds@school.edu', '13800000013'),
-('director_ai_ai', 'e10adc3949ba59abbe56e057f20f883e', 'director', '人工智能系主任', NULL, 'ai', 'ai', NULL, '人工智能学部', 'director_ai_ai@school.edu', '13800000014'),
-('director01', 'e10adc3949ba59abbe56e057f20f883e', 'director', '人工智能学部系主任', NULL, 'ai', 'ai', NULL, '人工智能学部', 'director@school.edu', '13800000009');
+INSERT INTO users (username, password, role, real_name, title, student_no, college, major, class_name, department, email, phone) VALUES
+('admin', '0192023a7bbd73250516f069df18b500', 'admin', '沈明', '管理员', NULL, NULL, NULL, NULL, '教务处', 'admin@school.edu', '13800000001'),
+('teacher01', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '张建国', '教授', NULL, 'ai', 'cs', NULL, '人工智能学部', 'zhang@school.edu', '13800000002'),
+('teacher02', 'e10adc3949ba59abbe56e057f20f883e', 'teacher', '李明华', '副教授', NULL, 'ee', 'ee', NULL, '电气工程学部', 'li@school.edu', '13800000003'),
+('student01', 'e10adc3949ba59abbe56e057f20f883e', 'student', '王小明', '学生', '2022001001', 'ai', 'cs', '计算机科学与技术2022级1班', '人工智能学部', 'wang@stu.edu', '13900000001'),
+('student02', 'e10adc3949ba59abbe56e057f20f883e', 'student', '刘小红', '学生', '2022001002', 'ai', 'se', '软件工程2022级1班', '人工智能学部', 'liu@stu.edu', '13900000002'),
+('student03', 'e10adc3949ba59abbe56e057f20f883e', 'student', '陈小刚', '学生', '2022001003', 'ai', 'se', '软件工程2022级2班', '人工智能学部', 'chen@stu.edu', '13900000003'),
+('student04', 'e10adc3949ba59abbe56e057f20f883e', 'student', '赵小芳', '学生', '2022001004', 'ee', 'ee', '电气工程及其自动化2022级1班', '电气工程学部', 'zhao@stu.edu', '13900000004'),
+('student05', 'e10adc3949ba59abbe56e057f20f883e', 'student', '孙小亮', '学生', '2022001005', 'ai', 'ai', '人工智能2022级1班', '人工智能学部', 'sun@stu.edu', '13900000005'),
+('student06', 'e10adc3949ba59abbe56e057f20f883e', 'student', '周小丽', '学生', '2022001006', 'ba', 'ba', '工商管理2022级1班', '经管学院', 'zhou@stu.edu', '13900000006'),
+('student07', 'e10adc3949ba59abbe56e057f20f883e', 'student', '吴小强', '学生', '2022001007', 'arts', 'chinese', '汉语言文学2022级1班', '文科学部', 'wu@stu.edu', '13900000007'),
+('student08', 'e10adc3949ba59abbe56e057f20f883e', 'student', '郑小华', '学生', '2022001008', 'mech_energy', 'mech', '机械设计制造及其自动化2022级1班', '能源与机械动力学院', 'zheng@stu.edu', '13900000008'),
+('director_ai_cs', 'e10adc3949ba59abbe56e057f20f883e', 'director', '周启明', '系主任', NULL, 'ai', 'cs', NULL, '人工智能学部', 'director_ai_cs@school.edu', '13800000011'),
+('director_ai_se', 'e10adc3949ba59abbe56e057f20f883e', 'director', '宋嘉树', '系主任', NULL, 'ai', 'se', NULL, '人工智能学部', 'director_ai_se@school.edu', '13800000012'),
+('director_ai_ds', 'e10adc3949ba59abbe56e057f20f883e', 'director', '邵文澜', '系主任', NULL, 'ai', 'ds', NULL, '人工智能学部', 'director_ai_ds@school.edu', '13800000013'),
+('director_ai_ai', 'e10adc3949ba59abbe56e057f20f883e', 'director', '韩知远', '系主任', NULL, 'ai', 'ai', NULL, '人工智能学部', 'director_ai_ai@school.edu', '13800000014'),
+('director01', 'e10adc3949ba59abbe56e057f20f883e', 'director', '许明远', '系主任', NULL, 'ai', 'ai', NULL, '人工智能学部', 'director@school.edu', '13800000009');
 
 INSERT INTO topics (title, description, teacher_id, college, major, max_students, selected_count, status) VALUES
 ('基于JSP的毕业设计管理系统', '设计并实现一套完整的毕业设计全流程管理系统，包含选题、文档提交与审核等功能。', 2, 'ai', 'cs', 3, 1, 'open'),

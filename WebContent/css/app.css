@@ -366,6 +366,48 @@ body {
   background: #fff;
 }
 .ai-input-area textarea { resize: vertical; }
+.ai-mermaid-sample {
+  margin: 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+.ai-mermaid-block {
+  margin: 12px 0 4px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.ai-mermaid-title {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.ai-mermaid-canvas {
+  min-width: 260px;
+  text-align: center;
+}
+.ai-mermaid-canvas svg {
+  max-width: 100%;
+  height: auto;
+}
+.ai-mermaid-fallback {
+  margin: 8px 0 0;
+  padding: 10px;
+  background: #fff;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: left;
+}
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(20px); }

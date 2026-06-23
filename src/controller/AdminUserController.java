@@ -157,14 +157,34 @@ public class AdminUserController extends HttpServlet {
         u.setPassword(request.getParameter("password"));
         u.setRole(request.getParameter("role"));
         u.setRealName(request.getParameter("realName"));
-        u.setStudentNo(request.getParameter("studentNo"));
+        u.setTitle(resolveTitle(request.getParameter("title"), u.getRole()));
+        u.setStudentNo("student".equals(u.getRole()) ? request.getParameter("studentNo") : null);
         u.setCollege(request.getParameter("college"));
         u.setMajor(request.getParameter("major"));
-        u.setClassName(request.getParameter("className"));
+        u.setClassName("student".equals(u.getRole()) ? request.getParameter("className") : null);
         u.setDepartment(request.getParameter("department"));
         u.setEmail(request.getParameter("email"));
         u.setPhone(request.getParameter("phone"));
         return u;
+    }
+
+    private String resolveTitle(String title, String role) {
+        if (title != null && !title.trim().isEmpty()) {
+            return title.trim();
+        }
+        if ("admin".equals(role)) {
+            return "管理员";
+        }
+        if ("director".equals(role)) {
+            return "系主任";
+        }
+        if ("teacher".equals(role)) {
+            return "教师";
+        }
+        if ("student".equals(role)) {
+            return "学生";
+        }
+        return null;
     }
 
     private UserSearchCriteria buildCriteria(HttpServletRequest request) {

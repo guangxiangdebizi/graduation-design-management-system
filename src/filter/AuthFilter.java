@@ -63,6 +63,8 @@ public class AuthFilter implements Filter {
             response.sendRedirect(ctx + "/login.jsp?error=account_changed");
             return;
         }
+        session.setAttribute("loginUser", currentUser);
+        user = currentUser;
 
         if (path.startsWith("/admin/") && !"admin".equals(user.getRole())) {
             response.sendRedirect(ctx + "/dashboard.jsp");

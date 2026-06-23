@@ -150,7 +150,7 @@
     </div>
   </div>
   <table class="table-modern">
-    <tr><th><input type="checkbox" id="checkAllStudents" onclick="toggleStudentChecks(this)"></th><th>ID</th><th>用户名</th><th>姓名</th><th>角色</th><th>学院</th><th>专业</th><th>班级</th><th>学号</th><th>状态</th><th>操作</th></tr>
+    <tr><th><input type="checkbox" id="checkAllStudents" onclick="toggleStudentChecks(this)"></th><th>姓名</th><th>ID</th><th>用户名</th><th>学院</th><th>专业</th><th>身份/职称</th><th>权限角色</th><th>班级</th><th>学号</th><th>状态</th><th>操作</th></tr>
     <% for (User u : users) { %>
     <tr>
       <td>
@@ -158,17 +158,18 @@
         <input type="checkbox" name="selectedIds" value="<%= u.getId() %>" class="student-check" form="selectedResetForm">
         <% } %>
       </td>
+      <td><%= EscapeUtil.html(u.getRealName()) %></td>
       <td><%= u.getId() %></td>
       <td><%= EscapeUtil.html(u.getUsername()) %></td>
-      <td><%= EscapeUtil.html(u.getRealName()) %></td>
-      <td><span class="badge bg-<%= "admin".equals(u.getRole())?"danger":("teacher".equals(u.getRole())?"warning":"primary") %>"><%= roleOptions.get(u.getRole()) %></span></td>
       <td><%= u.getCollegeName() != null ? u.getCollegeName() : "—" %></td>
       <td><%= u.getMajorName() != null ? u.getMajorName() : "—" %></td>
+      <td><%= EscapeUtil.html(u.getDisplayTitle()) %></td>
+      <td><span class="badge bg-<%= "admin".equals(u.getRole())?"danger":("director".equals(u.getRole())?"info":("teacher".equals(u.getRole())?"warning":"primary")) %>"><%= roleOptions.get(u.getRole()) %></span></td>
       <td><%= u.getClassName() != null ? u.getClassName() : "—" %></td>
       <td><%= u.getStudentNo() != null ? u.getStudentNo() : "—" %></td>
       <td><span class="badge bg-<%= u.getStatus()==1?"success":"secondary" %>"><%= userStatusOptions.get(String.valueOf(u.getStatus())) %></span></td>
       <td>
-        <button class="btn btn-sm btn-outline-primary" onclick="editUser('<%= u.getId() %>','<%= EscapeUtil.js(u.getUsername()) %>','<%= EscapeUtil.js(u.getRealName()) %>','<%= u.getRole() %>','<%= EscapeUtil.js(u.getCollege() != null ? u.getCollege() : "") %>','<%= EscapeUtil.js(u.getMajor() != null ? u.getMajor() : "") %>','<%= EscapeUtil.js(u.getClassName() != null ? u.getClassName() : "") %>','<%= EscapeUtil.js(u.getStudentNo() != null ? u.getStudentNo() : "") %>','<%= EscapeUtil.js(u.getEmail() != null ? u.getEmail() : "") %>','<%= EscapeUtil.js(u.getPhone() != null ? u.getPhone() : "") %>',<%= u.getStatus() %>)">编辑</button>
+        <button class="btn btn-sm btn-outline-primary" onclick="editUser('<%= u.getId() %>','<%= EscapeUtil.js(u.getUsername()) %>','<%= EscapeUtil.js(u.getRealName()) %>','<%= EscapeUtil.js(u.getTitle() != null ? u.getTitle() : "") %>','<%= u.getRole() %>','<%= EscapeUtil.js(u.getCollege() != null ? u.getCollege() : "") %>','<%= EscapeUtil.js(u.getMajor() != null ? u.getMajor() : "") %>','<%= EscapeUtil.js(u.getClassName() != null ? u.getClassName() : "") %>','<%= EscapeUtil.js(u.getStudentNo() != null ? u.getStudentNo() : "") %>','<%= EscapeUtil.js(u.getEmail() != null ? u.getEmail() : "") %>','<%= EscapeUtil.js(u.getPhone() != null ? u.getPhone() : "") %>',<%= u.getStatus() %>)">编辑</button>
         <% if (u.getId() != 1) { %>
         <form action="user.action" method="post" style="display:inline">
           <input type="hidden" name="action" value="delete">
@@ -180,7 +181,7 @@
     </tr>
     <% } %>
     <% if (users.isEmpty()) { %>
-    <tr><td colspan="11" class="text-center text-muted py-4">暂无数据</td></tr>
+    <tr><td colspan="12" class="text-center text-muted py-4">暂无数据</td></tr>
     <% } %>
   </table>
   <% request.setAttribute("baseUrl", pagUrl);
@@ -197,7 +198,7 @@
       <div class="modal-header"><h6 class="modal-title">Excel 批量导入教师/学生</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <div class="alert alert-info small py-2">
-          首行为表头；列顺序：用户名、姓名、学号、学院代码、专业代码、班级、部门/院系、邮箱、电话、初始密码。学生用户名可留空，系统用学号作为用户名；密码留空默认 123456。
+          首行为表头；列顺序：用户名、姓名、学号、学院代码、专业代码、班级、部门/院系、邮箱、电话、初始密码、身份/职称。学生用户名可留空，系统用学号作为用户名；密码留空默认 123456；身份/职称留空时按角色自动填充。
         </div>
         <div class="mb-2">
           <label class="form-label">导入类型</label>
@@ -249,7 +250,8 @@
           <div class="col-6"><label class="form-label">用户名 *</label><input name="username" class="form-control form-control-sm" required pattern="<%= EscapeUtil.attr(usernamePattern) %>"></div>
           <div class="col-6"><label class="form-label">密码 *</label><input name="password" type="password" class="form-control form-control-sm" required minlength="<%= passwordMinLength %>"></div>
           <div class="col-6"><label class="form-label">姓名 *</label><input name="realName" class="form-control form-control-sm" required></div>
-          <div class="col-6"><label class="form-label">角色 *</label>
+          <div class="col-6"><label class="form-label">身份/职称</label><input name="title" class="form-control form-control-sm" placeholder="如：教授、副教授、系主任、学生"></div>
+          <div class="col-6"><label class="form-label">权限角色 *</label>
             <select name="role" class="form-select form-select-sm">
               <% for (Map.Entry<String, String> e : roleOptions.entrySet()) { %>
               <option value="<%= e.getKey() %>"><%= e.getValue() %></option>
@@ -291,7 +293,8 @@
           <div class="col-6"><label class="form-label">用户名 *</label><input name="username" id="editUsername" class="form-control form-control-sm" required pattern="<%= EscapeUtil.attr(usernamePattern) %>"></div>
           <div class="col-6"><label class="form-label">新密码(留空不改)</label><input name="password" type="password" class="form-control form-control-sm"></div>
           <div class="col-6"><label class="form-label">姓名 *</label><input name="realName" id="editRealName" class="form-control form-control-sm" required></div>
-          <div class="col-6"><label class="form-label">角色 *</label>
+          <div class="col-6"><label class="form-label">身份/职称</label><input name="title" id="editTitle" class="form-control form-control-sm" placeholder="如：教授、副教授、系主任、学生"></div>
+          <div class="col-6"><label class="form-label">权限角色 *</label>
             <select name="role" id="editRole" class="form-select form-select-sm">
               <% for (Map.Entry<String, String> e : roleOptions.entrySet()) { %>
               <option value="<%= e.getKey() %>"><%= e.getValue() %></option>
@@ -393,10 +396,11 @@ function confirmSelectedReset() {
   return confirm('确定重置已勾选的 ' + checked + ' 个学生账号密码吗？');
 }
 
-function editUser(id, username, realName, role, college, major, className, studentNo, email, phone, status) {
+function editUser(id, username, realName, title, role, college, major, className, studentNo, email, phone, status) {
   document.getElementById('editId').value = id;
   document.getElementById('editUsername').value = username;
   document.getElementById('editRealName').value = realName;
+  document.getElementById('editTitle').value = title;
   document.getElementById('editRole').value = role;
   document.getElementById('editCollege').value = college;
   updateEditMajors();

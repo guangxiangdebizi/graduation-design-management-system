@@ -15,7 +15,7 @@ import util.CollegeUtil;
 
 public class UserDao {
     private static final String SELECT_COLS =
-        "id,username,password,role,real_name,student_no,college,major,class_name,department,email,phone,status,created_at";
+        "id,username,password,role,real_name,title,student_no,college,major,class_name,department,email,phone,status,created_at";
 
     public User findByUsername(String username) {
         List<Object[]> rows = SQLHelper.queryList(
@@ -111,24 +111,24 @@ public class UserDao {
 
     public int insert(User user) {
         return SQLHelper.executeInsert(
-            "INSERT INTO users(username,password,role,real_name,student_no,college,major,class_name,department,email,phone,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO users(username,password,role,real_name,title,student_no,college,major,class_name,department,email,phone,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
             user.getUsername(), PasswordUtil.hash(user.getPassword()), user.getRole(),
-            user.getRealName(), user.getStudentNo(), user.getCollege(), user.getMajor(),
+            user.getRealName(), user.getTitle(), user.getStudentNo(), user.getCollege(), user.getMajor(),
             user.getClassName(), user.getDepartment(), user.getEmail(), user.getPhone(), user.getStatus());
     }
 
     public int update(User user) {
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
             return SQLHelper.executeUpdate(
-                "UPDATE users SET username=?,password=?,role=?,real_name=?,student_no=?,college=?,major=?,class_name=?,department=?,email=?,phone=?,status=? WHERE id=?",
+                "UPDATE users SET username=?,password=?,role=?,real_name=?,title=?,student_no=?,college=?,major=?,class_name=?,department=?,email=?,phone=?,status=? WHERE id=?",
                 user.getUsername(), PasswordUtil.hash(user.getPassword()), user.getRole(),
-                user.getRealName(), user.getStudentNo(), user.getCollege(), user.getMajor(),
+                user.getRealName(), user.getTitle(), user.getStudentNo(), user.getCollege(), user.getMajor(),
                 user.getClassName(), user.getDepartment(), user.getEmail(), user.getPhone(),
                 user.getStatus(), user.getId());
         }
         return SQLHelper.executeUpdate(
-            "UPDATE users SET username=?,role=?,real_name=?,student_no=?,college=?,major=?,class_name=?,department=?,email=?,phone=?,status=? WHERE id=?",
-            user.getUsername(), user.getRole(), user.getRealName(), user.getStudentNo(),
+            "UPDATE users SET username=?,role=?,real_name=?,title=?,student_no=?,college=?,major=?,class_name=?,department=?,email=?,phone=?,status=? WHERE id=?",
+            user.getUsername(), user.getRole(), user.getRealName(), user.getTitle(), user.getStudentNo(),
             user.getCollege(), user.getMajor(), user.getClassName(), user.getDepartment(),
             user.getEmail(), user.getPhone(), user.getStatus(), user.getId());
     }
@@ -285,15 +285,16 @@ public class UserDao {
         u.setPassword((String) row[2]);
         u.setRole((String) row[3]);
         u.setRealName((String) row[4]);
-        u.setStudentNo((String) row[5]);
-        u.setCollege((String) row[6]);
-        u.setMajor((String) row[7]);
-        u.setClassName((String) row[8]);
-        u.setDepartment((String) row[9]);
-        u.setEmail((String) row[10]);
-        u.setPhone((String) row[11]);
-        u.setStatus(((Number) row[12]).intValue());
-        u.setCreatedAt(DateUtil.toDate(row[13]));
+        u.setTitle((String) row[5]);
+        u.setStudentNo((String) row[6]);
+        u.setCollege((String) row[7]);
+        u.setMajor((String) row[8]);
+        u.setClassName((String) row[9]);
+        u.setDepartment((String) row[10]);
+        u.setEmail((String) row[11]);
+        u.setPhone((String) row[12]);
+        u.setStatus(((Number) row[13]).intValue());
+        u.setCreatedAt(DateUtil.toDate(row[14]));
 
         // 翻译学院和专业名称
         if (u.getCollege() != null) {

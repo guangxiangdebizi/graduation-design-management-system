@@ -37,12 +37,13 @@
       <table class="table table-sm">
         <tr><th style="width:110px">用户名</th><td><%= EscapeUtil.html(profileUser.getUsername()) %></td></tr>
         <tr><th>姓名</th><td><%= EscapeUtil.html(profileUser.getRealName()) %></td></tr>
-        <tr><th>角色</th><td><%= EscapeUtil.html(DictionaryUtil.label("role", profileUser.getRole())) %></td></tr>
+        <tr><th>身份/职称</th><td><%= EscapeUtil.html(profileUser.getDisplayTitle()) %></td></tr>
+        <tr><th>权限角色</th><td><%= EscapeUtil.html(DictionaryUtil.label("role", profileUser.getRole())) %></td></tr>
         <% if ("student".equals(profileUser.getRole())) { %>
         <tr><th>学号</th><td><%= EscapeUtil.html(profileUser.getStudentNo()) %></td></tr>
         <tr><th>班级</th><td><%= EscapeUtil.html(profileUser.getClassName()) %></td></tr>
         <% } %>
-        <tr><th>所属</th><td><%= EscapeUtil.html(profileUser.getFullAffiliation()) %></td></tr>
+        <tr><th>学院/专业</th><td><%= EscapeUtil.html(profileUser.getFullAffiliation()) %></td></tr>
       </table>
     </div>
   </div>

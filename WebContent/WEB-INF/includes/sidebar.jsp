@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="util.DictionaryUtil" %>
+<%@ page import="util.DictionaryUtil,util.EscapeUtil" %>
 <%
   String ctx = request.getContextPath();
   String sidebarCurrentPage = request.getRequestURI();
@@ -18,7 +18,6 @@
     <a href="<%= ctx %>/dashboard.jsp" class="<%= sidebarCurrentPage.endsWith("dashboard.jsp") ? "active" : "" %>">&#9632; 仪表盘</a>
     <% if ("admin".equals(userRole)) { %>
       <a href="<%= ctx %>/admin/user.action" class="<%= sidebarCurrentPage.contains("/admin/user") ? "active" : "" %>">&#9632; 用户管理</a>
-      <a href="<%= ctx %>/admin/topic-review.action" class="<%= sidebarCurrentPage.contains("/admin/topic-review") ? "active" : "" %>">&#9632; 课题审核</a>
       <a href="<%= ctx %>/admin/system-switch.action" class="<%= sidebarCurrentPage.contains("/admin/system-switch") ? "active" : "" %>">&#9632; 系统开关</a>
       <a href="<%= ctx %>/admin/announcements.jsp" class="<%= sidebarCurrentPage.contains("/admin/announcements") ? "active" : "" %>">&#9632; 公告管理</a>
       <a href="<%= ctx %>/admin/defenses.jsp" class="<%= sidebarCurrentPage.contains("/admin/defenses") ? "active" : "" %>">&#9632; 答辩安排</a>
@@ -67,8 +66,8 @@
       <span class="breadcrumb ms-2"><%= request.getAttribute("pageTitle") %></span>
     </div>
     <div class="user-info">
-      <strong><%= loginUser.getRealName() %></strong>
-      <span class="text-muted">(<%= DictionaryUtil.label("role", userRole) %>)</span>
+      <strong><%= EscapeUtil.html(loginUser.getRealName()) %></strong>
+      <span class="text-muted">(<%= EscapeUtil.html(loginUser.getDisplayTitle()) %> / <%= DictionaryUtil.label("role", userRole) %>)</span>
       &nbsp;|&nbsp;
       <a href="<%= ctx %>/profile.action" class="text-decoration-none">个人中心</a>
       &nbsp;|&nbsp;

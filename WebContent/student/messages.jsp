@@ -175,7 +175,7 @@
 
             <% for (User u : contacts) { if (u.getId() != loginUser.getId()) { %>
 
-              <option value="<%= u.getId() %>"><%= EscapeUtil.html(u.getRealName()) %> (<%= u.getRole() %>)</option>
+              <option value="<%= u.getId() %>"><%= EscapeUtil.html(u.getRealName()) %>（<%= EscapeUtil.html(u.getDisplayTitle()) %>）</option>
 
             <% }} %>
 

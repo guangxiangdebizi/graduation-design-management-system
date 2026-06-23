@@ -105,6 +105,52 @@ password=VALUES(password), role=VALUES(role), real_name=VALUES(real_name), colle
 major=VALUES(major), class_name=VALUES(class_name), department=VALUES(department),
 email=VALUES(email), phone=VALUES(phone), status=VALUES(status);
 
+SET @has_user_title_seed_demo := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'title'
+);
+SET @add_user_title_seed_demo_sql := IF(
+    @has_user_title_seed_demo = 0,
+    'ALTER TABLE users ADD COLUMN title VARCHAR(50) DEFAULT NULL COMMENT ''身份/职称，如教授、副教授、系主任、学生'' AFTER real_name',
+    'SELECT 1'
+);
+PREPARE add_user_title_seed_demo_stmt FROM @add_user_title_seed_demo_sql;
+EXECUTE add_user_title_seed_demo_stmt;
+DEALLOCATE PREPARE add_user_title_seed_demo_stmt;
+
+UPDATE users
+SET title = CASE
+        WHEN role='admin' THEN '管理员'
+        WHEN role='director' THEN '系主任'
+        WHEN role='student' THEN '学生'
+        WHEN real_name LIKE '%副教授' THEN '副教授'
+        WHEN real_name LIKE '%教授' THEN '教授'
+        WHEN real_name LIKE '%讲师' THEN '讲师'
+        WHEN real_name LIKE '%老师' THEN '教师'
+        WHEN role='teacher' THEN '教师'
+        ELSE title
+    END
+WHERE title IS NULL OR title = '';
+
+UPDATE users SET real_name='秦文', title='教务管理员' WHERE username='admin02';
+UPDATE users SET real_name='许宁', title='学院管理员' WHERE username='admin03';
+UPDATE users SET real_name='周启明', title='系主任' WHERE username='director_ai_cs';
+UPDATE users SET real_name='宋嘉树', title='系主任' WHERE username='director_ai_se';
+UPDATE users SET real_name='邵文澜', title='系主任' WHERE username='director_ai_ds';
+UPDATE users SET real_name='韩知远', title='系主任' WHERE username='director_ai_ai';
+UPDATE users SET real_name='王志远', title='教授' WHERE username='teacher03';
+UPDATE users SET real_name='陈思明', title='讲师' WHERE username='teacher04';
+UPDATE users SET real_name='刘雅文', title='副教授' WHERE username='teacher05';
+UPDATE users SET real_name='赵启航', title='讲师' WHERE username='teacher06';
+UPDATE users SET real_name='孙立新', title='教授' WHERE username='teacher07';
+UPDATE users SET real_name='周若楠', title='讲师' WHERE username='teacher08';
+UPDATE users SET real_name='吴文博', title='教师' WHERE username='teacher09';
+UPDATE users SET real_name='郑雨薇', title='讲师' WHERE username='teacher10';
+UPDATE users SET real_name='胡景明', title='讲师' WHERE username='teacher11';
+UPDATE users SET real_name='高子轩', title='讲师' WHERE username='teacher12';
+UPDATE users SET real_name='马清扬', title='讲师' WHERE username='teacher13';
+UPDATE users SET real_name='林嘉宁', title='讲师' WHERE username='teacher14';
+
 -- 4. 课题扩充
 SET @has_topics_major := (
     SELECT COUNT(*) FROM information_schema.COLUMNS
