@@ -61,6 +61,7 @@
   else if ("delete_failed".equals(msg)) { msgTitle="失败"; msgContent="删除用户失败"; msgClass="danger"; }
   else if ("delete_self".equals(msg)) { msgTitle="失败"; msgContent="不能删除当前登录用户"; msgClass="danger"; }
   else if ("username_exists".equals(msg)) { msgTitle="错误"; msgContent="用户名已存在"; msgClass="danger"; }
+  else if ("student_no_exists".equals(msg)) { msgTitle="错误"; msgContent="学号已存在，请更换学号或留空"; msgClass="danger"; }
   else if ("import_empty".equals(msg)) { msgTitle="错误"; msgContent="请选择要导入的 Excel 文件"; msgClass="danger"; }
   else if ("import_error".equals(msg)) { msgTitle="错误"; msgContent="导入失败，请检查文件格式"; msgClass="danger"; }
   else if ("import_role_invalid".equals(msg)) { msgTitle="错误"; msgContent="只能导入教师或学生账号"; msgClass="danger"; }

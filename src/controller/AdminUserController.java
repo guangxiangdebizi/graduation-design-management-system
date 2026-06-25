@@ -71,6 +71,11 @@ public class AdminUserController extends HttpServlet {
             }
             User u = buildUser(request);
             u.setStatus(1);
+            if (u.getStudentNo() != null
+                    && dao.existsByStudentNoExcludeId(u.getStudentNo(), 0)) {
+                WebUtil.redirect(request, response, "/admin/user.action?msg=student_no_exists");
+                return;
+            }
             dao.insert(u);
             OperationLogUtil.log(loginUser.getId(), "ADD", "user", "新增用户 " + u.getUsername());
             WebUtil.redirect(request, response, "/admin/user.action?msg=add_ok");
@@ -98,6 +103,11 @@ public class AdminUserController extends HttpServlet {
                     && (!"admin".equals(u.getRole()) || u.getStatus() != 1)
                     && dao.countActiveAdmins() <= 1) {
                 WebUtil.redirect(request, response, "/admin/user.action?msg=last_admin");
+                return;
+            }
+            if (u.getStudentNo() != null
+                    && dao.existsByStudentNoExcludeId(u.getStudentNo(), editId)) {
+                WebUtil.redirect(request, response, "/admin/user.action?msg=student_no_exists");
                 return;
             }
             String pwd = request.getParameter("password");
@@ -153,19 +163,32 @@ public class AdminUserController extends HttpServlet {
 
     private User buildUser(HttpServletRequest request) {
         User u = new User();
-        u.setUsername(request.getParameter("username"));
+        u.setUsername(trimParam(request.getParameter("username")));
         u.setPassword(request.getParameter("password"));
         u.setRole(request.getParameter("role"));
-        u.setRealName(request.getParameter("realName"));
+        u.setRealName(trimParam(request.getParameter("realName")));
         u.setTitle(resolveTitle(request.getParameter("title"), u.getRole()));
-        u.setStudentNo("student".equals(u.getRole()) ? request.getParameter("studentNo") : null);
-        u.setCollege(request.getParameter("college"));
-        u.setMajor(request.getParameter("major"));
-        u.setClassName("student".equals(u.getRole()) ? request.getParameter("className") : null);
-        u.setDepartment(request.getParameter("department"));
-        u.setEmail(request.getParameter("email"));
-        u.setPhone(request.getParameter("phone"));
+        u.setStudentNo("student".equals(u.getRole())
+            ? blankToNull(request.getParameter("studentNo")) : null);
+        u.setCollege(blankToNull(request.getParameter("college")));
+        u.setMajor(blankToNull(request.getParameter("major")));
+        u.setClassName("student".equals(u.getRole())
+            ? blankToNull(request.getParameter("className")) : null);
+        u.setDepartment(blankToNull(request.getParameter("department")));
+        u.setEmail(blankToNull(request.getParameter("email")));
+        u.setPhone(blankToNull(request.getParameter("phone")));
         return u;
+    }
+
+    private String blankToNull(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String trimParam(String value) {
+        return value == null ? null : value.trim();
     }
 
     private String resolveTitle(String title, String role) {
