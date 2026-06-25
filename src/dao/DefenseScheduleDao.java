@@ -13,8 +13,9 @@ public class DefenseScheduleDao {
         + "d.defense_time,d.room,d.group_name,d.score,d.comment,d.created_at "
         + "FROM defense_schedules d "
         + "JOIN users u ON d.student_id=u.id "
+        + "LEFT JOIN topic_assignments a ON a.student_id=u.id "
         + "LEFT JOIN topic_selections s ON s.student_id=u.id AND s.status='approved' "
-        + "LEFT JOIN topics t ON s.topic_id=t.id "
+        + "LEFT JOIN topics t ON t.id=COALESCE(a.topic_id,s.topic_id) "
         + "LEFT JOIN users ut ON t.teacher_id=ut.id ";
 
     public List<DefenseSchedule> findAll() {

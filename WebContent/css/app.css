@@ -226,10 +226,10 @@ body {
   font-weight: 600;
 }
 .badge-pending { background: #fef3c7; color: #92400e; }
-.badge-approved, .badge-reviewed, .badge-open { background: #d1fae5; color: #065f46; }
-.badge-rejected, .badge-closed { background: #fee2e2; color: #991b1b; }
+.badge-approved, .badge-reviewed, .badge-open, .badge-selected, .badge-confirmed { background: #d1fae5; color: #065f46; }
+.badge-rejected, .badge-closed, .badge-invalid { background: #fee2e2; color: #991b1b; }
 .badge-submitted, .badge-draft { background: #dbeafe; color: #1e40af; }
-.badge-cancelled { background: #f1f5f9; color: #475569; }
+.badge-cancelled, .badge-not_selected { background: #f1f5f9; color: #475569; }
 
 /* Topic cards */
 .topic-grid {

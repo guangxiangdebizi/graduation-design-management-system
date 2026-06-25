@@ -7,7 +7,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import bean.User;
+import dao.SelectionChoiceDao;
 import dao.SelectionDao;
+import dao.TopicAssignmentDao;
 
 @WebServlet("/student/my-selection.action")
 public class StudentSelectionController extends HttpServlet {
@@ -15,6 +17,8 @@ public class StudentSelectionController extends HttpServlet {
             throws ServletException, IOException {
         User user = (User) request.getSession().getAttribute("loginUser");
         request.setAttribute("pageTitle", "我的选题");
+        request.setAttribute("assignment", new TopicAssignmentDao().findByStudent(user.getId()));
+        request.setAttribute("choices", new SelectionChoiceDao().findByStudent(user.getId()));
         request.setAttribute("selections", new SelectionDao().findByStudent(user.getId()));
         request.getRequestDispatcher("/student/my-selection.jsp").forward(request, response);
     }

@@ -310,6 +310,7 @@ INSERT INTO dictionary_items(dict_type, item_code, item_label, sort_order, statu
 ('status', 'cancelled', '已取消', 40, 1),
 ('status', 'draft', '草稿', 50, 1),
 ('status', 'submitted', '已提交', 60, 1),
+('status', 'confirmed', '已确认', 65, 1),
 ('status', 'reviewed', '已审核', 70, 1),
 ('status', 'open', '开放', 80, 1),
 ('status', 'closed', '已关闭', 90, 1),
@@ -317,6 +318,8 @@ INSERT INTO dictionary_items(dict_type, item_code, item_label, sort_order, statu
 ('status', 'unsubmitted', '未提交', 110, 1),
 ('status', 'unselected', '未选题', 120, 1),
 ('status', 'selected', '已选题', 130, 1),
+('status', 'not_selected', '未中选', 135, 1),
+('status', 'invalid', '已失效', 136, 1),
 ('status', 'unread', '未读', 140, 1),
 ('status', 'read', '已读', 150, 1),
 ('status', 'sent', '已发送', 160, 1);

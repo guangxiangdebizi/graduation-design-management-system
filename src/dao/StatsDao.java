@@ -16,14 +16,20 @@ public class StatsDao {
         boolean scoped = hasScope(college, major);
         Object val = scoped
             ? SQLHelper.queryScalar(
-                "SELECT COUNT(DISTINCT s.student_id) FROM topic_selections s "
-                + "JOIN topics t ON s.topic_id=t.id "
-                + "JOIN users u ON s.student_id=u.id "
-                + "WHERE s.status='approved' "
+                "SELECT COUNT(DISTINCT x.student_id) FROM ("
+                + "SELECT student_id,topic_id FROM topic_assignments "
+                + "UNION SELECT student_id,topic_id FROM topic_selections WHERE status='approved'"
+                + ") x "
+                + "JOIN topics t ON x.topic_id=t.id "
+                + "JOIN users u ON x.student_id=u.id "
+                + "WHERE 1=1 "
                 + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
                 college, major, college, major)
             : SQLHelper.queryScalar(
-                "SELECT COUNT(DISTINCT student_id) FROM topic_selections WHERE status='approved'");
+                "SELECT COUNT(DISTINCT student_id) FROM ("
+                + "SELECT student_id FROM topic_assignments "
+                + "UNION SELECT student_id FROM topic_selections WHERE status='approved'"
+                + ") x");
         return val == null ? 0 : ((Number) val).intValue();
     }
 
@@ -69,33 +75,43 @@ public class StatsDao {
         boolean scoped = hasScope(college, major);
         Object scored = scoped
             ? SQLHelper.queryScalar(
-                "SELECT COUNT(DISTINCT d.student_id) "
-                + "FROM defense_schedules d "
+                "SELECT COUNT(DISTINCT d.student_id) FROM defense_schedules d "
                 + "JOIN users u ON d.student_id=u.id "
-                + "JOIN topic_selections s ON s.student_id=u.id AND s.status='approved' "
-                + "JOIN topics t ON s.topic_id=t.id "
+                + "JOIN ("
+                + "  SELECT student_id,topic_id FROM topic_assignments "
+                + "  UNION SELECT student_id,topic_id FROM topic_selections WHERE status='approved'"
+                + ") x ON x.student_id=u.id "
+                + "JOIN topics t ON x.topic_id=t.id "
                 + "WHERE d.score IS NOT NULL "
                 + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
                 college, major, college, major)
             : SQLHelper.queryScalar(
                 "SELECT COUNT(DISTINCT d.student_id) "
                 + "FROM defense_schedules d "
-                + "JOIN topic_selections s ON s.student_id=d.student_id AND s.status='approved' "
+                + "JOIN ("
+                + "  SELECT student_id FROM topic_assignments "
+                + "  UNION SELECT student_id FROM topic_selections WHERE status='approved'"
+                + ") x ON x.student_id=d.student_id "
                 + "WHERE d.score IS NOT NULL");
         Object pending = scoped
             ? SQLHelper.queryScalar(
-                "SELECT COUNT(DISTINCT d.student_id) "
-                + "FROM defense_schedules d "
+                "SELECT COUNT(DISTINCT d.student_id) FROM defense_schedules d "
                 + "JOIN users u ON d.student_id=u.id "
-                + "JOIN topic_selections s ON s.student_id=u.id AND s.status='approved' "
-                + "JOIN topics t ON s.topic_id=t.id "
+                + "JOIN ("
+                + "  SELECT student_id,topic_id FROM topic_assignments "
+                + "  UNION SELECT student_id,topic_id FROM topic_selections WHERE status='approved'"
+                + ") x ON x.student_id=u.id "
+                + "JOIN topics t ON x.topic_id=t.id "
                 + "WHERE d.score IS NULL "
                 + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
                 college, major, college, major)
             : SQLHelper.queryScalar(
                 "SELECT COUNT(DISTINCT d.student_id) "
                 + "FROM defense_schedules d "
-                + "JOIN topic_selections s ON s.student_id=d.student_id AND s.status='approved' "
+                + "JOIN ("
+                + "  SELECT student_id FROM topic_assignments "
+                + "  UNION SELECT student_id FROM topic_selections WHERE status='approved'"
+                + ") x ON x.student_id=d.student_id "
                 + "WHERE d.score IS NULL");
         int scoredCount = scored == null ? 0 : ((Number) scored).intValue();
         int pendingCount = pending == null ? 0 : ((Number) pending).intValue();

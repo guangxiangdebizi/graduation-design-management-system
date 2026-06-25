@@ -47,7 +47,6 @@
       <a href="<%= ctx %>/teacher/messages.action" class="<%= sidebarCurrentPage.contains("/messages") ? "active" : "" %>">&#9632; 站内消息<% if (unreadMsg > 0) { %> <span class="badge bg-danger"><%= unreadMsg %></span><% } %></a>
     <% } else { %>
       <a href="<%= ctx %>/student/topic.action" class="<%= sidebarCurrentPage.contains("/student/topic") ? "active" : "" %>">&#9632; 浏览课题</a>
-      <a href="<%= ctx %>/student/choice.action" class="<%= sidebarCurrentPage.contains("/student/choice") ? "active" : "" %>">&#9632; 志愿填报</a>
       <a href="<%= ctx %>/student/my-selection.action" class="<%= sidebarCurrentPage.contains("/student/my-selection") ? "active" : "" %>">&#9632; 我的选题</a>
       <a href="<%= ctx %>/student/document.action" class="<%= sidebarCurrentPage.contains("/student/document") ? "active" : "" %>">&#9632; 文档提交</a>
       <a href="<%= ctx %>/student/grades.action" class="<%= sidebarCurrentPage.contains("/student/grades") ? "active" : "" %>">&#9632; 我的成绩</a>

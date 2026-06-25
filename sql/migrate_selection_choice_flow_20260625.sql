@@ -70,3 +70,8 @@ INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('selection.choice_limit', '3', '每个学生每轮最多志愿数')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+INSERT INTO dictionary_items(dict_type, item_code, item_label, sort_order, status) VALUES
+('status', 'confirmed', CONVERT(0xE5B7B2E7A1AEE8AEA4 USING utf8mb4), 65, 1),
+('status', 'not_selected', CONVERT(0xE69CAAE4B8ADE98089 USING utf8mb4), 135, 1),
+('status', 'invalid', CONVERT(0xE5B7B2E5A4B1E69588 USING utf8mb4), 136, 1)
+ON DUPLICATE KEY UPDATE item_label=VALUES(item_label), sort_order=VALUES(sort_order), status=VALUES(status);

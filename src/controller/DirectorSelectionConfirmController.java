@@ -7,15 +7,17 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import bean.Topic;
+import bean.TopicAssignment;
 import bean.TopicSelection;
 import bean.User;
 import bean.UserScope;
+import dao.SelectionChoiceDao;
 import dao.SelectionDao;
-import dao.TopicDao;
+import dao.TopicAssignmentDao;
 import util.MessageNotifyUtil;
 import util.OperationLogUtil;
 import util.ScopeUtil;
+import util.SystemSwitchUtil;
 import util.WebUtil;
 
 @WebServlet("/director/selection-confirm.action")
@@ -34,14 +36,25 @@ public class DirectorSelectionConfirmController extends HttpServlet {
             status = "pending";
         }
         SelectionDao selectionDao = new SelectionDao();
-        TopicDao topicDao = new TopicDao();
+        TopicAssignmentDao assignmentDao = new TopicAssignmentDao();
+        int round = SystemSwitchUtil.currentRound();
+        if ("2".equals(request.getParameter("round"))) {
+            round = 2;
+        } else if ("1".equals(request.getParameter("round"))) {
+            round = 1;
+        }
+        request.setAttribute("choiceGroups", new SelectionChoiceDao().findTopicChoiceGroups(
+            scope.getCollege(), scope.getMajor(), round));
+        request.setAttribute("assignments", assignmentDao.findByDirectorScope(
+            scope.getCollege(), scope.getMajor()));
         request.setAttribute("selections", selectionDao.findByDirectorScope(
             scope.getCollege(), scope.getMajor(), "all".equals(status) ? null : status));
         request.setAttribute("statusFilter", status);
-        request.setAttribute("unselectedStudents", selectionDao.findUnselectedStudents(
+        request.setAttribute("currentRound", Integer.valueOf(round));
+        request.setAttribute("unselectedStudents", assignmentDao.findUnassignedStudents(
             scope.getCollege(), scope.getMajor()));
-        request.setAttribute("availableTopics", topicDao.findOpenTopics(
-            null, scope.getCollege(), scope.getMajor()));
+        request.setAttribute("availableTopics", assignmentDao.findAssignableTopics(
+            scope.getCollege(), scope.getMajor()));
         request.setAttribute("directorScopeText", ScopeUtil.scopeText(scope));
         request.getRequestDispatcher("/director/selection-confirm.jsp").forward(request, response);
     }
@@ -58,6 +71,47 @@ public class DirectorSelectionConfirmController extends HttpServlet {
 
         String action = request.getParameter("action");
         SelectionDao dao = new SelectionDao();
+        TopicAssignmentDao assignmentDao = new TopicAssignmentDao();
+        if ("confirmChoice".equals(action)) {
+            int choiceId = parseInt(request.getParameter("choiceId"));
+            int result = assignmentDao.confirmChoice(choiceId, user.getId(),
+                scope.getCollege(), scope.getMajor(), request.getParameter("reviewComment"));
+            if (result == TopicAssignmentDao.ERR_TOPIC_ASSIGNED) {
+                WebUtil.redirect(request, response,
+                    "/director/selection-confirm.action?msg=topic_assigned");
+                return;
+            }
+            if (result == TopicAssignmentDao.ERR_STUDENT_ASSIGNED) {
+                WebUtil.redirect(request, response,
+                    "/director/selection-confirm.action?msg=student_has_topic");
+                return;
+            }
+            if (result == TopicAssignmentDao.ERR_CHOICE_INVALID) {
+                WebUtil.redirect(request, response,
+                    "/director/selection-confirm.action?msg=choice_invalid");
+                return;
+            }
+            if (result == TopicAssignmentDao.ERR_SCOPE) {
+                WebUtil.redirect(request, response,
+                    "/director/selection-confirm.action?msg=forbidden");
+                return;
+            }
+            if (result <= 0) {
+                WebUtil.redirect(request, response,
+                    "/director/selection-confirm.action?msg=error");
+                return;
+            }
+            TopicAssignment assignment = assignmentDao.findById(result);
+            if (assignment != null) {
+                MessageNotifyUtil.send(assignment.getStudentId(), "选题确认结果",
+                    "专业负责人已确认您的毕业设计题目《" + assignment.getTopicTitle() + "》。");
+            }
+            OperationLogUtil.log(user.getId(), "CONFIRM_CHOICE", "topic_assignments",
+                "专业负责人确认三志愿 choiceId=" + choiceId + ", assignmentId=" + result);
+            WebUtil.redirect(request, response, "/director/selection-confirm.action?msg=choice_confirm_ok");
+            return;
+        }
+
         if ("confirm".equals(action) || "reject".equals(action)) {
             int id = parseInt(request.getParameter("id"));
             String comment = request.getParameter("reviewComment");
@@ -97,16 +151,22 @@ public class DirectorSelectionConfirmController extends HttpServlet {
         if ("assign".equals(action)) {
             int studentId = parseInt(request.getParameter("studentId"));
             int topicId = parseInt(request.getParameter("topicId"));
-            int result = dao.manualAssign(studentId, topicId, scope.getCollege(), scope.getMajor(),
-                request.getParameter("reviewComment"));
-            if (result == -1) {
+            int result = assignmentDao.manualAssign(studentId, topicId, user.getId(),
+                scope.getCollege(), scope.getMajor(), request.getParameter("reviewComment"));
+            if (result == TopicAssignmentDao.ERR_TOPIC_ASSIGNED
+                    || result == TopicAssignmentDao.ERR_CHOICE_INVALID) {
                 WebUtil.redirect(request, response,
-                    "/director/selection-confirm.action?msg=quota_full");
+                    "/director/selection-confirm.action?msg=topic_assigned");
                 return;
             }
-            if (result == -2) {
+            if (result == TopicAssignmentDao.ERR_STUDENT_ASSIGNED) {
                 WebUtil.redirect(request, response,
                     "/director/selection-confirm.action?msg=student_has_topic");
+                return;
+            }
+            if (result == TopicAssignmentDao.ERR_SCOPE) {
+                WebUtil.redirect(request, response,
+                    "/director/selection-confirm.action?msg=forbidden");
                 return;
             }
             if (result <= 0) {
@@ -114,8 +174,11 @@ public class DirectorSelectionConfirmController extends HttpServlet {
                     "/director/selection-confirm.action?msg=error");
                 return;
             }
-            MessageNotifyUtil.send(studentId, "选题分配结果", "系主任已为您手动分配毕业设计题目。");
-            OperationLogUtil.log(user.getId(), "ASSIGN", "topic_selection",
+            TopicAssignment assignment = assignmentDao.findById(result);
+            MessageNotifyUtil.send(studentId, "选题分配结果",
+                assignment == null ? "专业负责人已为您手动分配毕业设计题目。"
+                    : "专业负责人已为您手动分配毕业设计题目《" + assignment.getTopicTitle() + "》。");
+            OperationLogUtil.log(user.getId(), "ASSIGN", "topic_assignments",
                 "系主任手动分配选题 studentId=" + studentId + ", topicId=" + topicId);
             WebUtil.redirect(request, response, "/director/selection-confirm.action?msg=assign_ok");
             return;

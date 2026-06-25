@@ -1,17 +1,25 @@
 package controller;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Map;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+import bean.SelectionApplication;
+import bean.SelectionChoice;
 import bean.User;
 import bean.Topic;
+import bean.TopicAssignment;
+import dao.SelectionChoiceDao;
 import dao.SelectionDao;
+import dao.TopicAssignmentDao;
 import dao.TopicDao;
 import util.OperationLogUtil;
+import util.SystemConfigUtil;
 import util.ScopeUtil;
 import util.SystemSwitchUtil;
 import util.WebUtil;
@@ -28,14 +36,37 @@ public class StudentTopicController extends HttpServlet {
         String major = ScopeUtil.clean(user.getMajor());
         TopicDao dao = new TopicDao();
         boolean selectionOpen = SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION);
-        List<Topic> topics = dao.findOpenTopics(keyword, college, major);
+        SelectionChoiceDao choiceDao = new SelectionChoiceDao();
+        TopicAssignment assignment = new TopicAssignmentDao().findByStudent(user.getId());
+        SelectionDao selectionDao = new SelectionDao();
+        bean.TopicSelection legacySelection = assignment == null
+            ? selectionDao.findApprovedByStudent(user.getId()) : null;
+        int round = SystemSwitchUtil.currentRound();
+        SelectionApplication activeApplication = choiceDao.findActiveApplication(user.getId(), round);
+        List<SelectionChoice> activeChoices = activeApplication == null
+            ? new ArrayList<SelectionChoice>()
+            : choiceDao.findByApplication(activeApplication.getId());
+        List<Topic> topics = assignment == null && legacySelection == null
+            ? choiceDao.findSelectableTopics(user.getId(), round)
+            : dao.findOpenTopics(keyword, college, major);
+        Map<Integer, Integer> intentCounts = choiceDao.intentCounts(topics, round);
         request.setAttribute("topics", topics);
         request.setAttribute("keyword", keyword);
         request.setAttribute("collegeFilter", college);
         request.setAttribute("majorFilter", major);
         request.setAttribute("selectionOpen", Boolean.valueOf(selectionOpen));
+        request.setAttribute("round", Integer.valueOf(round));
+        request.setAttribute("intentLimit",
+            Integer.valueOf(SystemConfigUtil.getInt("selection.intent_limit", 3)));
+        request.setAttribute("assignment", assignment);
+        request.setAttribute("legacySelection", legacySelection);
+        request.setAttribute("activeApplication", activeApplication);
+        request.setAttribute("activeChoices", activeChoices);
+        request.setAttribute("intentCounts", intentCounts);
+        boolean hasChoiceApplication = activeApplication != null;
         request.setAttribute("hasApplied",
-            new SelectionDao().hasPendingOrApproved(user.getId()));
+            Boolean.valueOf(assignment != null || hasChoiceApplication
+                || selectionDao.hasPendingOrApproved(user.getId())));
         request.getRequestDispatcher("/student/topics.jsp").forward(request, response);
     }
 
@@ -46,6 +77,20 @@ public class StudentTopicController extends HttpServlet {
         User user = (User) session.getAttribute("loginUser");
         String action = request.getParameter("action");
         SelectionDao dao = new SelectionDao();
+
+        if ("submitChoices".equals(action)) {
+            int result = new SelectionChoiceDao().submitChoices(
+                user.getId(), SystemSwitchUtil.currentRound(), parseTopicIds(request));
+            if (result > 0) {
+                OperationLogUtil.log(user.getId(), "SUBMIT_CHOICES", "selection_choices",
+                    "在浏览课题页提交第" + SystemSwitchUtil.currentRound()
+                        + "轮志愿 applicationId=" + result);
+                WebUtil.redirect(request, response, "/student/topic.action?msg=choice_ok");
+                return;
+            }
+            WebUtil.redirect(request, response, "/student/topic.action?msg=" + choiceMessage(result));
+            return;
+        }
 
         if ("apply".equals(action)) {
             if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION)) {
@@ -81,5 +126,37 @@ public class StudentTopicController extends HttpServlet {
         } else {
             WebUtil.redirect(request, response, "/student/topic.action");
         }
+    }
+
+    private List<Integer> parseTopicIds(HttpServletRequest request) {
+        List<Integer> ids = new ArrayList<Integer>();
+        addTopicId(ids, request.getParameter("topic1"));
+        addTopicId(ids, request.getParameter("topic2"));
+        addTopicId(ids, request.getParameter("topic3"));
+        return ids;
+    }
+
+    private void addTopicId(List<Integer> ids, String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return;
+        }
+        try {
+            int id = Integer.parseInt(value.trim());
+            if (id > 0) {
+                ids.add(Integer.valueOf(id));
+            }
+        } catch (NumberFormatException ignored) {
+        }
+    }
+
+    private String choiceMessage(int result) {
+        if (result == SelectionChoiceDao.ERR_HAS_ASSIGNMENT) return "has_assignment";
+        if (result == SelectionChoiceDao.ERR_SELECTION_CLOSED) return "selection_closed";
+        if (result == SelectionChoiceDao.ERR_CHOICE_COUNT) return "choice_count_invalid";
+        if (result == SelectionChoiceDao.ERR_DUPLICATE_CHOICE) return "duplicate_choice";
+        if (result == SelectionChoiceDao.ERR_TOPIC_INVALID) return "topic_invalid";
+        if (result == SelectionChoiceDao.ERR_INTENT_FULL) return "intent_full";
+        if (result == SelectionChoiceDao.ERR_ALREADY_SUBMITTED) return "already_submitted";
+        return "error";
     }
 }

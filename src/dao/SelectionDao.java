@@ -23,36 +23,38 @@ public class SelectionDao {
         + "JOIN users ut ON t.teacher_id=ut.id ";
 
     public List<TopicSelection> findByTeacher(int teacherId, String status) {
+        List<TopicSelection> assignments = findAssignmentsByTeacher(teacherId, status);
         String sql = SELECT_SQL + "WHERE t.teacher_id=?";
-        List<Object[]> rows;
         if (status != null && status.length() > 0) {
             sql += " AND s.status=? ORDER BY s.apply_time DESC";
-            rows = SQLHelper.queryList(sql, teacherId, status);
+            assignments.addAll(mapList(SQLHelper.queryList(sql, teacherId, status)));
         } else {
             sql += " ORDER BY s.apply_time DESC";
-            rows = SQLHelper.queryList(sql, teacherId);
+            assignments.addAll(mapList(SQLHelper.queryList(sql, teacherId)));
         }
-        return mapList(rows);
+        return assignments;
     }
 
     public List<TopicSelection> findByDirectorScope(String college, String major, String status) {
+        List<TopicSelection> assignments = findAssignmentsByDirectorScope(college, major, status);
         String sql = SELECT_SQL
             + "WHERE t.college=? AND t.major=? AND u.college=? AND u.major=?";
-        List<Object[]> rows;
         if (status != null && status.length() > 0) {
             sql += " AND s.status=? ORDER BY s.apply_time DESC";
-            rows = SQLHelper.queryList(sql, college, major, college, major, status);
+            assignments.addAll(mapList(SQLHelper.queryList(sql, college, major, college, major, status)));
         } else {
             sql += " ORDER BY s.apply_time DESC";
-            rows = SQLHelper.queryList(sql, college, major, college, major);
+            assignments.addAll(mapList(SQLHelper.queryList(sql, college, major, college, major)));
         }
-        return mapList(rows);
+        return assignments;
     }
 
     public List<TopicSelection> findByStudent(int studentId) {
+        List<TopicSelection> list = findAssignmentsByStudent(studentId);
         List<Object[]> rows = SQLHelper.queryList(
             SELECT_SQL + "WHERE s.student_id=? ORDER BY s.apply_time DESC", studentId);
-        return mapList(rows);
+        list.addAll(mapList(rows));
+        return list;
     }
 
     public List<TopicSelection> findApprovedStudents(int page, int pageSize) {
@@ -64,6 +66,10 @@ public class SelectionDao {
     }
 
     public TopicSelection findApprovedByStudent(int studentId) {
+        List<TopicSelection> assignments = findAssignmentsByStudent(studentId);
+        if (!assignments.isEmpty()) {
+            return assignments.get(0);
+        }
         List<Object[]> rows = SQLHelper.queryList(
             SELECT_SQL + "WHERE s.student_id=? AND s.status='approved' LIMIT 1", studentId);
         if (rows.isEmpty()) {
@@ -84,7 +90,12 @@ public class SelectionDao {
         Object val = SQLHelper.queryScalar(
             "SELECT COUNT(*) FROM topic_selections WHERE student_id=? AND status IN ('pending','approved')",
             studentId);
-        return val != null && ((Number) val).intValue() > 0;
+        if (val != null && ((Number) val).intValue() > 0) {
+            return true;
+        }
+        Object assigned = SQLHelper.queryScalar(
+            "SELECT COUNT(*) FROM topic_assignments WHERE student_id=?", studentId);
+        return assigned != null && ((Number) assigned).intValue() > 0;
     }
 
     public int apply(int studentId, int topicId, String reason) {
@@ -234,29 +245,41 @@ public class SelectionDao {
 
     public int countApprovedStudents() {
         Object val = SQLHelper.queryScalar(
-            "SELECT COUNT(*) FROM topic_selections WHERE status='approved'");
+            "SELECT COUNT(DISTINCT student_id) FROM ("
+            + "SELECT student_id FROM topic_assignments "
+            + "UNION SELECT student_id FROM topic_selections WHERE status='approved'"
+            + ") x");
         return val == null ? 0 : ((Number) val).intValue();
     }
 
     public int countApprovedStudents(String college, String major) {
         Object val = SQLHelper.queryScalar(
-            "SELECT COUNT(*) FROM topic_selections s "
-            + "JOIN topics t ON s.topic_id=t.id "
-            + "JOIN users u ON s.student_id=u.id "
-            + "WHERE s.status='approved' "
-            + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
+            "SELECT COUNT(DISTINCT x.student_id) FROM ("
+            + "SELECT a.student_id,a.topic_id FROM topic_assignments a "
+            + "UNION SELECT s.student_id,s.topic_id FROM topic_selections s WHERE s.status='approved'"
+            + ") x "
+            + "JOIN topics t ON x.topic_id=t.id "
+            + "JOIN users u ON x.student_id=u.id "
+            + "WHERE t.college=? AND t.major=? AND u.college=? AND u.major=?",
             college, major, college, major);
         return val == null ? 0 : ((Number) val).intValue();
     }
 
     public int countPendingByDirector(String college, String major) {
         Object val = SQLHelper.queryScalar(
-            "SELECT COUNT(*) FROM topic_selections s "
+            "SELECT ("
+            + "SELECT COUNT(DISTINCT s.student_id) FROM topic_selections s "
             + "JOIN topics t ON s.topic_id=t.id "
             + "JOIN users u ON s.student_id=u.id "
             + "WHERE s.status='pending' "
-            + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?",
-            college, major, college, major);
+            + "AND t.college=? AND t.major=? AND u.college=? AND u.major=?"
+            + ") + ("
+            + "SELECT COUNT(DISTINCT a.student_id) FROM selection_applications a "
+            + "JOIN users u ON a.student_id=u.id "
+            + "WHERE a.status='submitted' AND u.college=? AND u.major=? "
+            + "AND NOT EXISTS (SELECT 1 FROM topic_assignments x WHERE x.student_id=u.id)"
+            + ")",
+            college, major, college, major, college, major);
         return val == null ? 0 : ((Number) val).intValue();
     }
 
@@ -265,6 +288,10 @@ public class SelectionDao {
             "SELECT u.id,u.username,u.real_name,u.student_no,u.college,u.major,u.class_name "
             + "FROM users u "
             + "WHERE u.role='student' AND u.status=1 AND u.college=? AND u.major=? "
+            + "AND NOT EXISTS ("
+            + "  SELECT 1 FROM topic_assignments a "
+            + "  WHERE a.student_id=u.id"
+            + ") "
             + "AND NOT EXISTS ("
             + "  SELECT 1 FROM topic_selections s "
             + "  WHERE s.student_id=u.id AND s.status IN ('pending','approved')"
@@ -284,6 +311,43 @@ public class SelectionDao {
             list.add(u);
         }
         return list;
+    }
+
+    private List<TopicSelection> findAssignmentsByTeacher(int teacherId, String status) {
+        if (status != null && status.length() > 0 && !"approved".equals(status)) {
+            return new ArrayList<TopicSelection>();
+        }
+        List<Object[]> rows = SQLHelper.queryList(assignmentSelectSql()
+            + "WHERE t.teacher_id=? ORDER BY a.confirm_time DESC", teacherId);
+        return mapList(rows);
+    }
+
+    private List<TopicSelection> findAssignmentsByDirectorScope(String college, String major,
+            String status) {
+        if (status != null && status.length() > 0 && !"approved".equals(status)) {
+            return new ArrayList<TopicSelection>();
+        }
+        List<Object[]> rows = SQLHelper.queryList(assignmentSelectSql()
+            + "WHERE t.college=? AND t.major=? AND u.college=? AND u.major=? "
+            + "ORDER BY a.confirm_time DESC",
+            college, major, college, major);
+        return mapList(rows);
+    }
+
+    private List<TopicSelection> findAssignmentsByStudent(int studentId) {
+        List<Object[]> rows = SQLHelper.queryList(assignmentSelectSql()
+            + "WHERE a.student_id=? ORDER BY a.confirm_time DESC", studentId);
+        return mapList(rows);
+    }
+
+    private String assignmentSelectSql() {
+        return "SELECT a.id,a.student_id,a.topic_id,u.real_name,u.student_no,t.title,ut.real_name,"
+            + "'approved' AS status,'三志愿选题最终确认' AS apply_reason,a.confirm_comment,"
+            + "a.confirm_time,a.confirm_time,a.round "
+            + "FROM topic_assignments a "
+            + "JOIN users u ON a.student_id=u.id "
+            + "JOIN topics t ON a.topic_id=t.id "
+            + "JOIN users ut ON t.teacher_id=ut.id ";
     }
 
     public int confirmByDirector(int id, String college, String major, String comment) {

@@ -82,13 +82,15 @@ function initPageMessages() {
     'edit_self_role', 'last_admin', 'defense_ineligible',
     'topic_submit_closed', 'selection_closed', 'upload_closed',
     'has_assignment', 'choice_count_invalid', 'duplicate_choice',
-    'topic_invalid', 'intent_full', 'already_submitted'];
+    'topic_invalid', 'intent_full', 'already_submitted',
+    'topic_assigned', 'choice_invalid'];
   var messages = {
     'add_ok': '添加成功',
     'edit_ok': '修改成功',
     'delete_ok': '删除成功',
     'apply_ok': '选题申请已提交',
     'choice_ok': '志愿已提交，请等待专业负责人确认',
+    'choice_confirm_ok': '已确认志愿并生成最终题目分配',
     'already_applied': '您已有待审或已通过的选题',
     'submit_ok': '文档提交成功',
     'no_topic': '请先完成选题后再提交文档',
@@ -125,6 +127,8 @@ function initPageMessages() {
     'topic_invalid': '只能选择本专业、未分配、已审核通过的题目',
     'intent_full': '题目的本轮意向人数已满，请重新选择',
     'already_submitted': '您本轮已经提交过志愿，请等待确认',
+    'topic_assigned': '该题目已被最终分配，不能重复确认',
+    'choice_invalid': '该志愿当前不可确认，可能已失效或题目未开放',
     'locked': '登录失败次数过多，请稍后再试',
     'error': '操作失败，请重试'
   };

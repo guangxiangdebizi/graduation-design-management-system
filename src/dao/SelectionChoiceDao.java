@@ -13,6 +13,7 @@ import java.util.Set;
 import bean.SelectionApplication;
 import bean.SelectionChoice;
 import bean.Topic;
+import bean.TopicChoiceGroup;
 import util.CollegeUtil;
 import util.DateUtil;
 import util.SQLHelper;
@@ -206,6 +207,39 @@ public class SelectionChoiceDao {
         return mapChoices(rows);
     }
 
+    public List<TopicChoiceGroup> findTopicChoiceGroups(String college, String major, int round) {
+        int normalizedRound = round >= 2 ? 2 : 1;
+        List<Object[]> rows = SQLHelper.queryList(choiceSelectSql()
+            + "JOIN selection_applications a ON c.application_id=a.id "
+            + "WHERE c.round=? AND c.status='pending' AND a.status='submitted' "
+            + "AND t.college=? AND t.major=? AND u.college=? AND u.major=? "
+            + "AND NOT EXISTS (SELECT 1 FROM topic_assignments x WHERE x.topic_id=t.id) "
+            + "AND NOT EXISTS (SELECT 1 FROM topic_assignments x WHERE x.student_id=u.id) "
+            + "AND NOT EXISTS (SELECT 1 FROM topic_selections x "
+            + "  WHERE x.topic_id=t.id AND x.status='approved') "
+            + "AND NOT EXISTS (SELECT 1 FROM topic_selections x "
+            + "  WHERE x.student_id=u.id AND x.status='approved') "
+            + "ORDER BY t.created_at DESC,t.id,c.choice_rank,u.student_no,u.id",
+            normalizedRound, college, major, college, major);
+
+        List<SelectionChoice> choices = mapChoices(rows);
+        Map<Integer, TopicChoiceGroup> groupMap = new LinkedHashMap<Integer, TopicChoiceGroup>();
+        for (SelectionChoice choice : choices) {
+            Integer key = Integer.valueOf(choice.getTopicId());
+            TopicChoiceGroup group = groupMap.get(key);
+            if (group == null) {
+                group = new TopicChoiceGroup();
+                group.setTopicId(choice.getTopicId());
+                group.setTopicTitle(choice.getTopicTitle());
+                group.setTeacherName(choice.getTeacherName());
+                group.setRound(choice.getRound());
+                groupMap.put(key, group);
+            }
+            group.getChoices().add(choice);
+        }
+        return new ArrayList<TopicChoiceGroup>(groupMap.values());
+    }
+
     private boolean hasFinalAssignment(Connection conn, int studentId) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT 1 FROM topic_assignments WHERE student_id=? LIMIT 1")) {
@@ -351,4 +385,3 @@ public class SelectionChoiceDao {
         }
     }
 }
-

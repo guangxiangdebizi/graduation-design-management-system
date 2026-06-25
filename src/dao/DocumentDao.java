@@ -117,8 +117,10 @@ public class DocumentDao {
             conn.setAutoCommit(false);
 
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT 1 FROM topic_selections WHERE student_id=? AND topic_id=? "
-                    + "AND status='approved' FOR UPDATE")) {
+                    "SELECT 1 FROM ("
+                    + "SELECT student_id,topic_id FROM topic_assignments "
+                    + "UNION SELECT student_id,topic_id FROM topic_selections WHERE status='approved'"
+                    + ") x WHERE student_id=? AND topic_id=?")) {
                 ps.setInt(1, doc.getStudentId());
                 ps.setInt(2, doc.getTopicId());
                 try (ResultSet rs = ps.executeQuery()) {
