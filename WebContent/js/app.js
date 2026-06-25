@@ -80,12 +80,15 @@ function initPageMessages() {
     'delete_failed', 'delete_self', 'forbidden', 'student_has_topic',
     'stage_locked', 'document_locked', 'invalid_score', 'invalid_quota',
     'edit_self_role', 'last_admin', 'defense_ineligible',
-    'topic_submit_closed', 'selection_closed', 'upload_closed'];
+    'topic_submit_closed', 'selection_closed', 'upload_closed',
+    'has_assignment', 'choice_count_invalid', 'duplicate_choice',
+    'topic_invalid', 'intent_full', 'already_submitted'];
   var messages = {
     'add_ok': '添加成功',
     'edit_ok': '修改成功',
     'delete_ok': '删除成功',
     'apply_ok': '选题申请已提交',
+    'choice_ok': '志愿已提交，请等待专业负责人确认',
     'already_applied': '您已有待审或已通过的选题',
     'submit_ok': '文档提交成功',
     'no_topic': '请先完成选题后再提交文档',
@@ -116,6 +119,12 @@ function initPageMessages() {
     'topic_submit_closed': '教师出题入口已关闭',
     'selection_closed': '学生选题入口已关闭',
     'upload_closed': '当前阶段上传入口已关闭',
+    'has_assignment': '您已经有最终确认题目，不能重复填报',
+    'choice_count_invalid': '每轮至少选择 1 个志愿，最多选择 3 个志愿',
+    'duplicate_choice': '三个志愿不能选择同一个题目',
+    'topic_invalid': '只能选择本专业、未分配、已审核通过的题目',
+    'intent_full': '题目的本轮意向人数已满，请重新选择',
+    'already_submitted': '您本轮已经提交过志愿，请等待确认',
     'locked': '登录失败次数过多，请稍后再试',
     'error': '操作失败，请重试'
   };

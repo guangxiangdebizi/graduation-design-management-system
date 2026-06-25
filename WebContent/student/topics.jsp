@@ -79,7 +79,7 @@
       <% if (!selectionOpen) { %>
         <span class="text-muted small mt-2 d-block">当前只能浏览，选题系统开启后才能申请</span>
       <% } else if (!hasApplied && t.getSelectedCount() < t.getMaxStudents()) { %>
-        <button class="btn btn-primary btn-sm mt-2" onclick="applyTopic(<%= t.getId() %>,'<%= EscapeUtil.js(t.getTitle()) %>')">申请选题</button>
+        <a class="btn btn-primary btn-sm mt-2" href="choice.action">去填报志愿</a>
       <% } else if (hasApplied) { %>
         <span class="text-muted small mt-2 d-block">您已有选题申请</span>
       <% } else { %>
@@ -88,28 +88,5 @@
     </div>
   <% }} %>
 </div>
-
-<div class="modal fade" id="applyModal" tabindex="-1">
-  <div class="modal-dialog"><div class="modal-content">
-    <form action="topic.action" method="post">
-      <input type="hidden" name="action" value="apply">
-      <input type="hidden" name="topicId" id="applyTopicId">
-      <div class="modal-header"><h6 class="modal-title" id="applyTitle">申请选题</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <label class="form-label">申请理由</label>
-        <textarea name="applyReason" class="form-control form-control-sm" rows="4" placeholder="请说明您选择该课题的原因和相关基础..." required></textarea>
-      </div>
-      <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">提交申请</button></div>
-    </form>
-  </div></div>
-</div>
-
-<script>
-function applyTopic(id, title) {
-  document.getElementById('applyTopicId').value = id;
-  document.getElementById('applyTitle').textContent = '申请选题 - ' + title;
-  new bootstrap.Modal(document.getElementById('applyModal')).show();
-}
-</script>
 
 <%@ include file="/WEB-INF/includes/footer.jsp" %>
