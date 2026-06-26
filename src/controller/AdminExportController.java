@@ -31,10 +31,12 @@ public class AdminExportController extends HttpServlet {
 
         StringBuilder sql = new StringBuilder(
             "SELECT u.student_no,u.real_name,u.department,t.title,ut.real_name,"
-            + "(SELECT score FROM documents WHERE student_id=u.id AND doc_type='proposal' LIMIT 1),"
-            + "(SELECT score FROM documents WHERE student_id=u.id AND doc_type='midterm' LIMIT 1),"
+            + "(SELECT status FROM documents WHERE student_id=u.id AND doc_type='proposal' LIMIT 1),"
+            + "(SELECT status FROM documents WHERE student_id=u.id AND doc_type='midterm' LIMIT 1),"
+            + "(SELECT status FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
             + "(SELECT score FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
-            + "ds.score,ds.defense_time,ds.room "
+            + "(SELECT feedback FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
+            + "ds.defense_time,ds.room "
             + "FROM users u "
             + "JOIN ("
             + "  SELECT student_id,topic_id FROM topic_assignments "
@@ -50,7 +52,7 @@ public class AdminExportController extends HttpServlet {
         Sheet sheet = wb.createSheet("成绩汇总");
         Row header = sheet.createRow(0);
         String[] titles = {"学号", "姓名", "院系", "课题", "指导教师",
-            "开题分数", "中期分数", "终稿分数", "答辩分数", "答辩时间", "答辩教室"};
+            "开题状态", "中期状态", "终稿/结题状态", "最终成绩", "导师评语", "答辩时间", "答辩教室"};
         for (int i = 0; i < titles.length; i++) {
             header.createCell(i).setCellValue(titles[i]);
         }
@@ -63,12 +65,13 @@ public class AdminExportController extends HttpServlet {
             r.createCell(2).setCellValue(row[2] == null ? "" : String.valueOf(row[2]));
             r.createCell(3).setCellValue(row[3] == null ? "" : String.valueOf(row[3]));
             r.createCell(4).setCellValue(row[4] == null ? "" : String.valueOf(row[4]));
-            setScoreCell(r, 5, row[5]);
-            setScoreCell(r, 6, row[6]);
-            setScoreCell(r, 7, row[7]);
+            r.createCell(5).setCellValue(statusText(row[5]));
+            r.createCell(6).setCellValue(statusText(row[6]));
+            r.createCell(7).setCellValue(statusText(row[7]));
             setScoreCell(r, 8, row[8]);
             r.createCell(9).setCellValue(row[9] == null ? "" : String.valueOf(row[9]));
             r.createCell(10).setCellValue(row[10] == null ? "" : String.valueOf(row[10]));
+            r.createCell(11).setCellValue(row[11] == null ? "" : String.valueOf(row[11]));
         }
         for (int i = 0; i < titles.length; i++) {
             sheet.autoSizeColumn(i);
@@ -87,6 +90,15 @@ public class AdminExportController extends HttpServlet {
         } else {
             r.createCell(col).setCellValue(new BigDecimal(val.toString()).doubleValue());
         }
+    }
+
+    private String statusText(Object val) {
+        if (val == null) return "未提交";
+        String status = String.valueOf(val);
+        if ("submitted".equals(status)) return "待审核";
+        if ("reviewed".equals(status)) return "已通过";
+        if ("rejected".equals(status)) return "已退回";
+        return status;
     }
 
 }

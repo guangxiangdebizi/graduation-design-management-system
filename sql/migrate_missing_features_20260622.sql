@@ -23,7 +23,7 @@ INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('switch.manual_assign', '0', '强制分配阶段开关，管理员只控制开放状态，具体分配由系主任执行'),
 ('switch.upload_proposal', '1', '开题报告上传开关'),
 ('switch.upload_midterm', '1', '中期报告上传开关'),
-('switch.upload_final', '1', '终稿上传开关')
+('switch.upload_final', '1', '终稿/结题材料上传开关')
 ON DUPLICATE KEY UPDATE config_value=VALUES(config_value), description=VALUES(description);
 
 CREATE TABLE IF NOT EXISTS file_templates (

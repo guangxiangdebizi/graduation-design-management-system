@@ -139,7 +139,7 @@ public class StatsDao {
             sql += "JOIN topics t ON d.topic_id=t.id "
                 + "JOIN users u ON d.student_id=u.id ";
         }
-        sql += "WHERE d.status='reviewed' AND d.score IS NOT NULL ";
+        sql += "WHERE d.doc_type='final' AND d.status='reviewed' AND d.score IS NOT NULL ";
         if (scoped) {
             sql += "AND t.college=? AND t.major=? AND u.college=? AND u.major=? ";
         }

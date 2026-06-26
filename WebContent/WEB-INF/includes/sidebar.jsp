@@ -35,6 +35,7 @@
       <a href="<%= ctx %>/teacher/messages.action" class="<%= sidebarCurrentPage.contains("/messages") ? "active" : "" %>">&#9632; 站内消息<% if (unreadMsg > 0) { %> <span class="badge bg-danger"><%= unreadMsg %></span><% } %></a>
       <a href="<%= ctx %>/director/topic-review.action" class="<%= sidebarCurrentPage.contains("/director/topic-review") ? "active" : "" %>">&#9632; 本专业课题审核</a>
       <a href="<%= ctx %>/director/selection-confirm.action" class="<%= sidebarCurrentPage.contains("/director/selection-confirm") ? "active" : "" %>">&#9632; 本专业选题确认</a>
+      <a href="<%= ctx %>/director/document-progress.action" class="<%= sidebarCurrentPage.contains("/director/document-progress") ? "active" : "" %>">&#9632; 本专业资料进度</a>
       <a href="<%= ctx %>/director/statistics.jsp" class="<%= sidebarCurrentPage.contains("/director/statistics") ? "active" : "" %>">&#9632; 本专业项目统计</a>
     <% } else if ("teacher".equals(userRole)) { %>
       <a href="<%= ctx %>/teacher/topic.action" class="<%= sidebarCurrentPage.contains("/teacher/topic") ? "active" : "" %>">&#9632; 我的课题</a>

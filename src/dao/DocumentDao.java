@@ -214,10 +214,15 @@ public class DocumentDao {
         if (!"reviewed".equals(status) && !"rejected".equals(status)) {
             return 0;
         }
-        if ("reviewed".equals(status)
+        if ("reviewed".equals(status) && isFinalDoc(id)
                 && (score == null || score.compareTo(BigDecimal.ZERO) < 0
                 || score.compareTo(new BigDecimal("100")) > 0)) {
             return 0;
+        }
+        if (!isFinalDoc(id)) {
+            score = null;
+            selfReview = null;
+            peerReview = null;
         }
         if ("rejected".equals(status)) {
             score = null;
@@ -261,6 +266,11 @@ public class DocumentDao {
         }
     }
 
+    private boolean isFinalDoc(int id) {
+        Object val = SQLHelper.queryScalar("SELECT doc_type FROM documents WHERE id=?", id);
+        return "final".equals(val == null ? null : String.valueOf(val));
+    }
+
     private void saveVersion(Connection conn, int documentId, String title,
             String content, String filePath) throws Exception {
         int nextNo = ((Number) queryScalar(conn,
@@ -299,6 +309,28 @@ public class DocumentDao {
             + "WHERE t.teacher_id=? AND d.status='submitted'",
             teacherId);
         return val == null ? 0 : ((Number) val).intValue();
+    }
+
+    public List<Object[]> findProgressByScope(String college, String major) {
+        return SQLHelper.queryList(
+            "SELECT u.student_no,u.real_name,u.class_name,t.title,teacher.real_name,"
+            + "p.status,p.submit_time,p.review_time,"
+            + "m.status,m.submit_time,m.review_time,"
+            + "f.status,f.score,f.submit_time,f.review_time "
+            + "FROM users u "
+            + "JOIN ("
+            + "  SELECT student_id,topic_id FROM topic_assignments "
+            + "  UNION SELECT student_id,topic_id FROM topic_selections WHERE status='approved'"
+            + ") sel ON sel.student_id=u.id "
+            + "JOIN topics t ON sel.topic_id=t.id "
+            + "JOIN users teacher ON t.teacher_id=teacher.id "
+            + "LEFT JOIN documents p ON p.student_id=u.id AND p.doc_type='proposal' "
+            + "LEFT JOIN documents m ON m.student_id=u.id AND m.doc_type='midterm' "
+            + "LEFT JOIN documents f ON f.student_id=u.id AND f.doc_type='final' "
+            + "WHERE u.role='student' AND u.college=? AND u.major=? "
+            + "AND t.college=? AND t.major=? "
+            + "ORDER BY u.student_no",
+            college, major, college, major);
     }
 
     private List<Document> mapList(List<Object[]> rows) {

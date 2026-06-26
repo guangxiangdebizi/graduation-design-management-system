@@ -86,7 +86,7 @@ INSERT INTO dictionary_items(dict_type, item_code, item_label, sort_order, statu
 ('topic_status', 'closed', '关闭选题', 20, 1),
 ('document_type', 'proposal', '开题报告', 10, 1),
 ('document_type', 'midterm', '中期检查', 20, 1),
-('document_type', 'final', '终稿', 30, 1),
+('document_type', 'final', '终稿/结题材料', 30, 1),
 ('status', 'pending', '待审核', 10, 1),
 ('status', 'approved', '已通过', 20, 1),
 ('status', 'rejected', '已拒绝', 30, 1),

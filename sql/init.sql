@@ -303,7 +303,7 @@ INSERT INTO dictionary_items(dict_type, item_code, item_label, sort_order, statu
 ('topic_status', 'rejected', '已驳回', 30, 1),
 ('document_type', 'proposal', '开题报告', 10, 1),
 ('document_type', 'midterm', '中期检查', 20, 1),
-('document_type', 'final', '终稿', 30, 1),
+('document_type', 'final', '终稿/结题材料', 30, 1),
 ('status', 'pending', '待审核', 10, 1),
 ('status', 'approved', '已通过', 20, 1),
 ('status', 'rejected', '已拒绝', 30, 1),
@@ -346,7 +346,7 @@ INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('selection.choice_limit', '3', '每个学生每轮最多志愿数'),
 ('switch.upload_proposal', '1', '开题报告上传开关'),
 ('switch.upload_midterm', '1', '中期报告上传开关'),
-('switch.upload_final', '1', '终稿上传开关');
+('switch.upload_final', '1', '终稿/结题材料上传开关');
 
 -- 密码: admin123 / 123456 (MD5)
 INSERT INTO users (username, password, role, real_name, title, student_no, college, major, class_name, department, email, phone) VALUES

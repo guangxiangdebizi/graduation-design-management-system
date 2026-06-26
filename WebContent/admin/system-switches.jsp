@@ -46,7 +46,7 @@
         <td><input class="form-check-input" type="checkbox" name="switch.upload_midterm" <%= "1".equals(switches.get("switch.upload_midterm"))?"checked":"" %>></td>
       </tr>
       <tr>
-        <td>终稿上传</td><td>控制学生毕业论文/终稿提交</td>
+        <td>终稿/结题材料上传</td><td>控制学生毕业论文终稿/结题材料提交</td>
         <td><input class="form-check-input" type="checkbox" name="switch.upload_final" <%= "1".equals(switches.get("switch.upload_final"))?"checked":"" %>></td>
       </tr>
     </table>

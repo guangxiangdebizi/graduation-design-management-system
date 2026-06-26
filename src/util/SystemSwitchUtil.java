@@ -22,7 +22,7 @@ public class SystemSwitchUtil {
         defs.put(MANUAL_ASSIGN, "强制分配阶段开放");
         defs.put(UPLOAD_PROPOSAL, "开题报告上传开关");
         defs.put(UPLOAD_MIDTERM, "中期检查上传开关");
-        defs.put(UPLOAD_FINAL, "终稿上传开关");
+        defs.put(UPLOAD_FINAL, "终稿/结题材料上传开关");
         return defs;
     }
 

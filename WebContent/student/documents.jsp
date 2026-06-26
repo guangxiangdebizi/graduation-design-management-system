@@ -44,7 +44,7 @@
 
       <div class="icon">&#9888;</div>
 
-      <p>您还没有通过选题审批，无法提交文档</p>
+      <p>您还没有最终确认的毕业设计题目，无法提交阶段资料</p>
 
       <a href="topic.action" class="btn btn-primary btn-sm">去申请选题</a>
 
@@ -71,6 +71,9 @@
 <div class="content-card">
 
   <p class="text-muted small mb-3">当前课题: <strong><%= EscapeUtil.html(approved.getTopicTitle()) %></strong> | 指导教师: <%= EscapeUtil.html(approved.getTeacherName()) %></p>
+  <div class="alert alert-info py-2">
+    资料按阶段提交：开题报告通过后才能提交中期检查；中期检查通过后才能提交终稿/结题材料。开题和中期只做阶段审核，终稿/结题审核通过后形成最终成绩。
+  </div>
 
   <% if (!uploadOpen) { %>
 

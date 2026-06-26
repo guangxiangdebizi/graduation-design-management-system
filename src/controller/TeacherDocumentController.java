@@ -57,17 +57,21 @@ public class TeacherDocumentController extends HttpServlet {
                 redirectToList(request, response, "invalid_score");
                 return;
             }
-            if ("review".equals(action) && (score == null
+            Document document = dao.findById(id);
+            boolean finalDoc = document != null && "final".equals(document.getDocType());
+            if ("review".equals(action) && finalDoc && (score == null
                     || score.compareTo(BigDecimal.ZERO) < 0
                     || score.compareTo(new BigDecimal("100")) > 0)) {
                 redirectToList(request, response, "invalid_score");
                 return;
             }
+            if (!finalDoc) {
+                score = null;
+            }
 
             String feedback = request.getParameter("feedback");
-            String selfReview = request.getParameter("selfReview");
-            String peerReview = request.getParameter("peerReview");
-            Document document = dao.findById(id);
+            String selfReview = finalDoc ? request.getParameter("selfReview") : null;
+            String peerReview = finalDoc ? request.getParameter("peerReview") : null;
             int result = dao.review(id, user.getId(), status, score, feedback, selfReview, peerReview);
             if (result <= 0 || document == null) {
                 redirectToList(request, response, "error");
