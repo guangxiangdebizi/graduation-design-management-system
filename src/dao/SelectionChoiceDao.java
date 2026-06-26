@@ -89,7 +89,7 @@ public class SelectionChoiceDao {
         int normalizedRound = round >= 2 ? 2 : 1;
         int choiceLimit = SystemConfigUtil.getInt("selection.choice_limit", 3);
         int intentLimit = SystemConfigUtil.getInt("selection.intent_limit", 3);
-        if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION)
+        if (!SystemSwitchUtil.isSelectionOpenForRound(normalizedRound)
                 || SystemSwitchUtil.currentRound() != normalizedRound) {
             return ERR_SELECTION_CLOSED;
         }

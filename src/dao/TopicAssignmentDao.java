@@ -13,7 +13,6 @@ import bean.User;
 import util.CollegeUtil;
 import util.DateUtil;
 import util.SQLHelper;
-import util.SystemSwitchUtil;
 
 public class TopicAssignmentDao {
     public static final int ERR_TOPIC_ASSIGNED = -1;
@@ -252,7 +251,6 @@ public class TopicAssignmentDao {
                 return ERR_STUDENT_ASSIGNED;
             }
 
-            int round = SystemSwitchUtil.currentRound();
             int assignmentId;
             try (PreparedStatement ps = conn.prepareStatement(
                     "INSERT INTO topic_assignments(student_id,topic_id,choice_id,round,source,"
@@ -260,9 +258,9 @@ public class TopicAssignmentDao {
                     Statement.RETURN_GENERATED_KEYS)) {
                 ps.setInt(1, studentId);
                 ps.setInt(2, topicId);
-                ps.setInt(3, round >= 2 ? 2 : 1);
+                ps.setInt(3, 2);
                 ps.setInt(4, confirmerId);
-                ps.setString(5, normalizeComment(comment, "专业负责人手动分配"));
+                ps.setString(5, normalizeComment(comment, "第二轮后系主任强制分配"));
                 ps.executeUpdate();
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     assignmentId = rs.next() ? rs.getInt(1) : 0;

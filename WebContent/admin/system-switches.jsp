@@ -15,6 +15,9 @@
 
 <div class="content-card">
   <h5 class="mb-3">系统开放状态</h5>
+  <div class="alert alert-info py-2">
+    管理员只控制流程开关：关闭第一轮、开启第二轮后学生端进入第 2 轮选题；第二轮结束后关闭第二轮并开启强制分配，具体分配由系主任/专业负责人在本专业确认页执行。
+  </div>
   <form action="system-switch.action" method="post">
     <table class="table-modern">
       <tr><th>功能</th><th>说明</th><th>当前状态</th></tr>
@@ -23,12 +26,16 @@
         <td><input class="form-check-input" type="checkbox" name="switch.topic_submit" <%= "1".equals(switches.get("switch.topic_submit"))?"checked":"" %>></td>
       </tr>
       <tr>
-        <td>学生选题</td><td>关闭后学生只能浏览已公布题目，不能提交选题申请；第一轮和第二轮复用该开关</td>
+        <td>第一轮选题</td><td>开启后学生端进入第一轮志愿填报；第一轮结束后关闭该开关</td>
         <td><input class="form-check-input" type="checkbox" name="switch.selection" <%= "1".equals(switches.get("switch.selection"))?"checked":"" %>></td>
       </tr>
       <tr>
-        <td>第二轮选题</td><td>开启后学生新提交的选题申请记为第二轮，用于第一轮确认后再次开放选题；关闭则回到第一轮</td>
+        <td>第二轮选题</td><td>第一轮确认完成后开启；未最终确认题目的学生可在学生端提交第 2 轮志愿</td>
         <td><input class="form-check-input" type="checkbox" name="switch.selection_round2" <%= "1".equals(switches.get("switch.selection_round2"))?"checked":"" %>></td>
+      </tr>
+      <tr>
+        <td>强制分配</td><td>第二轮确认结束后由管理员开启阶段；开启后由系主任/专业负责人把剩余学生分配到剩余题目</td>
+        <td><input class="form-check-input" type="checkbox" name="switch.manual_assign" <%= "1".equals(switches.get("switch.manual_assign"))?"checked":"" %>></td>
       </tr>
       <tr>
         <td>开题报告上传</td><td>控制学生开题报告提交</td>

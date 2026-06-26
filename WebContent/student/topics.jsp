@@ -17,6 +17,7 @@
   String majorFilter = (String) request.getAttribute("majorFilter");
   Boolean hasAppliedAttr = (Boolean) request.getAttribute("hasApplied");
   Boolean selectionOpenAttr = (Boolean) request.getAttribute("selectionOpen");
+  Boolean manualAssignOpenAttr = (Boolean) request.getAttribute("manualAssignOpen");
   Integer roundObj = (Integer) request.getAttribute("round");
   Integer intentLimitObj = (Integer) request.getAttribute("intentLimit");
   if (topics == null || hasAppliedAttr == null || activeChoices == null || intentCounts == null) {
@@ -28,6 +29,7 @@
   if (majorFilter == null) majorFilter = "";
   boolean hasApplied = hasAppliedAttr.booleanValue();
   boolean selectionOpen = selectionOpenAttr == null || selectionOpenAttr.booleanValue();
+  boolean manualAssignOpen = manualAssignOpenAttr != null && manualAssignOpenAttr.booleanValue();
   int round = roundObj == null ? 1 : roundObj.intValue();
   int intentLimit = intentLimitObj == null ? 3 : intentLimitObj.intValue();
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
@@ -75,7 +77,9 @@
   </div>
 </form>
 
-<% if (!selectionOpen) { %>
+<% if (!selectionOpen && manualAssignOpen) { %>
+  <div class="alert alert-warning py-2">第二轮选题已结束，当前进入强制分配阶段。请等待系主任/专业负责人确认或分配最终题目。</div>
+<% } else if (!selectionOpen) { %>
   <div class="alert alert-warning py-2">选题系统当前关闭：可以浏览系主任已公布题目，但不能提交选题申请。</div>
 <% } %>
 

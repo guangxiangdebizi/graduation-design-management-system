@@ -35,13 +35,13 @@ public class StudentTopicController extends HttpServlet {
         String college = ScopeUtil.clean(user.getCollege());
         String major = ScopeUtil.clean(user.getMajor());
         TopicDao dao = new TopicDao();
-        boolean selectionOpen = SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION);
+        int round = SystemSwitchUtil.currentRound();
+        boolean selectionOpen = SystemSwitchUtil.isSelectionOpenForRound(round);
         SelectionChoiceDao choiceDao = new SelectionChoiceDao();
         TopicAssignment assignment = new TopicAssignmentDao().findByStudent(user.getId());
         SelectionDao selectionDao = new SelectionDao();
         bean.TopicSelection legacySelection = assignment == null
             ? selectionDao.findApprovedByStudent(user.getId()) : null;
-        int round = SystemSwitchUtil.currentRound();
         SelectionApplication activeApplication = choiceDao.findActiveApplication(user.getId(), round);
         List<SelectionChoice> activeChoices = activeApplication == null
             ? new ArrayList<SelectionChoice>()
@@ -55,6 +55,8 @@ public class StudentTopicController extends HttpServlet {
         request.setAttribute("collegeFilter", college);
         request.setAttribute("majorFilter", major);
         request.setAttribute("selectionOpen", Boolean.valueOf(selectionOpen));
+        request.setAttribute("manualAssignOpen",
+            Boolean.valueOf(SystemSwitchUtil.isManualAssignOpen()));
         request.setAttribute("round", Integer.valueOf(round));
         request.setAttribute("intentLimit",
             Integer.valueOf(SystemConfigUtil.getInt("selection.intent_limit", 3)));
@@ -79,12 +81,12 @@ public class StudentTopicController extends HttpServlet {
         SelectionDao dao = new SelectionDao();
 
         if ("submitChoices".equals(action)) {
+            int round = SystemSwitchUtil.currentRound();
             int result = new SelectionChoiceDao().submitChoices(
-                user.getId(), SystemSwitchUtil.currentRound(), parseTopicIds(request));
+                user.getId(), round, parseTopicIds(request));
             if (result > 0) {
                 OperationLogUtil.log(user.getId(), "SUBMIT_CHOICES", "selection_choices",
-                    "在浏览课题页提交第" + SystemSwitchUtil.currentRound()
-                        + "轮志愿 applicationId=" + result);
+                    "在浏览课题页提交第" + round + "轮志愿 applicationId=" + result);
                 WebUtil.redirect(request, response, "/student/topic.action?msg=choice_ok");
                 return;
             }
@@ -93,7 +95,7 @@ public class StudentTopicController extends HttpServlet {
         }
 
         if ("apply".equals(action)) {
-            if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION)) {
+            if (!SystemSwitchUtil.isSelectionOpen()) {
                 WebUtil.redirect(request, response, "/student/topic.action?msg=selection_closed");
                 return;
             }

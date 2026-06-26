@@ -45,5 +45,5 @@ INSERT INTO system_configs(config_key, config_value, description) VALUES
 ON DUPLICATE KEY UPDATE description = VALUES(description);
 
 UPDATE system_configs
-   SET description = '第二轮选题开关，配合 selection.current_round 使用'
+   SET description = '第二轮学生选题开关，开启后学生端进入第二轮'
  WHERE config_key = 'switch.selection_round2';

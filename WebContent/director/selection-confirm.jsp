@@ -10,6 +10,7 @@
   List<Topic> availableTopics = (List<Topic>) request.getAttribute("availableTopics");
   String statusFilter = (String) request.getAttribute("statusFilter");
   String directorScopeText = (String) request.getAttribute("directorScopeText");
+  Boolean manualAssignOpenAttr = (Boolean) request.getAttribute("manualAssignOpen");
   Integer currentRoundAttr = (Integer) request.getAttribute("currentRound");
   int currentRound = currentRoundAttr == null ? 1 : currentRoundAttr.intValue();
   if (choiceGroups == null || assignments == null || selections == null
@@ -19,6 +20,7 @@
   }
   if (statusFilter == null) statusFilter = "pending";
   if (directorScopeText == null) directorScopeText = "";
+  boolean manualAssignOpen = manualAssignOpenAttr != null && manualAssignOpenAttr.booleanValue();
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <%@ include file="/WEB-INF/includes/header.jsp" %>
@@ -81,7 +83,7 @@
 <div class="content-card">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">已确认最终分配</h5>
-    <span class="text-muted small">来自第一轮、第二轮或手动分配。</span>
+    <span class="text-muted small">来自第一轮、第二轮或强制分配。</span>
   </div>
   <table class="table-modern">
     <tr><th>学生</th><th>学号</th><th>课题</th><th>指导教师</th><th>来源</th><th>确认时间</th><th>说明</th></tr>
@@ -96,7 +98,7 @@
         <td>
           <% if ("round1".equals(a.getSource())) { %>第一轮<% }
              else if ("round2".equals(a.getSource())) { %>第二轮<% }
-             else { %>手动分配<% } %>
+             else { %>强制分配<% } %>
         </td>
         <td><%= a.getConfirmTime()==null?"—":sdf.format(a.getConfirmTime()) %></td>
         <td><%= a.getConfirmComment()==null?"—":EscapeUtil.html(a.getConfirmComment()) %></td>
@@ -107,10 +109,14 @@
 
 <div class="content-card">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0">第二轮后手动分配</h5>
-    <span class="text-muted small">只列出尚无最终题目的学生和未被最终分配的题目。</span>
+    <h5 class="mb-0">第二轮后强制分配</h5>
+    <span class="text-muted small">管理员只开放流程阶段；剩余学生和剩余题目的具体分配由系主任/专业负责人执行。</span>
   </div>
-  <% if (unselectedStudents.isEmpty()) { %>
+  <% if (!manualAssignOpen) { %>
+    <div class="alert alert-warning py-2 mb-0">
+      管理员尚未开启强制分配阶段。请先完成第二轮确认，由管理员关闭第二轮选题并开启“强制分配”后再操作。
+    </div>
+  <% } else if (unselectedStudents.isEmpty()) { %>
     <div class="empty-state"><div class="icon">&#9989;</div><p>本专业暂无未确认题目的学生</p></div>
   <% } else if (availableTopics.isEmpty()) { %>
     <div class="empty-state"><div class="icon">&#128221;</div><p>暂无可分配题目</p></div>
@@ -137,7 +143,7 @@
       </div>
       <div class="col-md-3">
         <label class="form-label">分配说明</label>
-        <input name="reviewComment" class="form-control form-control-sm" placeholder="如：第二轮后手动分配">
+        <input name="reviewComment" class="form-control form-control-sm" placeholder="如：第二轮后强制分配">
       </div>
       <div class="col-md-auto">
         <button type="submit" class="btn btn-primary btn-sm">确认分配</button>

@@ -17,9 +17,10 @@ ON DUPLICATE KEY UPDATE item_label=VALUES(item_label), sort_order=VALUES(sort_or
 
 INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('switch.topic_submit', '1', '教师出题开关'),
-('switch.selection', '1', '学生选题开关，第一轮和第二轮复用'),
-('switch.selection_round1', '1', '第一轮选题开关'),
-('switch.selection_round2', '0', '第二轮选题开关'),
+('switch.selection', '1', '第一轮学生选题开关'),
+('switch.selection_round1', '1', '第一轮学生选题开关，兼容旧配置'),
+('switch.selection_round2', '0', '第二轮学生选题开关，开启后学生端进入第二轮'),
+('switch.manual_assign', '0', '强制分配阶段开关，管理员只控制开放状态，具体分配由系主任执行'),
 ('switch.upload_proposal', '1', '开题报告上传开关'),
 ('switch.upload_midterm', '1', '中期报告上传开关'),
 ('switch.upload_final', '1', '终稿上传开关')

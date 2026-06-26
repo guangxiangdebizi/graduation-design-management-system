@@ -56,6 +56,8 @@ public class DirectorSelectionConfirmController extends HttpServlet {
         request.setAttribute("availableTopics", assignmentDao.findAssignableTopics(
             scope.getCollege(), scope.getMajor()));
         request.setAttribute("directorScopeText", ScopeUtil.scopeText(scope));
+        request.setAttribute("manualAssignOpen",
+            Boolean.valueOf(SystemSwitchUtil.isManualAssignOpen()));
         request.getRequestDispatcher("/director/selection-confirm.jsp").forward(request, response);
     }
 
@@ -138,7 +140,7 @@ public class DirectorSelectionConfirmController extends HttpServlet {
                 MessageNotifyUtil.send(selection.getStudentId(), "选题确认结果",
                     "confirm".equals(action)
                         ? "系主任已确认您的选题《" + selection.getTopicTitle() + "》。"
-                        : "系主任未确认您的选题申请，请参加下一轮选题或等待手动分配。");
+                        : "系主任未确认您的选题申请，请参加下一轮选题或等待强制分配。");
             }
             OperationLogUtil.log(user.getId(),
                 "confirm".equals(action) ? "CONFIRM" : "REJECT",
@@ -149,6 +151,11 @@ public class DirectorSelectionConfirmController extends HttpServlet {
         }
 
         if ("assign".equals(action)) {
+            if (!SystemSwitchUtil.isManualAssignOpen()) {
+                WebUtil.redirect(request, response,
+                    "/director/selection-confirm.action?msg=assign_closed");
+                return;
+            }
             int studentId = parseInt(request.getParameter("studentId"));
             int topicId = parseInt(request.getParameter("topicId"));
             int result = assignmentDao.manualAssign(studentId, topicId, user.getId(),
@@ -176,10 +183,10 @@ public class DirectorSelectionConfirmController extends HttpServlet {
             }
             TopicAssignment assignment = assignmentDao.findById(result);
             MessageNotifyUtil.send(studentId, "选题分配结果",
-                assignment == null ? "专业负责人已为您手动分配毕业设计题目。"
-                    : "专业负责人已为您手动分配毕业设计题目《" + assignment.getTopicTitle() + "》。");
+                assignment == null ? "系主任已为您强制分配毕业设计题目。"
+                    : "系主任已为您强制分配毕业设计题目《" + assignment.getTopicTitle() + "》。");
             OperationLogUtil.log(user.getId(), "ASSIGN", "topic_assignments",
-                "系主任手动分配选题 studentId=" + studentId + ", topicId=" + topicId);
+                "系主任强制分配选题 studentId=" + studentId + ", topicId=" + topicId);
             WebUtil.redirect(request, response, "/director/selection-confirm.action?msg=assign_ok");
             return;
         }

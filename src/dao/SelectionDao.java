@@ -120,7 +120,7 @@ public class SelectionDao {
                 }
             }
 
-            if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.SELECTION)) {
+            if (!SystemSwitchUtil.isSelectionOpen()) {
                 conn.rollback();
                 return -3;
             }

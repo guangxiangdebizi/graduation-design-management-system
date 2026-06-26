@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS topic_assignments (
 
 INSERT INTO system_configs(config_key, config_value, description) VALUES
 ('selection.intent_limit', '3', '每个题目每轮最多志愿意向人数'),
-('selection.choice_limit', '3', '每个学生每轮最多志愿数')
+('selection.choice_limit', '3', '每个学生每轮最多志愿数'),
+('switch.manual_assign', '0', '强制分配阶段开关，管理员只控制开放状态，具体分配由系主任执行')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 INSERT INTO dictionary_items(dict_type, item_code, item_label, sort_order, status) VALUES
