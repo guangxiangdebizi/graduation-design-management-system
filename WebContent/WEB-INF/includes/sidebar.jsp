@@ -26,6 +26,7 @@
       <a href="<%= ctx %>/admin/logs.action" class="<%= sidebarCurrentPage.contains("/admin/logs") ? "active" : "" %>">&#9632; 操作日志</a>
     <% } else if ("director".equals(userRole)) { %>
       <a href="<%= ctx %>/teacher/topic.action" class="<%= sidebarCurrentPage.contains("/teacher/topic") ? "active" : "" %>">&#9632; 我的课题</a>
+      <a href="<%= ctx %>/teacher/choice-review.action" class="<%= sidebarCurrentPage.contains("/teacher/choice-review") ? "active" : "" %>">&#9632; 志愿审批</a>
       <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题建议</a>
       <a href="<%= ctx %>/teacher/document.action" class="<%= sidebarCurrentPage.contains("/teacher/document") ? "active" : "" %>">&#9632; 文档审核</a>
       <a href="<%= ctx %>/teacher/students.action" class="<%= sidebarCurrentPage.contains("/teacher/students") ? "active" : "" %>">&#9632; 学生进度</a>
@@ -39,6 +40,7 @@
       <a href="<%= ctx %>/director/statistics.jsp" class="<%= sidebarCurrentPage.contains("/director/statistics") ? "active" : "" %>">&#9632; 本专业项目统计</a>
     <% } else if ("teacher".equals(userRole)) { %>
       <a href="<%= ctx %>/teacher/topic.action" class="<%= sidebarCurrentPage.contains("/teacher/topic") ? "active" : "" %>">&#9632; 我的课题</a>
+      <a href="<%= ctx %>/teacher/choice-review.action" class="<%= sidebarCurrentPage.contains("/teacher/choice-review") ? "active" : "" %>">&#9632; 志愿审批</a>
       <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题建议</a>
       <a href="<%= ctx %>/teacher/document.action" class="<%= sidebarCurrentPage.contains("/teacher/document") ? "active" : "" %>">&#9632; 文档审核</a>
       <a href="<%= ctx %>/teacher/students.action" class="<%= sidebarCurrentPage.contains("/teacher/students") ? "active" : "" %>">&#9632; 学生进度</a>

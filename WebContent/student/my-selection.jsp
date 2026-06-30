@@ -45,7 +45,7 @@
       </tr>
       <% } %>
     </table>
-    <div class="text-muted small mt-2">当前志愿需要专业负责人确认后，才会成为最终毕业设计题目。</div>
+    <div class="text-muted small mt-2">当前志愿需要对应课题指导教师接收后，才会成为最终毕业设计题目。</div>
   <% } else if (list.isEmpty()) { %>
     <div class="empty-state">
       <div class="icon">&#128221;</div>

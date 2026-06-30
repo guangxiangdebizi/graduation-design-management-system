@@ -38,9 +38,9 @@
   String msg = request.getParameter("msg");
   String msgTitle = "", msgContent = "", msgClass = "";
   if ("already_applied".equals(msg)) { msgTitle="提示"; msgContent="您已有选题申请，请等待系主任确认"; msgClass="warning"; }
-  else if ("choice_ok".equals(msg)) { msgTitle="成功"; msgContent="志愿已提交，请等待专业负责人确认"; msgClass="success"; }
+  else if ("choice_ok".equals(msg)) { msgTitle="成功"; msgContent="志愿已提交，请等待对应课题指导教师审批"; msgClass="success"; }
   else if ("has_assignment".equals(msg)) { msgTitle="提示"; msgContent="您已经有最终确认题目，不能重复填报"; msgClass="warning"; }
-  else if ("already_submitted".equals(msg)) { msgTitle="提示"; msgContent="您本轮已经提交过志愿，请等待确认"; msgClass="warning"; }
+  else if ("already_submitted".equals(msg)) { msgTitle="提示"; msgContent="您本轮已经提交过志愿，请等待指导教师审批"; msgClass="warning"; }
   else if ("choice_count_invalid".equals(msg)) { msgTitle="提示"; msgContent="每轮至少选择 1 个志愿，最多选择 3 个志愿"; msgClass="warning"; }
   else if ("duplicate_choice".equals(msg)) { msgTitle="提示"; msgContent="三个志愿不能选择同一个题目"; msgClass="warning"; }
   else if ("topic_invalid".equals(msg)) { msgTitle="提示"; msgContent="只能选择本专业、未分配、已审核通过的题目"; msgClass="warning"; }
@@ -125,7 +125,7 @@
       </tr>
       <% } %>
     </table>
-    <div class="text-muted small mt-2">提交后需等待专业负责人确认，本轮不能重复提交。</div>
+    <div class="text-muted small mt-2">提交后需等待对应课题指导教师审批，本轮不能重复提交。</div>
   </div>
 <% } else { %>
   <div class="content-card mb-3">

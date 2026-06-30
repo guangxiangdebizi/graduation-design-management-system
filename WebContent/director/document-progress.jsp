@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="java.util.*,java.text.SimpleDateFormat,bean.User,util.EscapeUtil,util.StatusUtil" %>
+<%@ page import="java.util.*,java.text.SimpleDateFormat,bean.User,util.DateUtil,util.EscapeUtil,util.StatusUtil" %>
 <%
   request.setAttribute("pageTitle", "本专业资料进度");
   User loginUser = (User) session.getAttribute("loginUser");
@@ -55,12 +55,20 @@
     StringBuilder sb = new StringBuilder();
     sb.append(EscapeUtil.html(StatusUtil.label(status)));
     if (submitObj != null) {
-      sb.append("<div class=\"text-muted small\">提交：").append(sdf.format(submitObj)).append("</div>");
+      sb.append("<div class=\"text-muted small\">提交：").append(formatDate(submitObj, sdf)).append("</div>");
     }
     if (reviewObj != null) {
-      sb.append("<div class=\"text-muted small\">审核：").append(sdf.format(reviewObj)).append("</div>");
+      sb.append("<div class=\"text-muted small\">审核：").append(formatDate(reviewObj, sdf)).append("</div>");
     }
     return sb.toString();
+  }
+
+  private String formatDate(Object value, SimpleDateFormat sdf) {
+    Date date = DateUtil.toDate(value);
+    if (date != null) {
+      return sdf.format(date);
+    }
+    return EscapeUtil.html(String.valueOf(value));
   }
 %>
 

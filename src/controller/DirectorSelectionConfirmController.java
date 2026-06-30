@@ -75,42 +75,8 @@ public class DirectorSelectionConfirmController extends HttpServlet {
         SelectionDao dao = new SelectionDao();
         TopicAssignmentDao assignmentDao = new TopicAssignmentDao();
         if ("confirmChoice".equals(action)) {
-            int choiceId = parseInt(request.getParameter("choiceId"));
-            int result = assignmentDao.confirmChoice(choiceId, user.getId(),
-                scope.getCollege(), scope.getMajor(), request.getParameter("reviewComment"));
-            if (result == TopicAssignmentDao.ERR_TOPIC_ASSIGNED) {
-                WebUtil.redirect(request, response,
-                    "/director/selection-confirm.action?msg=topic_assigned");
-                return;
-            }
-            if (result == TopicAssignmentDao.ERR_STUDENT_ASSIGNED) {
-                WebUtil.redirect(request, response,
-                    "/director/selection-confirm.action?msg=student_has_topic");
-                return;
-            }
-            if (result == TopicAssignmentDao.ERR_CHOICE_INVALID) {
-                WebUtil.redirect(request, response,
-                    "/director/selection-confirm.action?msg=choice_invalid");
-                return;
-            }
-            if (result == TopicAssignmentDao.ERR_SCOPE) {
-                WebUtil.redirect(request, response,
-                    "/director/selection-confirm.action?msg=forbidden");
-                return;
-            }
-            if (result <= 0) {
-                WebUtil.redirect(request, response,
-                    "/director/selection-confirm.action?msg=error");
-                return;
-            }
-            TopicAssignment assignment = assignmentDao.findById(result);
-            if (assignment != null) {
-                MessageNotifyUtil.send(assignment.getStudentId(), "选题确认结果",
-                    "专业负责人已确认您的毕业设计题目《" + assignment.getTopicTitle() + "》。");
-            }
-            OperationLogUtil.log(user.getId(), "CONFIRM_CHOICE", "topic_assignments",
-                "专业负责人确认三志愿 choiceId=" + choiceId + ", assignmentId=" + result);
-            WebUtil.redirect(request, response, "/director/selection-confirm.action?msg=choice_confirm_ok");
+            WebUtil.redirect(request, response,
+                "/director/selection-confirm.action?msg=teacher_review_required");
             return;
         }
 

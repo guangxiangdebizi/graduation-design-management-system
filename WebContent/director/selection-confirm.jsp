@@ -29,14 +29,14 @@
 
 <div class="alert alert-info py-2">
   当前专业负责人权限范围：<%= EscapeUtil.html(directorScopeText) %>。
-  本页按“一个题目最终只能确认给一个学生、一个学生最终只能确认一个题目”的规则生成最终分配。
+  本页展示本专业志愿审批进度和最终分配结果；第一、第二轮由对应课题指导教师审批，第二轮后未匹配学生由专业负责人兜底分配。
 </div>
 
 <div class="content-card">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h5 class="mb-1">学生三志愿确认</h5>
-      <div class="text-muted small">按题目聚合显示本轮候选人，优先查看第一志愿；确认后写入最终分配表。</div>
+      <h5 class="mb-1">学生三志愿教师审批进度</h5>
+      <div class="text-muted small">第一轮、第二轮志愿由对应课题指导教师审批；本页用于专业负责人查看本专业候选情况和最终结果。</div>
     </div>
     <div>
       <a href="selection-confirm.action?round=1&status=<%= EscapeUtil.attr(statusFilter) %>" class="btn btn-sm <%= currentRound==1?"btn-primary":"btn-outline-primary" %>">第一轮</a>
@@ -45,7 +45,7 @@
   </div>
 
   <% if (choiceGroups.isEmpty()) { %>
-    <div class="empty-state"><div class="icon">&#128221;</div><p>第<%= currentRound %>轮暂无待确认志愿候选</p></div>
+    <div class="empty-state"><div class="icon">&#128221;</div><p>第<%= currentRound %>轮暂无待教师审批志愿候选</p></div>
   <% } else { for (TopicChoiceGroup group : choiceGroups) { %>
     <div class="border rounded p-3 mb-3">
       <div class="d-flex justify-content-between align-items-start mb-2">
@@ -56,7 +56,7 @@
         <span class="badge bg-secondary">候选 <%= group.getCandidateCount() %> 人</span>
       </div>
       <table class="table-modern">
-        <tr><th>志愿</th><th>学生</th><th>学号</th><th>提交时间</th><th>当前题目意向数</th><th>确认操作</th></tr>
+        <tr><th>志愿</th><th>学生</th><th>学号</th><th>提交时间</th><th>当前题目意向数</th><th>审批责任</th></tr>
         <% for (SelectionChoice c : group.getChoices()) { %>
           <tr>
             <td><span class="badge <%= c.getChoiceRank()==1?"bg-primary":(c.getChoiceRank()==2?"bg-info":"bg-secondary") %>">第<%= c.getChoiceRank() %>志愿</span></td>
@@ -64,15 +64,7 @@
             <td><%= EscapeUtil.html(c.getStudentNo()) %></td>
             <td><%= c.getCreatedAt()==null?"—":sdf.format(c.getCreatedAt()) %></td>
             <td><%= c.getCurrentIntentCount() %></td>
-            <td>
-              <form action="selection-confirm.action" method="post" class="d-flex gap-2 align-items-center"
-                    onsubmit="return confirm('确认将《<%= EscapeUtil.js(group.getTopicTitle()) %>》分配给 <%= EscapeUtil.js(c.getStudentName()) %>？');">
-                <input type="hidden" name="action" value="confirmChoice">
-                <input type="hidden" name="choiceId" value="<%= c.getId() %>">
-                <input name="reviewComment" class="form-control form-control-sm" placeholder="确认说明，可空" style="min-width:180px;">
-                <button type="submit" class="btn btn-success btn-sm">确认给该学生</button>
-              </form>
-            </td>
+            <td><span class="text-muted small">由课题指导教师审批</span></td>
           </tr>
         <% } %>
       </table>
@@ -114,7 +106,7 @@
   </div>
   <% if (!manualAssignOpen) { %>
     <div class="alert alert-warning py-2 mb-0">
-      管理员尚未开启强制分配阶段。请先完成第二轮确认，由管理员关闭第二轮选题并开启“强制分配”后再操作。
+      管理员尚未开启强制分配阶段。请先完成第二轮教师审批，由管理员关闭第二轮选题并开启“强制分配”后再操作。
     </div>
   <% } else if (unselectedStudents.isEmpty()) { %>
     <div class="empty-state"><div class="icon">&#9989;</div><p>本专业暂无未确认题目的学生</p></div>
@@ -183,7 +175,7 @@
         </td>
         <td>
           <% if ("pending".equals(s.getStatus())) { %>
-            <button class="btn btn-sm btn-success" onclick="reviewSelection(<%= s.getId() %>,'confirm','<%= EscapeUtil.js(s.getStudentName()) %>')">确认对应</button>
+            <button class="btn btn-sm btn-success" onclick="reviewSelection(<%= s.getId() %>,'confirm','<%= EscapeUtil.js(s.getStudentName()) %>')">旧版确认</button>
             <button class="btn btn-sm btn-outline-danger" onclick="reviewSelection(<%= s.getId() %>,'reject','<%= EscapeUtil.js(s.getStudentName()) %>')">不确认</button>
           <% } else { %>
             —
@@ -202,7 +194,7 @@
       <div class="modal-header"><h6 class="modal-title" id="reviewTitle">选题确认</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <label class="form-label">确认意见</label>
-        <textarea name="reviewComment" class="form-control form-control-sm" rows="3" placeholder="请输入专业负责人确认意见"></textarea>
+        <textarea name="reviewComment" class="form-control form-control-sm" rows="3" placeholder="请输入旧版单题申请确认意见"></textarea>
       </div>
       <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">提交</button></div>
     </form>

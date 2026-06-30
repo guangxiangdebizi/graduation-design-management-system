@@ -83,14 +83,16 @@ function initPageMessages() {
     'topic_submit_closed', 'selection_closed', 'assign_closed', 'upload_closed',
     'has_assignment', 'choice_count_invalid', 'duplicate_choice',
     'topic_invalid', 'intent_full', 'already_submitted',
-    'topic_assigned', 'choice_invalid'];
+    'topic_assigned', 'choice_invalid', 'review_closed'];
   var messages = {
     'add_ok': '添加成功',
     'edit_ok': '修改成功',
     'delete_ok': '删除成功',
     'apply_ok': '选题申请已提交',
-    'choice_ok': '志愿已提交，请等待专业负责人确认',
+    'choice_ok': '志愿已提交，请等待对应课题指导教师审批',
     'choice_confirm_ok': '已确认志愿并生成最终题目分配',
+    'accept_ok': '已接收该学生志愿，并生成最终题目分配',
+    'reject_ok': '已将该志愿标记为未接收',
     'already_applied': '您已有待审或已通过的选题',
     'submit_ok': '文档提交成功',
     'no_topic': '请先完成选题后再提交文档',
@@ -127,9 +129,10 @@ function initPageMessages() {
     'duplicate_choice': '三个志愿不能选择同一个题目',
     'topic_invalid': '只能选择本专业、未分配、已审核通过的题目',
     'intent_full': '题目的本轮意向人数已满，请重新选择',
-    'already_submitted': '您本轮已经提交过志愿，请等待确认',
+    'already_submitted': '您本轮已经提交过志愿，请等待指导教师审批',
     'topic_assigned': '该题目已被最终分配，不能重复确认',
-    'choice_invalid': '该志愿当前不可确认，可能已失效或题目未开放',
+    'choice_invalid': '该志愿当前不可审批，可能已失效或题目未开放',
+    'review_closed': '当前轮次未开放教师志愿审批',
     'locked': '登录失败次数过多，请稍后再试',
     'error': '操作失败，请重试'
   };
