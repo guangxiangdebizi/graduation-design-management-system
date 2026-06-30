@@ -37,7 +37,7 @@ public class DirectorExportController extends HttpServlet {
             + "(SELECT status FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
             + "(SELECT score FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
             + "(SELECT feedback FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
-            + "ds.defense_time,ds.room "
+            + "ds.score,ds.defense_time,ds.room "
             + "FROM users u "
             + "JOIN ("
             + "  SELECT student_id,topic_id FROM topic_assignments "
@@ -60,7 +60,8 @@ public class DirectorExportController extends HttpServlet {
         Sheet sheet = wb.createSheet("本专业成绩汇总");
         Row header = sheet.createRow(0);
         String[] titles = {"学号", "姓名", "院系", "课题", "指导教师",
-            "开题状态", "中期状态", "终稿/结题状态", "最终成绩", "导师评语", "答辩时间", "答辩教室"};
+            "开题状态", "中期状态", "终稿/结题状态", "终稿成绩", "答辩成绩",
+            "综合参考分", "导师评语", "答辩时间", "答辩教室"};
         for (int i = 0; i < titles.length; i++) {
             header.createCell(i).setCellValue(titles[i]);
         }
@@ -77,9 +78,11 @@ public class DirectorExportController extends HttpServlet {
             r.createCell(6).setCellValue(statusText(row[6]));
             r.createCell(7).setCellValue(statusText(row[7]));
             setScoreCell(r, 8, row[8]);
-            r.createCell(9).setCellValue(row[9] == null ? "" : String.valueOf(row[9]));
-            r.createCell(10).setCellValue(row[10] == null ? "" : String.valueOf(row[10]));
-            r.createCell(11).setCellValue(row[11] == null ? "" : String.valueOf(row[11]));
+            setScoreCell(r, 9, row[10]);
+            setScoreCell(r, 10, composite(row[8], row[10]));
+            r.createCell(11).setCellValue(row[9] == null ? "" : String.valueOf(row[9]));
+            r.createCell(12).setCellValue(row[11] == null ? "" : String.valueOf(row[11]));
+            r.createCell(13).setCellValue(row[12] == null ? "" : String.valueOf(row[12]));
         }
         for (int i = 0; i < titles.length; i++) {
             sheet.autoSizeColumn(i);
@@ -108,5 +111,13 @@ public class DirectorExportController extends HttpServlet {
         if ("reviewed".equals(status)) return "已通过";
         if ("rejected".equals(status)) return "已退回";
         return status;
+    }
+
+    private BigDecimal composite(Object finalScore, Object defenseScore) {
+        if (finalScore == null || defenseScore == null) {
+            return null;
+        }
+        return new BigDecimal(finalScore.toString()).multiply(new BigDecimal("0.6"))
+            .add(new BigDecimal(defenseScore.toString()).multiply(new BigDecimal("0.4")));
     }
 }

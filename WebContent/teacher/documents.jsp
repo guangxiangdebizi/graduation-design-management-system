@@ -47,7 +47,7 @@
     <div class="empty-state"><div class="icon">&#128196;</div><p><%= EscapeUtil.html(emptyText) %></p></div>
   <% } else { %>
     <table class="table-modern">
-      <tr><th>学生</th><th>课题</th><th>标题</th><th>提交时间</th><th>状态</th><th><%= finalDocType ? "最终成绩" : "阶段说明" %></th><th>操作</th></tr>
+      <tr><th>学生</th><th>课题</th><th>标题</th><th>提交时间</th><th>状态</th><th><%= finalDocType ? "终稿成绩" : "阶段说明" %></th><th>操作</th></tr>
       <% for (Document d : list) { %>
       <tr>
         <td><%= EscapeUtil.html(d.getStudentName()) %></td>
@@ -75,7 +75,7 @@
         <div class="mb-2"><strong>内容：</strong><div id="docContent" class="border rounded p-2 bg-light" style="max-height:200px;overflow-y:auto;font-size:0.9rem"></div></div>
         <div class="mb-2"><strong>附件：</strong><span id="docFile"></span></div>
         <div class="row g-2">
-          <div class="col-4 final-score-field"><label class="form-label">最终成绩 (0-100)</label><input name="score" id="docScore" type="number" min="0" max="100" step="0.5" class="form-control form-control-sm" oninput="validateScore(this)"></div>
+          <div class="col-4 final-score-field"><label class="form-label">终稿成绩 (0-100)</label><input name="score" id="docScore" type="number" min="0" max="100" step="0.5" class="form-control form-control-sm" oninput="validateScore(this)"></div>
           <div class="<%= finalDocType ? "col-8" : "col-12" %>"><label class="form-label"><%= finalDocType ? "导师评语" : "审核意见" %></label><textarea name="feedback" id="docFeedback" class="form-control form-control-sm" rows="2"></textarea></div>
         </div>
         <div class="row g-2 mt-1 final-review-fields">
@@ -83,7 +83,7 @@
           <div class="col-6"><label class="form-label">备注/评阅意见</label><textarea name="peerReview" id="docPeerReview" class="form-control form-control-sm" rows="2" placeholder="完整版评阅教师流程暂不强制"></textarea></div>
         </div>
         <% if (!finalDocType) { %>
-          <div class="text-muted small mt-2">开题报告和中期检查只做阶段通过/退回，不计入最终成绩。</div>
+          <div class="text-muted small mt-2">开题报告和中期检查只做阶段通过/退回；终稿成绩与答辩平均分共同用于综合参考分。</div>
         <% } %>
       </div>
       <div class="modal-footer" id="docActions">

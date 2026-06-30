@@ -72,7 +72,7 @@
 
   <p class="text-muted small mb-3">当前课题: <strong><%= EscapeUtil.html(approved.getTopicTitle()) %></strong> | 指导教师: <%= EscapeUtil.html(approved.getTeacherName()) %></p>
   <div class="alert alert-info py-2">
-    资料按阶段提交：开题报告通过后才能提交中期检查；中期检查通过后才能提交终稿/结题材料。开题和中期只做阶段审核，终稿/结题审核通过后形成最终成绩。
+    资料按阶段提交：开题报告通过后才能提交中期检查；中期检查通过后才能提交终稿/结题材料。开题和中期只做阶段审核，终稿/结题审核通过后形成终稿成绩，答辩成绩由三名答辩教师评分取平均。
   </div>
 
   <% if (!uploadOpen) { %>

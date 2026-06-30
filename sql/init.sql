@@ -5,6 +5,8 @@ USE graduation_design;
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS operation_logs;
 DROP TABLE IF EXISTS document_versions;
+DROP TABLE IF EXISTS defense_scores;
+DROP TABLE IF EXISTS defense_committee_members;
 DROP TABLE IF EXISTS defense_schedules;
 DROP TABLE IF EXISTS file_templates;
 DROP TABLE IF EXISTS documents;
@@ -211,6 +213,32 @@ CREATE TABLE defense_schedules (
     UNIQUE KEY uk_defense_student (student_id),
     FOREIGN KEY (student_id) REFERENCES users(id),
     CHECK (score IS NULL OR (score >= 0 AND score <= 100))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE defense_committee_members (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    schedule_id INT NOT NULL,
+    teacher_id INT NOT NULL,
+    member_order TINYINT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (schedule_id) REFERENCES defense_schedules(id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES users(id),
+    UNIQUE KEY uk_defense_member_teacher (schedule_id, teacher_id),
+    UNIQUE KEY uk_defense_member_order (schedule_id, member_order),
+    CHECK (member_order BETWEEN 1 AND 3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE defense_scores (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    schedule_id INT NOT NULL,
+    teacher_id INT NOT NULL,
+    score DECIMAL(5,2) NOT NULL,
+    comment TEXT,
+    score_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (schedule_id) REFERENCES defense_schedules(id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES users(id),
+    UNIQUE KEY uk_defense_score_teacher (schedule_id, teacher_id),
+    CHECK (score >= 0 AND score <= 100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE document_versions (

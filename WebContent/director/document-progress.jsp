@@ -27,7 +27,7 @@
     <table class="table-modern">
       <tr>
         <th>学生</th><th>学号</th><th>班级</th><th>课题</th><th>指导教师</th>
-        <th>开题报告</th><th>中期检查</th><th>终稿/结题</th><th>最终成绩</th>
+        <th>开题报告</th><th>中期检查</th><th>终稿/结题</th><th>终稿成绩</th>
       </tr>
       <% for (Object[] r : rows) { %>
         <tr>

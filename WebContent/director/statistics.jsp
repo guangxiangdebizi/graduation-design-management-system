@@ -43,7 +43,7 @@
   </div>
   <div class="col-lg-3 col-md-6">
     <div class="content-card">
-      <h6>本专业最终成绩分布</h6>
+      <h6>本专业终稿成绩分布</h6>
       <div id="chartScores" style="height:280px;position:relative">
         <div id="chartScoresLoading" class="text-center py-5 text-muted">加载中...</div>
         <div id="chartScoresError" class="text-center py-5 text-danger d-none">图表加载失败</div>
@@ -52,7 +52,7 @@
   </div>
   <div class="col-lg-3 col-md-6">
     <div class="content-card">
-      <h6>本专业答辩安排</h6>
+      <h6>本专业答辩评分进度</h6>
       <div id="chartDefense" style="height:280px;position:relative">
         <div id="chartDefenseLoading" class="text-center py-5 text-muted">加载中...</div>
         <div id="chartDefenseError" class="text-center py-5 text-danger d-none">图表加载失败</div>

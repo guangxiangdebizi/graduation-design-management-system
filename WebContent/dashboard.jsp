@@ -94,11 +94,11 @@
     <% if (director) { %>
     <a href="director/topic-review.action" class="btn btn-outline-primary btn-sm">本专业课题审核</a>
     <a href="director/selection-confirm.action" class="btn btn-outline-primary btn-sm">本专业选题确认</a>
+    <a href="director/defense.action" class="btn btn-outline-primary btn-sm">本专业答辩安排</a>
     <a href="director/statistics.jsp" class="btn btn-outline-primary btn-sm">本专业项目统计</a>
     <% } else { %>
     <a href="admin/statistics.jsp" class="btn btn-outline-primary btn-sm">ECharts 统计</a>
     <a href="admin/announcement.action" class="btn btn-outline-primary btn-sm">公告管理</a>
-    <a href="admin/defense.action" class="btn btn-outline-primary btn-sm">答辩安排</a>
     <a href="admin/messages.action" class="btn btn-outline-primary btn-sm">站内消息</a>
     <a href="admin/logs.action" class="btn btn-outline-primary btn-sm">操作日志</a>
     <% } %>
@@ -193,7 +193,6 @@
     List<Announcement> announcements = (List<Announcement>) request.getAttribute("announcements");
     DefenseSchedule defense = (DefenseSchedule) request.getAttribute("defense");
     String selectionStatusText = (String) request.getAttribute("selectionStatusText");
-    SimpleDateFormat defSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 %>
 <div class="stat-cards">
   <div class="stat-card"><span class="icon">&#128221;</span><div class="label">选题状态</div><div class="value" style="font-size:1.2rem;"><%= selectionStatusText %></div></div>
@@ -222,15 +221,14 @@
   </div>
   <div class="col-md-6">
     <div class="content-card">
-      <h5>答辩安排</h5>
+      <h5>答辩信息</h5>
       <% if (defense == null) { %>
-        <div class="empty-state"><p>答辩安排尚未发布</p></div>
+        <div class="empty-state"><p>答辩教师尚未安排</p></div>
       <% } else { %>
         <table class="table-modern">
-          <tr><th>时间</th><td><%= defense.getDefenseTime()==null?"待定":defSdf.format(defense.getDefenseTime()) %></td></tr>
-          <tr><th>教室</th><td><%= defense.getRoom()==null?"待定":EscapeUtil.html(defense.getRoom()) %></td></tr>
-          <tr><th>分组</th><td><%= defense.getGroupName()==null?"—":EscapeUtil.html(defense.getGroupName()) %></td></tr>
-          <tr><th>成绩</th><td><%= defense.getScore()==null?"待评定":defense.getScore() %></td></tr>
+          <tr><th>答辩教师</th><td><%= defense.getCommitteeMembers()==null || defense.getCommitteeMembers().isEmpty() ? "尚未指定" : defense.getCommitteeMembers().size() + " 人" %></td></tr>
+          <tr><th>评分进度</th><td><%= defense.getScoreCount() %>/3</td></tr>
+          <tr><th>答辩成绩</th><td><%= defense.getAverageScore()==null?"待评定":defense.getAverageScore() + " 分" %></td></tr>
         </table>
         <a href="student/defense.action" class="btn btn-sm btn-outline-primary">查看详情</a>
       <% } %>
