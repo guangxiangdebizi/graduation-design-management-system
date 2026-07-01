@@ -84,7 +84,7 @@ function initPageMessages() {
     'defense_teacher_duplicate', 'defense_teacher_scope', 'defense_not_member',
     'topic_submit_closed', 'selection_closed', 'assign_closed', 'upload_closed',
     'has_assignment', 'choice_count_invalid', 'duplicate_choice',
-    'topic_invalid', 'intent_full', 'already_submitted',
+    'topic_invalid', 'already_submitted',
     'topic_assigned', 'choice_invalid', 'review_closed'];
   var messages = {
     'add_ok': '添加成功',
@@ -136,8 +136,7 @@ function initPageMessages() {
     'has_assignment': '您已经有最终确认题目，不能重复填报',
     'choice_count_invalid': '每轮至少选择 1 个志愿，最多选择 3 个志愿',
     'duplicate_choice': '三个志愿不能选择同一个题目',
-    'topic_invalid': '只能选择本专业、未分配、已审核通过的题目',
-    'intent_full': '题目的本轮意向人数已满，请重新选择',
+    'topic_invalid': '只能选择本专业、未满额、已审核通过的题目',
     'already_submitted': '您本轮已经提交过志愿，请等待指导教师审批',
     'topic_assigned': '该题目已被最终分配，不能重复确认',
     'choice_invalid': '该志愿当前不可审批，可能已失效或题目未开放',
