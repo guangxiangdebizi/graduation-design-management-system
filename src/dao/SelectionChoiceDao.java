@@ -26,7 +26,6 @@ public class SelectionChoiceDao {
     public static final int ERR_CHOICE_COUNT = -3;
     public static final int ERR_DUPLICATE_CHOICE = -4;
     public static final int ERR_TOPIC_INVALID = -5;
-    public static final int ERR_INTENT_FULL = -6;
     public static final int ERR_ALREADY_SUBMITTED = -7;
 
     public List<Topic> findSelectableTopics(int studentId, int round) {
@@ -43,9 +42,7 @@ public class SelectionChoiceDao {
             + "t.max_students,t.selected_count,t.status,t.created_at "
             + "FROM topics t JOIN users u ON t.teacher_id=u.id "
             + "WHERE t.status='open' AND t.college=? AND t.major=? "
-            + "AND NOT EXISTS (SELECT 1 FROM topic_assignments a WHERE a.topic_id=t.id) "
-            + "AND NOT EXISTS (SELECT 1 FROM topic_selections s "
-            + "  WHERE s.topic_id=t.id AND s.status='approved') "
+            + "AND t.selected_count < t.max_students "
             + "ORDER BY t.created_at DESC",
             college, major);
         List<Topic> list = new ArrayList<Topic>();
@@ -69,18 +66,14 @@ public class SelectionChoiceDao {
         return list;
     }
 
-    public Map<Integer, Integer> intentCounts(List<Topic> topics, int round) {
+    public Map<Integer, Integer> confirmedCounts(List<Topic> topics) {
         Map<Integer, Integer> counts = new LinkedHashMap<Integer, Integer>();
         if (topics == null || topics.isEmpty()) {
             return counts;
         }
         for (Topic topic : topics) {
-            Object val = SQLHelper.queryScalar(
-                "SELECT COUNT(*) FROM selection_choices "
-                + "WHERE topic_id=? AND round=? AND status='pending'",
-                topic.getId(), round);
             counts.put(Integer.valueOf(topic.getId()),
-                Integer.valueOf(val == null ? 0 : ((Number) val).intValue()));
+                Integer.valueOf(topic.getSelectedCount()));
         }
         return counts;
     }
@@ -88,7 +81,6 @@ public class SelectionChoiceDao {
     public int submitChoices(int studentId, int round, List<Integer> topicIds) {
         int normalizedRound = round >= 2 ? 2 : 1;
         int choiceLimit = SystemConfigUtil.getInt("selection.choice_limit", 3);
-        int intentLimit = SystemConfigUtil.getInt("selection.intent_limit", 3);
         if (!SystemSwitchUtil.isSelectionOpenForRound(normalizedRound)
                 || SystemSwitchUtil.currentRound() != normalizedRound) {
             return ERR_SELECTION_CLOSED;
@@ -136,10 +128,6 @@ public class SelectionChoiceDao {
                 if (!validTopicForStudent(conn, topicId.intValue(), college, major)) {
                     conn.rollback();
                     return ERR_TOPIC_INVALID;
-                }
-                if (countTopicIntent(conn, topicId.intValue(), normalizedRound) >= intentLimit) {
-                    conn.rollback();
-                    return ERR_INTENT_FULL;
                 }
             }
 
@@ -213,10 +201,8 @@ public class SelectionChoiceDao {
             + "JOIN selection_applications a ON c.application_id=a.id "
             + "WHERE c.round=? AND c.status='pending' AND a.status='submitted' "
             + "AND t.college=? AND t.major=? AND u.college=? AND u.major=? "
-            + "AND NOT EXISTS (SELECT 1 FROM topic_assignments x WHERE x.topic_id=t.id) "
+            + "AND t.status='open' AND t.selected_count < t.max_students "
             + "AND NOT EXISTS (SELECT 1 FROM topic_assignments x WHERE x.student_id=u.id) "
-            + "AND NOT EXISTS (SELECT 1 FROM topic_selections x "
-            + "  WHERE x.topic_id=t.id AND x.status='approved') "
             + "AND NOT EXISTS (SELECT 1 FROM topic_selections x "
             + "  WHERE x.student_id=u.id AND x.status='approved') "
             + "ORDER BY t.created_at DESC,t.id,c.choice_rank,u.student_no,u.id",
@@ -274,7 +260,8 @@ public class SelectionChoiceDao {
     private boolean validTopicForStudent(Connection conn, int topicId, String college, String major)
             throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT status,college,major FROM topics WHERE id=? FOR UPDATE")) {
+                "SELECT status,college,major,selected_count,max_students "
+                + "FROM topics WHERE id=? FOR UPDATE")) {
             ps.setInt(1, topicId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next() || !"open".equals(rs.getString(1))) {
@@ -283,36 +270,12 @@ public class SelectionChoiceDao {
                 if (!same(college, rs.getString(2)) || !same(major, rs.getString(3))) {
                     return false;
                 }
-            }
-        }
-        try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT 1 FROM topic_assignments WHERE topic_id=? LIMIT 1")) {
-            ps.setInt(1, topicId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
+                if (rs.getInt(4) >= rs.getInt(5)) {
                     return false;
                 }
             }
         }
-        try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT 1 FROM topic_selections WHERE topic_id=? AND status='approved' LIMIT 1")) {
-            ps.setInt(1, topicId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return !rs.next();
-            }
-        }
-    }
-
-    private int countTopicIntent(Connection conn, int topicId, int round) throws Exception {
-        try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT COUNT(*) FROM selection_choices "
-                + "WHERE topic_id=? AND round=? AND status='pending'")) {
-            ps.setInt(1, topicId);
-            ps.setInt(2, round);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
-            }
-        }
+        return true;
     }
 
     private String choiceSelectSql() {

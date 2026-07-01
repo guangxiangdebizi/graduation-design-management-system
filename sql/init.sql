@@ -161,7 +161,7 @@ CREATE TABLE topic_assignments (
     FOREIGN KEY (choice_id) REFERENCES selection_choices(id),
     FOREIGN KEY (confirmed_by) REFERENCES users(id),
     UNIQUE KEY uk_topic_assignment_student (student_id),
-    UNIQUE KEY uk_topic_assignment_topic (topic_id),
+    KEY idx_topic_assignment_topic (topic_id),
     CHECK (round IN (1, 2))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

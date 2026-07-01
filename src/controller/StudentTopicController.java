@@ -19,7 +19,6 @@ import dao.SelectionDao;
 import dao.TopicAssignmentDao;
 import dao.TopicDao;
 import util.OperationLogUtil;
-import util.SystemConfigUtil;
 import util.ScopeUtil;
 import util.SystemSwitchUtil;
 import util.WebUtil;
@@ -49,7 +48,7 @@ public class StudentTopicController extends HttpServlet {
         List<Topic> topics = assignment == null && legacySelection == null
             ? choiceDao.findSelectableTopics(user.getId(), round)
             : dao.findOpenTopics(keyword, college, major);
-        Map<Integer, Integer> intentCounts = choiceDao.intentCounts(topics, round);
+        Map<Integer, Integer> confirmedCounts = choiceDao.confirmedCounts(topics);
         request.setAttribute("topics", topics);
         request.setAttribute("keyword", keyword);
         request.setAttribute("collegeFilter", college);
@@ -58,13 +57,11 @@ public class StudentTopicController extends HttpServlet {
         request.setAttribute("manualAssignOpen",
             Boolean.valueOf(SystemSwitchUtil.isManualAssignOpen()));
         request.setAttribute("round", Integer.valueOf(round));
-        request.setAttribute("intentLimit",
-            Integer.valueOf(SystemConfigUtil.getInt("selection.intent_limit", 3)));
         request.setAttribute("assignment", assignment);
         request.setAttribute("legacySelection", legacySelection);
         request.setAttribute("activeApplication", activeApplication);
         request.setAttribute("activeChoices", activeChoices);
-        request.setAttribute("intentCounts", intentCounts);
+        request.setAttribute("confirmedCounts", confirmedCounts);
         boolean hasChoiceApplication = activeApplication != null;
         request.setAttribute("hasApplied",
             Boolean.valueOf(assignment != null || hasChoiceApplication
@@ -157,7 +154,6 @@ public class StudentTopicController extends HttpServlet {
         if (result == SelectionChoiceDao.ERR_CHOICE_COUNT) return "choice_count_invalid";
         if (result == SelectionChoiceDao.ERR_DUPLICATE_CHOICE) return "duplicate_choice";
         if (result == SelectionChoiceDao.ERR_TOPIC_INVALID) return "topic_invalid";
-        if (result == SelectionChoiceDao.ERR_INTENT_FULL) return "intent_full";
         if (result == SelectionChoiceDao.ERR_ALREADY_SUBMITTED) return "already_submitted";
         return "error";
     }

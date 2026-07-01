@@ -11,7 +11,7 @@
   TopicSelection legacySelection = (TopicSelection) request.getAttribute("legacySelection");
   SelectionApplication activeApplication = (SelectionApplication) request.getAttribute("activeApplication");
   List<SelectionChoice> activeChoices = (List<SelectionChoice>) request.getAttribute("activeChoices");
-  Map<Integer, Integer> intentCounts = (Map<Integer, Integer>) request.getAttribute("intentCounts");
+  Map<Integer, Integer> confirmedCounts = (Map<Integer, Integer>) request.getAttribute("confirmedCounts");
   String keyword = (String) request.getAttribute("keyword");
   String collegeFilter = (String) request.getAttribute("collegeFilter");
   String majorFilter = (String) request.getAttribute("majorFilter");
@@ -19,8 +19,7 @@
   Boolean selectionOpenAttr = (Boolean) request.getAttribute("selectionOpen");
   Boolean manualAssignOpenAttr = (Boolean) request.getAttribute("manualAssignOpen");
   Integer roundObj = (Integer) request.getAttribute("round");
-  Integer intentLimitObj = (Integer) request.getAttribute("intentLimit");
-  if (topics == null || hasAppliedAttr == null || activeChoices == null || intentCounts == null) {
+  if (topics == null || hasAppliedAttr == null || activeChoices == null || confirmedCounts == null) {
     response.sendRedirect(request.getContextPath() + "/student/topic.action");
     return;
   }
@@ -31,7 +30,6 @@
   boolean selectionOpen = selectionOpenAttr == null || selectionOpenAttr.booleanValue();
   boolean manualAssignOpen = manualAssignOpenAttr != null && manualAssignOpenAttr.booleanValue();
   int round = roundObj == null ? 1 : roundObj.intValue();
-  int intentLimit = intentLimitObj == null ? 3 : intentLimitObj.intValue();
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
   // 消息提示
@@ -44,7 +42,6 @@
   else if ("choice_count_invalid".equals(msg)) { msgTitle="提示"; msgContent="每轮至少选择 1 个志愿，最多选择 3 个志愿"; msgClass="warning"; }
   else if ("duplicate_choice".equals(msg)) { msgTitle="提示"; msgContent="三个志愿不能选择同一个题目"; msgClass="warning"; }
   else if ("topic_invalid".equals(msg)) { msgTitle="提示"; msgContent="只能选择本专业、未分配、已审核通过的题目"; msgClass="warning"; }
-  else if ("intent_full".equals(msg)) { msgTitle="提示"; msgContent="某个题目的本轮意向人数已满，请重新选择"; msgClass="warning"; }
   else if ("quota_full".equals(msg)) { msgTitle="提示"; msgContent="该课题名额已满"; msgClass="warning"; }
   else if ("selection_closed".equals(msg)) { msgTitle="提示"; msgContent="选题系统当前未开启，只能浏览已公布题目"; msgClass="warning"; }
   else if ("major_mismatch".equals(msg)) { msgTitle="提示"; msgContent="只能申请本学院本专业范围内的课题"; msgClass="warning"; }
@@ -131,7 +128,7 @@
   <div class="content-card mb-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h5 class="mb-0">第 <%= round %> 轮志愿填报</h5>
-      <span class="text-muted small">至少 1 个，最多 3 个；每题本轮最多 <%= intentLimit %> 个意向</span>
+      <span class="text-muted small">每轮至少 1 个、最多 3 个志愿；课题名额只按教师确认人数计算</span>
     </div>
     <% if (topics.isEmpty()) { %>
       <div class="empty-state"><div class="icon">&#128269;</div><p>当前没有可填报的本专业题目</p></div>
@@ -144,11 +141,11 @@
           <select name="topic1" id="topic1" class="form-select form-select-sm choice-select" required <%= selectionOpen ? "" : "disabled" %>>
             <option value="">请选择题目</option>
             <% for (Topic t : topics) {
-                Integer cntObj = intentCounts.get(Integer.valueOf(t.getId()));
-                int count = cntObj == null ? 0 : cntObj.intValue();
-                boolean full = count >= intentLimit;
+                Integer cntObj = confirmedCounts.get(Integer.valueOf(t.getId()));
+                int count = cntObj == null ? t.getSelectedCount() : cntObj.intValue();
+                boolean full = count >= t.getMaxStudents();
             %>
-              <option value="<%= t.getId() %>" <%= full ? "disabled" : "" %>><%= EscapeUtil.html(t.getTitle()) %>（<%= count %>/<%= intentLimit %>）<%= full ? " - 意向已满" : "" %></option>
+              <option value="<%= t.getId() %>" <%= full ? "disabled" : "" %>><%= EscapeUtil.html(t.getTitle()) %>（已确认 <%= count %>/<%= t.getMaxStudents() %>）<%= full ? " - 名额已满" : "" %></option>
             <% } %>
           </select>
         </div>
@@ -157,11 +154,11 @@
           <select name="topic2" id="topic2" class="form-select form-select-sm choice-select" <%= selectionOpen ? "" : "disabled" %>>
             <option value="">不填</option>
             <% for (Topic t : topics) {
-                Integer cntObj = intentCounts.get(Integer.valueOf(t.getId()));
-                int count = cntObj == null ? 0 : cntObj.intValue();
-                boolean full = count >= intentLimit;
+                Integer cntObj = confirmedCounts.get(Integer.valueOf(t.getId()));
+                int count = cntObj == null ? t.getSelectedCount() : cntObj.intValue();
+                boolean full = count >= t.getMaxStudents();
             %>
-              <option value="<%= t.getId() %>" <%= full ? "disabled" : "" %>><%= EscapeUtil.html(t.getTitle()) %>（<%= count %>/<%= intentLimit %>）<%= full ? " - 意向已满" : "" %></option>
+              <option value="<%= t.getId() %>" <%= full ? "disabled" : "" %>><%= EscapeUtil.html(t.getTitle()) %>（已确认 <%= count %>/<%= t.getMaxStudents() %>）<%= full ? " - 名额已满" : "" %></option>
             <% } %>
           </select>
         </div>
@@ -170,11 +167,11 @@
           <select name="topic3" id="topic3" class="form-select form-select-sm choice-select" <%= selectionOpen ? "" : "disabled" %>>
             <option value="">不填</option>
             <% for (Topic t : topics) {
-                Integer cntObj = intentCounts.get(Integer.valueOf(t.getId()));
-                int count = cntObj == null ? 0 : cntObj.intValue();
-                boolean full = count >= intentLimit;
+                Integer cntObj = confirmedCounts.get(Integer.valueOf(t.getId()));
+                int count = cntObj == null ? t.getSelectedCount() : cntObj.intValue();
+                boolean full = count >= t.getMaxStudents();
             %>
-              <option value="<%= t.getId() %>" <%= full ? "disabled" : "" %>><%= EscapeUtil.html(t.getTitle()) %>（<%= count %>/<%= intentLimit %>）<%= full ? " - 意向已满" : "" %></option>
+              <option value="<%= t.getId() %>" <%= full ? "disabled" : "" %>><%= EscapeUtil.html(t.getTitle()) %>（已确认 <%= count %>/<%= t.getMaxStudents() %>）<%= full ? " - 名额已满" : "" %></option>
             <% } %>
           </select>
         </div>
@@ -200,13 +197,13 @@
         <br>
         指导教师: <%= EscapeUtil.html(t.getTeacherName()) %>
         <br>
-        <% Integer cntObj = intentCounts.get(Integer.valueOf(t.getId()));
-           int intentCount = cntObj == null ? 0 : cntObj.intValue(); %>
-        本轮意向: <%= intentCount %>/<%= intentLimit %>
+        <% Integer cntObj = confirmedCounts.get(Integer.valueOf(t.getId()));
+           int confirmedCount = cntObj == null ? t.getSelectedCount() : cntObj.intValue(); %>
+        已确认: <%= confirmedCount %>/<%= t.getMaxStudents() %>
       </div>
       <% if (!selectionOpen) { %>
         <span class="text-muted small mt-2 d-block">当前只能浏览，选题系统开启后才能申请</span>
-      <% } else if (!hasApplied && intentCount < intentLimit) { %>
+      <% } else if (!hasApplied && confirmedCount < t.getMaxStudents()) { %>
         <div class="btn-group btn-group-sm mt-2" role="group">
           <button type="button" class="btn btn-outline-primary" onclick="setChoice('topic1','<%= t.getId() %>')">设为第一志愿</button>
           <button type="button" class="btn btn-outline-secondary" onclick="setChoice('topic2','<%= t.getId() %>')">第二</button>
@@ -215,7 +212,7 @@
       <% } else if (hasApplied) { %>
         <span class="text-muted small mt-2 d-block">您已有选题或志愿记录</span>
       <% } else { %>
-        <span class="badge-status badge-closed mt-2">本轮意向已满</span>
+        <span class="badge-status badge-closed mt-2">名额已满</span>
       <% } %>
     </div>
   <% }} %>

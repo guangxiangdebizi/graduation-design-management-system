@@ -103,9 +103,7 @@ public class TopicAssignmentDao {
             + "t.max_students,t.selected_count,t.status,t.created_at "
             + "FROM topics t JOIN users u ON t.teacher_id=u.id "
             + "WHERE t.status='open' AND t.college=? AND t.major=? "
-            + "AND NOT EXISTS (SELECT 1 FROM topic_assignments a WHERE a.topic_id=t.id) "
-            + "AND NOT EXISTS (SELECT 1 FROM topic_selections s "
-            + "  WHERE s.topic_id=t.id AND s.status='approved') "
+            + "AND t.selected_count < t.max_students "
             + "ORDER BY t.created_at DESC",
             college, major);
         List<Topic> list = new ArrayList<Topic>();
@@ -147,17 +145,13 @@ public class TopicAssignmentDao {
                 conn.rollback();
                 return ERR_CHOICE_INVALID;
             }
-            if (hasTopicAssignment(conn, snapshot.topicId)) {
+            if (snapshot.selectedCount >= snapshot.maxStudents) {
                 conn.rollback();
                 return ERR_TOPIC_ASSIGNED;
             }
             if (hasStudentAssignment(conn, snapshot.studentId)) {
                 conn.rollback();
                 return ERR_STUDENT_ASSIGNED;
-            }
-            if (hasLegacyApprovedTopic(conn, snapshot.topicId)) {
-                conn.rollback();
-                return ERR_TOPIC_ASSIGNED;
             }
             if (hasLegacyApprovedStudent(conn, snapshot.studentId)) {
                 conn.rollback();
@@ -189,8 +183,9 @@ public class TopicAssignmentDao {
             markStudentChoices(conn, snapshot.studentId, snapshot.round, snapshot.choiceId);
             expireApplication(conn, snapshot.applicationId, "confirmed");
             closeOtherApplicationChoices(conn, snapshot.applicationId, snapshot.choiceId);
-            expireTopicChoices(conn, snapshot.topicId, snapshot.choiceId);
-            updateTopicSelected(conn, snapshot.topicId);
+            if (updateTopicSelected(conn, snapshot.topicId)) {
+                expireTopicChoices(conn, snapshot.topicId, snapshot.choiceId);
+            }
 
             conn.commit();
             return assignmentId;
@@ -225,8 +220,11 @@ public class TopicAssignmentDao {
             }
 
             String topicStatus;
+            int selectedCount;
+            int maxStudents;
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT status FROM topics WHERE id=? AND college=? AND major=? FOR UPDATE")) {
+                    "SELECT status,selected_count,max_students "
+                    + "FROM topics WHERE id=? AND college=? AND major=? FOR UPDATE")) {
                 ps.setInt(1, topicId);
                 ps.setString(2, college);
                 ps.setString(3, major);
@@ -236,15 +234,13 @@ public class TopicAssignmentDao {
                         return ERR_SCOPE;
                     }
                     topicStatus = rs.getString(1);
+                    selectedCount = rs.getInt(2);
+                    maxStudents = rs.getInt(3);
                 }
             }
-            if (!"open".equals(topicStatus)) {
+            if (!"open".equals(topicStatus) || selectedCount >= maxStudents) {
                 conn.rollback();
                 return ERR_CHOICE_INVALID;
-            }
-            if (hasTopicAssignment(conn, topicId) || hasLegacyApprovedTopic(conn, topicId)) {
-                conn.rollback();
-                return ERR_TOPIC_ASSIGNED;
             }
             if (hasStudentAssignment(conn, studentId) || hasLegacyApprovedStudent(conn, studentId)) {
                 conn.rollback();
@@ -273,8 +269,9 @@ public class TopicAssignmentDao {
 
             expireAllStudentSubmittedApplications(conn, studentId);
             invalidateAllStudentPendingChoices(conn, studentId);
-            expireTopicChoices(conn, topicId, 0);
-            updateTopicSelected(conn, topicId);
+            if (updateTopicSelected(conn, topicId)) {
+                expireTopicChoices(conn, topicId, 0);
+            }
             conn.commit();
             return assignmentId;
         } catch (Exception ex) {
@@ -330,7 +327,7 @@ public class TopicAssignmentDao {
             throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT c.id,c.application_id,c.student_id,c.topic_id,c.round,c.status,"
-                + "a.status,t.status "
+                + "a.status,t.status,t.selected_count,t.max_students "
                 + "FROM selection_choices c "
                 + "JOIN selection_applications a ON c.application_id=a.id "
                 + "JOIN users u ON c.student_id=u.id "
@@ -355,17 +352,9 @@ public class TopicAssignmentDao {
                 snapshot.choiceStatus = rs.getString(6);
                 snapshot.applicationStatus = rs.getString(7);
                 snapshot.topicStatus = rs.getString(8);
+                snapshot.selectedCount = rs.getInt(9);
+                snapshot.maxStudents = rs.getInt(10);
                 return snapshot;
-            }
-        }
-    }
-
-    private boolean hasTopicAssignment(Connection conn, int topicId) throws Exception {
-        try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT 1 FROM topic_assignments WHERE topic_id=? LIMIT 1")) {
-            ps.setInt(1, topicId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
             }
         }
     }
@@ -374,16 +363,6 @@ public class TopicAssignmentDao {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT 1 FROM topic_assignments WHERE student_id=? LIMIT 1")) {
             ps.setInt(1, studentId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        }
-    }
-
-    private boolean hasLegacyApprovedTopic(Connection conn, int topicId) throws Exception {
-        try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT 1 FROM topic_selections WHERE topic_id=? AND status='approved' LIMIT 1")) {
-            ps.setInt(1, topicId);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next();
             }
@@ -461,11 +440,20 @@ public class TopicAssignmentDao {
         }
     }
 
-    private void updateTopicSelected(Connection conn, int topicId) throws Exception {
+    private boolean updateTopicSelected(Connection conn, int topicId) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
-                "UPDATE topics SET selected_count=1,status='closed' WHERE id=?")) {
+                "UPDATE topics SET selected_count=selected_count+1,"
+                + "status=CASE WHEN selected_count+1>=max_students THEN 'closed' ELSE 'open' END "
+                + "WHERE id=?")) {
             ps.setInt(1, topicId);
             ps.executeUpdate();
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT selected_count>=max_students FROM topics WHERE id=?")) {
+            ps.setInt(1, topicId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean(1);
+            }
         }
     }
 
@@ -498,5 +486,7 @@ public class TopicAssignmentDao {
         String choiceStatus;
         String applicationStatus;
         String topicStatus;
+        int selectedCount;
+        int maxStudents;
     }
 }
