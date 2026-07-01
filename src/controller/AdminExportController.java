@@ -34,8 +34,10 @@ public class AdminExportController extends HttpServlet {
             + "(SELECT status FROM documents WHERE student_id=u.id AND doc_type='proposal' LIMIT 1),"
             + "(SELECT status FROM documents WHERE student_id=u.id AND doc_type='midterm' LIMIT 1),"
             + "(SELECT status FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
-            + "(SELECT score FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
-            + "(SELECT feedback FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
+            + "(SELECT advisor_score FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
+            + "(SELECT advisor_comment FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
+            + "(SELECT reviewer_score FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
+            + "(SELECT reviewer_comment FROM documents WHERE student_id=u.id AND doc_type='final' LIMIT 1),"
             + "ds.score,ds.defense_time,ds.room "
             + "FROM users u "
             + "JOIN ("
@@ -52,8 +54,8 @@ public class AdminExportController extends HttpServlet {
         Sheet sheet = wb.createSheet("成绩汇总");
         Row header = sheet.createRow(0);
         String[] titles = {"学号", "姓名", "院系", "课题", "指导教师",
-            "开题状态", "中期状态", "终稿/结题状态", "终稿成绩", "答辩成绩",
-            "综合参考分", "导师评语", "答辩时间", "答辩教室"};
+            "开题状态", "中期状态", "终稿/结题状态", "指导教师评分", "评阅教师评分",
+            "答辩成绩", "最终成绩", "结课结果", "指导教师评语", "评阅教师意见", "答辩时间", "答辩教室"};
         for (int i = 0; i < titles.length; i++) {
             header.createCell(i).setCellValue(titles[i]);
         }
@@ -71,10 +73,13 @@ public class AdminExportController extends HttpServlet {
             r.createCell(7).setCellValue(statusText(row[7]));
             setScoreCell(r, 8, row[8]);
             setScoreCell(r, 9, row[10]);
-            setScoreCell(r, 10, composite(row[8], row[10]));
-            r.createCell(11).setCellValue(row[9] == null ? "" : String.valueOf(row[9]));
-            r.createCell(12).setCellValue(row[11] == null ? "" : String.valueOf(row[11]));
-            r.createCell(13).setCellValue(row[12] == null ? "" : String.valueOf(row[12]));
+            setScoreCell(r, 10, row[12]);
+            setScoreCell(r, 11, composite(row[8], row[10], row[12]));
+            r.createCell(12).setCellValue(finalResult(row[8], row[10], row[12]));
+            r.createCell(13).setCellValue(row[9] == null ? "" : String.valueOf(row[9]));
+            r.createCell(14).setCellValue(row[11] == null ? "" : String.valueOf(row[11]));
+            r.createCell(15).setCellValue(row[13] == null ? "" : String.valueOf(row[13]));
+            r.createCell(16).setCellValue(row[14] == null ? "" : String.valueOf(row[14]));
         }
         for (int i = 0; i < titles.length; i++) {
             sheet.autoSizeColumn(i);
@@ -104,12 +109,23 @@ public class AdminExportController extends HttpServlet {
         return status;
     }
 
-    private BigDecimal composite(Object finalScore, Object defenseScore) {
-        if (finalScore == null || defenseScore == null) {
+    private BigDecimal composite(Object advisorScore, Object reviewerScore, Object defenseScore) {
+        if (advisorScore == null || reviewerScore == null || defenseScore == null) {
             return null;
         }
-        return new BigDecimal(finalScore.toString()).multiply(new BigDecimal("0.6"))
+        return new BigDecimal(advisorScore.toString()).multiply(new BigDecimal("0.4"))
+            .add(new BigDecimal(reviewerScore.toString()).multiply(new BigDecimal("0.2")))
             .add(new BigDecimal(defenseScore.toString()).multiply(new BigDecimal("0.4")));
+    }
+
+    private String finalResult(Object advisorScore, Object reviewerScore, Object defenseScore) {
+        BigDecimal score = composite(advisorScore, reviewerScore, defenseScore);
+        if (score == null) {
+            return "待评定";
+        }
+        BigDecimal defense = new BigDecimal(defenseScore.toString());
+        return score.compareTo(new BigDecimal("60")) >= 0
+            && defense.compareTo(new BigDecimal("60")) >= 0 ? "通过" : "未通过";
     }
 
 }

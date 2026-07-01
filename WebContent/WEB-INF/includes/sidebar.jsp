@@ -28,6 +28,7 @@
       <a href="<%= ctx %>/teacher/choice-review.action" class="<%= sidebarCurrentPage.contains("/teacher/choice-review") ? "active" : "" %>">&#9632; 志愿审批</a>
       <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题建议</a>
       <a href="<%= ctx %>/teacher/document.action" class="<%= sidebarCurrentPage.contains("/teacher/document") ? "active" : "" %>">&#9632; 文档审核</a>
+      <a href="<%= ctx %>/teacher/paper-review.action" class="<%= sidebarCurrentPage.contains("/teacher/paper-review") ? "active" : "" %>">&#9632; 论文评阅</a>
       <a href="<%= ctx %>/teacher/students.action" class="<%= sidebarCurrentPage.contains("/teacher/students") ? "active" : "" %>">&#9632; 学生进度</a>
       <a href="<%= ctx %>/teacher/defense.action" class="<%= sidebarCurrentPage.contains("/teacher/defense") ? "active" : "" %>">&#9632; 答辩评分</a>
       <a href="<%= ctx %>/teacher/file-template.action" class="<%= sidebarCurrentPage.contains("/teacher/file-template") || sidebarCurrentPage.contains("/teacher/file-templates") ? "active" : "" %>">&#9632; 模板下载</a>
@@ -36,6 +37,7 @@
       <a href="<%= ctx %>/director/topic-review.action" class="<%= sidebarCurrentPage.contains("/director/topic-review") ? "active" : "" %>">&#9632; 本专业课题审核</a>
       <a href="<%= ctx %>/director/selection-confirm.action" class="<%= sidebarCurrentPage.contains("/director/selection-confirm") ? "active" : "" %>">&#9632; 本专业选题确认</a>
       <a href="<%= ctx %>/director/document-progress.action" class="<%= sidebarCurrentPage.contains("/director/document-progress") ? "active" : "" %>">&#9632; 本专业资料进度</a>
+      <a href="<%= ctx %>/director/paper-review.action" class="<%= sidebarCurrentPage.contains("/director/paper-review") ? "active" : "" %>">&#9632; 本专业论文评阅</a>
       <a href="<%= ctx %>/director/defense.action" class="<%= sidebarCurrentPage.contains("/director/defense") ? "active" : "" %>">&#9632; 本专业答辩安排</a>
       <a href="<%= ctx %>/director/statistics.jsp" class="<%= sidebarCurrentPage.contains("/director/statistics") ? "active" : "" %>">&#9632; 本专业项目统计</a>
     <% } else if ("teacher".equals(userRole)) { %>
@@ -43,6 +45,7 @@
       <a href="<%= ctx %>/teacher/choice-review.action" class="<%= sidebarCurrentPage.contains("/teacher/choice-review") ? "active" : "" %>">&#9632; 志愿审批</a>
       <a href="<%= ctx %>/teacher/selection.action" class="<%= sidebarCurrentPage.contains("/teacher/selection") ? "active" : "" %>">&#9632; 选题建议</a>
       <a href="<%= ctx %>/teacher/document.action" class="<%= sidebarCurrentPage.contains("/teacher/document") ? "active" : "" %>">&#9632; 文档审核</a>
+      <a href="<%= ctx %>/teacher/paper-review.action" class="<%= sidebarCurrentPage.contains("/teacher/paper-review") ? "active" : "" %>">&#9632; 论文评阅</a>
       <a href="<%= ctx %>/teacher/students.action" class="<%= sidebarCurrentPage.contains("/teacher/students") ? "active" : "" %>">&#9632; 学生进度</a>
       <a href="<%= ctx %>/teacher/defense.action" class="<%= sidebarCurrentPage.contains("/teacher/defense") ? "active" : "" %>">&#9632; 答辩评分</a>
       <a href="<%= ctx %>/teacher/file-template.action" class="<%= sidebarCurrentPage.contains("/teacher/file-template") || sidebarCurrentPage.contains("/teacher/file-templates") ? "active" : "" %>">&#9632; 模板下载</a>

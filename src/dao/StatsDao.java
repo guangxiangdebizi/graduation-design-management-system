@@ -127,19 +127,24 @@ public class StatsDao {
 
     public List<Object[]> scoreDistribution(String college, String major) {
         boolean scoped = hasScope(college, major);
+        String scoreExpr = "(d.advisor_score*0.4 + d.reviewer_score*0.2 + ds.score*0.4)";
         String sql =
             "SELECT CASE "
-            + "WHEN score>=90 THEN '90-100' "
-            + "WHEN score>=80 THEN '80-89' "
-            + "WHEN score>=70 THEN '70-79' "
-            + "WHEN score>=60 THEN '60-69' "
+            + "WHEN " + scoreExpr + ">=90 THEN '90-100' "
+            + "WHEN " + scoreExpr + ">=80 THEN '80-89' "
+            + "WHEN " + scoreExpr + ">=70 THEN '70-79' "
+            + "WHEN " + scoreExpr + ">=60 THEN '60-69' "
             + "ELSE '60以下' END AS grade_range, COUNT(*) "
-            + "FROM documents d ";
+            + "FROM documents d "
+            + "JOIN defense_schedules ds ON ds.student_id=d.student_id ";
         if (scoped) {
             sql += "JOIN topics t ON d.topic_id=t.id "
                 + "JOIN users u ON d.student_id=u.id ";
         }
-        sql += "WHERE d.doc_type='final' AND d.status='reviewed' AND d.score IS NOT NULL ";
+        sql += "WHERE d.doc_type='final' AND d.status='reviewed' "
+            + "AND d.advisor_score IS NOT NULL "
+            + "AND d.reviewer_score IS NOT NULL "
+            + "AND ds.score IS NOT NULL ";
         if (scoped) {
             sql += "AND t.college=? AND t.major=? AND u.college=? AND u.major=? ";
         }

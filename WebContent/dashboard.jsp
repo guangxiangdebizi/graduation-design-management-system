@@ -25,6 +25,7 @@
     int pendingSel = ((Integer) request.getAttribute("pendingSel")).intValue();
     int pendingDirectorSel = ((Integer) request.getAttribute("pendingDirectorSel")).intValue();
     int pendingDoc = ((Integer) request.getAttribute("pendingDoc")).intValue();
+    int pendingPaperReview = ((Integer) request.getAttribute("pendingPaperReview")).intValue();
     List<TopicSelection> pendingList = (List<TopicSelection>) request.getAttribute("pendingList");
 %>
 <% if (director) { %>
@@ -55,12 +56,13 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
       <h5 class="mb-1">教师身份工作台</h5>
-      <div class="text-muted small">系主任继承教师权限，这里只统计本人作为指导教师负责的课题、选题和文档。</div>
+      <div class="text-muted small">系主任继承教师权限，这里统计本人作为指导教师负责的课题/文档，以及被分配的论文评阅任务。</div>
     </div>
     <div class="d-flex flex-wrap gap-2">
       <a href="teacher/topic.action" class="btn btn-outline-primary btn-sm">我的课题</a>
       <a href="teacher/selection.action" class="btn btn-outline-primary btn-sm">选题建议</a>
       <a href="teacher/document.action" class="btn btn-outline-primary btn-sm">文档审核</a>
+      <a href="teacher/paper-review.action" class="btn btn-outline-primary btn-sm">论文评阅</a>
       <a href="teacher/students.action" class="btn btn-outline-primary btn-sm">学生进度</a>
     </div>
   </div>
@@ -68,6 +70,7 @@
     <div class="stat-card"><span class="icon">&#128221;</span><div class="label">我的课题</div><div class="value"><%= myTopics %></div></div>
     <div class="stat-card"><span class="icon">&#128203;</span><div class="label">待给建议选题</div><div class="value"><%= pendingSel %></div></div>
     <div class="stat-card"><span class="icon">&#128196;</span><div class="label">待审文档</div><div class="value"><%= pendingDoc %></div></div>
+    <div class="stat-card"><span class="icon">&#128214;</span><div class="label">待评阅论文</div><div class="value"><%= pendingPaperReview %></div></div>
     <div class="stat-card"><span class="icon">&#9989;</span><div class="label">本专业待确认选题</div><div class="value"><%= pendingDirectorSel %></div></div>
   </div>
   <% if (!pendingList.isEmpty()) { %>
@@ -94,6 +97,7 @@
     <% if (director) { %>
     <a href="director/topic-review.action" class="btn btn-outline-primary btn-sm">本专业课题审核</a>
     <a href="director/selection-confirm.action" class="btn btn-outline-primary btn-sm">本专业选题确认</a>
+    <a href="director/paper-review.action" class="btn btn-outline-primary btn-sm">本专业论文评阅</a>
     <a href="director/defense.action" class="btn btn-outline-primary btn-sm">本专业答辩安排</a>
     <a href="director/statistics.jsp" class="btn btn-outline-primary btn-sm">本专业项目统计</a>
     <% } else { %>
@@ -144,6 +148,7 @@
     int myTopics = ((Integer) request.getAttribute("myTopics")).intValue();
     int pendingSel = ((Integer) request.getAttribute("pendingSel")).intValue();
     int pendingDoc = ((Integer) request.getAttribute("pendingDoc")).intValue();
+    int pendingPaperReview = ((Integer) request.getAttribute("pendingPaperReview")).intValue();
     List<TopicSelection> pendingList = (List<TopicSelection>) request.getAttribute("pendingList");
     List<Announcement> announcements = (List<Announcement>) request.getAttribute("announcements");
 %>
@@ -151,6 +156,7 @@
   <div class="stat-card"><span class="icon">&#128221;</span><div class="label">我的课题</div><div class="value"><%= myTopics %></div></div>
   <div class="stat-card"><span class="icon">&#128203;</span><div class="label">待给建议选题</div><div class="value"><%= pendingSel %></div></div>
   <div class="stat-card"><span class="icon">&#128196;</span><div class="label">待审文档</div><div class="value"><%= pendingDoc %></div></div>
+  <div class="stat-card"><span class="icon">&#128214;</span><div class="label">待评阅论文</div><div class="value"><%= pendingPaperReview %></div></div>
 </div>
 <div class="row">
   <div class="col-md-6">

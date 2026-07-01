@@ -72,7 +72,7 @@
 
   <p class="text-muted small mb-3">当前课题: <strong><%= EscapeUtil.html(approved.getTopicTitle()) %></strong> | 指导教师: <%= EscapeUtil.html(approved.getTeacherName()) %></p>
   <div class="alert alert-info py-2">
-    资料按阶段提交：开题报告通过后才能提交中期检查；中期检查通过后才能提交终稿/结题材料。开题和中期只做阶段审核，终稿/结题审核通过后形成终稿成绩，答辩成绩由三名答辩教师评分取平均。
+    资料按阶段提交：开题报告通过后才能提交中期检查；中期检查通过后才能提交终稿/结题材料。开题和中期只做阶段审核；终稿通过后形成指导教师评分，系主任另行安排评阅教师评分，答辩成绩由三名答辩教师评分取平均。
   </div>
 
   <% if (!uploadOpen) { %>
@@ -87,9 +87,9 @@
 
       已提交 — 状态: <% request.setAttribute("status", currentDoc.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %>
 
-      <% if (currentDoc.getScore()!=null) { %> | 分数: <%= currentDoc.getScore() %><% } %>
+      <% if (currentDoc.getAdvisorScore()!=null) { %> | 指导教师评分: <%= currentDoc.getAdvisorScore() %><% } %>
 
-      <% if (currentDoc.getFeedback()!=null) { %> | 反馈: <%= EscapeUtil.html(currentDoc.getFeedback()) %><% } %>
+      <% if (currentDoc.getAdvisorComment()!=null) { %> | 指导教师评语: <%= EscapeUtil.html(currentDoc.getAdvisorComment()) %><% } else if (currentDoc.getFeedback()!=null) { %> | 反馈: <%= EscapeUtil.html(currentDoc.getFeedback()) %><% } %>
 
     </div>
 

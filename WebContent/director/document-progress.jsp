@@ -27,7 +27,7 @@
     <table class="table-modern">
       <tr>
         <th>学生</th><th>学号</th><th>班级</th><th>课题</th><th>指导教师</th>
-        <th>开题报告</th><th>中期检查</th><th>终稿/结题</th><th>终稿成绩</th>
+        <th>开题报告</th><th>中期检查</th><th>终稿/结题</th><th>指导教师评分</th><th>评阅教师</th><th>评阅评分</th>
       </tr>
       <% for (Object[] r : rows) { %>
         <tr>
@@ -40,6 +40,8 @@
           <td><%= stageCell(r[8], r[9], r[10], sdf) %></td>
           <td><%= stageCell(r[11], r[13], r[14], sdf) %></td>
           <td><%= r[12]==null?"—":EscapeUtil.html(String.valueOf(r[12])) + " 分" %></td>
+          <td><%= r.length > 15 && r[15]!=null ? EscapeUtil.html(String.valueOf(r[15])) : "—" %></td>
+          <td><%= r.length > 16 && r[16]!=null ? EscapeUtil.html(String.valueOf(r[16])) + " 分" : "—" %></td>
         </tr>
       <% } %>
     </table>

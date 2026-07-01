@@ -178,14 +178,23 @@ CREATE TABLE documents (
     feedback TEXT,
     self_review TEXT,
     peer_review TEXT,
+    advisor_score DECIMAL(5,2) DEFAULT NULL,
+    advisor_comment TEXT,
+    paper_reviewer_id INT DEFAULT NULL,
+    reviewer_score DECIMAL(5,2) DEFAULT NULL,
+    reviewer_comment TEXT,
+    reviewer_review_time DATETIME DEFAULT NULL,
     submit_time DATETIME DEFAULT NULL,
     review_time DATETIME DEFAULT NULL,
     reviewer_id INT DEFAULT NULL,
     FOREIGN KEY (student_id) REFERENCES users(id),
     FOREIGN KEY (topic_id) REFERENCES topics(id),
     FOREIGN KEY (reviewer_id) REFERENCES users(id),
+    FOREIGN KEY (paper_reviewer_id) REFERENCES users(id),
     UNIQUE KEY uk_student_doc_type (student_id, doc_type),
-    CHECK (score IS NULL OR (score >= 0 AND score <= 100))
+    CHECK (score IS NULL OR (score >= 0 AND score <= 100)),
+    CHECK (advisor_score IS NULL OR (advisor_score >= 0 AND advisor_score <= 100)),
+    CHECK (reviewer_score IS NULL OR (reviewer_score >= 0 AND reviewer_score <= 100))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE announcements (

@@ -47,7 +47,7 @@
     <div class="empty-state"><div class="icon">&#128196;</div><p><%= EscapeUtil.html(emptyText) %></p></div>
   <% } else { %>
     <table class="table-modern">
-      <tr><th>学生</th><th>课题</th><th>标题</th><th>提交时间</th><th>状态</th><th><%= finalDocType ? "终稿成绩" : "阶段说明" %></th><th>操作</th></tr>
+      <tr><th>学生</th><th>课题</th><th>标题</th><th>提交时间</th><th>状态</th><th><%= finalDocType ? "指导教师评分" : "阶段说明" %></th><th>操作</th></tr>
       <% for (Document d : list) { %>
       <tr>
         <td><%= EscapeUtil.html(d.getStudentName()) %></td>
@@ -55,9 +55,9 @@
         <td><%= EscapeUtil.html(d.getTitle()) %></td>
         <td><%= d.getSubmitTime()!=null?sdf.format(d.getSubmitTime()):"—" %></td>
         <td><% request.setAttribute("status", d.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %></td>
-        <td><%= finalDocType && d.getScore()!=null ? d.getScore() : "—" %></td>
+        <td><%= finalDocType && d.getAdvisorScore()!=null ? d.getAdvisorScore() : "—" %></td>
         <td>
-          <button class="btn btn-sm btn-outline-primary" onclick="viewDoc(<%= d.getId() %>,'<%= d.getStudentName() %>','<%= d.getTitle().replace("'","\\'") %>','<%= d.getContent()==null?"":d.getContent().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getFilePath()==null?"":d.getFilePath() %>','<%= d.getStatus() %>','<%= d.getScore()!=null?d.getScore():"" %>','<%= d.getFeedback()==null?"":d.getFeedback().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getSelfReview()==null?"":d.getSelfReview().replace("'","\\'").replace("\n","\\n").replace("\r","") %>','<%= d.getPeerReview()==null?"":d.getPeerReview().replace("'","\\'").replace("\n","\\n").replace("\r","") %>')">查看/审核</button>
+          <button class="btn btn-sm btn-outline-primary" onclick="viewDoc(<%= d.getId() %>,'<%= EscapeUtil.js(d.getStudentName()) %>','<%= EscapeUtil.js(d.getTitle()) %>','<%= EscapeUtil.js(d.getContent()==null?"":d.getContent()) %>','<%= EscapeUtil.js(d.getFilePath()==null?"":d.getFilePath()) %>','<%= d.getStatus() %>','<%= d.getAdvisorScore()!=null?d.getAdvisorScore():"" %>','<%= EscapeUtil.js(d.getAdvisorComment()==null?"":d.getAdvisorComment()) %>')">查看/审核</button>
         </td>
       </tr>
       <% } %>
@@ -75,19 +75,17 @@
         <div class="mb-2"><strong>内容：</strong><div id="docContent" class="border rounded p-2 bg-light" style="max-height:200px;overflow-y:auto;font-size:0.9rem"></div></div>
         <div class="mb-2"><strong>附件：</strong><span id="docFile"></span></div>
         <div class="row g-2">
-          <div class="col-4 final-score-field"><label class="form-label">终稿成绩 (0-100)</label><input name="score" id="docScore" type="number" min="0" max="100" step="0.5" class="form-control form-control-sm" oninput="validateScore(this)"></div>
-          <div class="<%= finalDocType ? "col-8" : "col-12" %>"><label class="form-label"><%= finalDocType ? "导师评语" : "审核意见" %></label><textarea name="feedback" id="docFeedback" class="form-control form-control-sm" rows="2"></textarea></div>
-        </div>
-        <div class="row g-2 mt-1 final-review-fields">
-          <div class="col-6"><label class="form-label">指导教师自评意见</label><textarea name="selfReview" id="docSelfReview" class="form-control form-control-sm" rows="2" placeholder="简化版可作为导师综合评价"></textarea></div>
-          <div class="col-6"><label class="form-label">备注/评阅意见</label><textarea name="peerReview" id="docPeerReview" class="form-control form-control-sm" rows="2" placeholder="完整版评阅教师流程暂不强制"></textarea></div>
+          <div class="col-4 final-score-field"><label class="form-label">指导教师评分 (0-100)</label><input name="score" id="docScore" type="number" min="0" max="100" step="0.5" class="form-control form-control-sm" oninput="validateScore(this)"></div>
+          <div class="<%= finalDocType ? "col-8" : "col-12" %>"><label class="form-label"><%= finalDocType ? "指导教师评语" : "审核意见" %></label><textarea name="feedback" id="docFeedback" class="form-control form-control-sm" rows="3"></textarea></div>
         </div>
         <% if (!finalDocType) { %>
-          <div class="text-muted small mt-2">开题报告和中期检查只做阶段通过/退回；终稿成绩与答辩平均分共同用于综合参考分。</div>
+          <div class="text-muted small mt-2">开题报告和中期检查只做阶段通过/退回；终稿通过后，指导教师评分、评阅教师评分、答辩平均分共同形成最终成绩。</div>
+        <% } else { %>
+          <div class="text-muted small mt-2">指导教师评分占最终成绩 40%；评阅教师评分由系主任另行安排非指导教师完成。</div>
         <% } %>
       </div>
       <div class="modal-footer" id="docActions">
-        <button type="submit" name="action" value="review" class="btn btn-success btn-sm">通过并评分</button>
+        <button type="submit" name="action" value="review" class="btn btn-success btn-sm"><%= finalDocType ? "通过并填写指导教师评分" : "通过" %></button>
         <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">驳回</button>
       </div>
     </form>
@@ -95,18 +93,16 @@
 </div>
 
 <script>
-function viewDoc(id,student,title,content,file,status,score,feedback,selfReview,peerReview) {
+function viewDoc(id,student,title,content,file,status,score,feedback) {
   document.getElementById('docId').value = id;
   document.getElementById('docTitle').textContent = student + ' - ' + title;
   document.getElementById('docContent').textContent = content || '无内容';
   document.getElementById('docFile').textContent = file || '无附件';
   document.getElementById('docScore').value = score;
   document.getElementById('docFeedback').value = feedback;
-  document.getElementById('docSelfReview').value = selfReview || '';
-  document.getElementById('docPeerReview').value = peerReview || '';
   document.getElementById('docActions').style.display = (status === 'submitted') ? 'flex' : 'none';
   var isFinal = '<%= finalDocType ? "1" : "0" %>' === '1';
-  document.querySelectorAll('.final-score-field,.final-review-fields').forEach(function(el) {
+  document.querySelectorAll('.final-score-field').forEach(function(el) {
     el.style.display = isFinal ? '' : 'none';
   });
   document.getElementById('docScore').required = isFinal && status === 'submitted';

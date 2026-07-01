@@ -108,6 +108,8 @@ public class DashboardController extends HttpServlet {
                     directorScope.getCollege(), directorScope.getMajor())));
             request.setAttribute("pendingDoc",
                 Integer.valueOf(new DocumentDao().countPendingByTeacher(user.getId())));
+            request.setAttribute("pendingPaperReview",
+                Integer.valueOf(new DocumentDao().countPendingPaperReview(user.getId())));
             request.setAttribute("pendingList",
                 selectionDao.findByTeacher(user.getId(), "pending"));
         } else {
@@ -115,6 +117,7 @@ public class DashboardController extends HttpServlet {
             request.setAttribute("pendingSel", Integer.valueOf(0));
             request.setAttribute("pendingDirectorSel", Integer.valueOf(0));
             request.setAttribute("pendingDoc", Integer.valueOf(0));
+            request.setAttribute("pendingPaperReview", Integer.valueOf(0));
             request.setAttribute("pendingList", new ArrayList<TopicSelection>());
         }
     }
@@ -131,6 +134,8 @@ public class DashboardController extends HttpServlet {
             Integer.valueOf(selectionDao.countPendingByTeacher(user.getId())));
         request.setAttribute("pendingDoc",
             Integer.valueOf(documentDao.countPendingByTeacher(user.getId())));
+        request.setAttribute("pendingPaperReview",
+            Integer.valueOf(documentDao.countPendingPaperReview(user.getId())));
         request.setAttribute("pendingList",
             selectionDao.findByTeacher(user.getId(), "pending"));
         request.setAttribute("announcements",

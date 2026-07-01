@@ -16,9 +16,18 @@ public class Document {
     private String feedback;
     private String selfReview;
     private String peerReview;
+    private BigDecimal advisorScore;
+    private String advisorComment;
+    private Integer paperReviewerId;
+    private String paperReviewerName;
+    private BigDecimal reviewerScore;
+    private String reviewerComment;
+    private Date reviewerReviewTime;
     private Date submitTime;
     private Date reviewTime;
     private Integer reviewerId;
+    private Integer teacherId;
+    private String teacherName;
     private String studentName;
     private String studentNo;
     private String topicTitle;
@@ -47,12 +56,30 @@ public class Document {
     public void setSelfReview(String selfReview) { this.selfReview = selfReview; }
     public String getPeerReview() { return peerReview; }
     public void setPeerReview(String peerReview) { this.peerReview = peerReview; }
+    public BigDecimal getAdvisorScore() { return advisorScore; }
+    public void setAdvisorScore(BigDecimal advisorScore) { this.advisorScore = advisorScore; }
+    public String getAdvisorComment() { return advisorComment; }
+    public void setAdvisorComment(String advisorComment) { this.advisorComment = advisorComment; }
+    public Integer getPaperReviewerId() { return paperReviewerId; }
+    public void setPaperReviewerId(Integer paperReviewerId) { this.paperReviewerId = paperReviewerId; }
+    public String getPaperReviewerName() { return paperReviewerName; }
+    public void setPaperReviewerName(String paperReviewerName) { this.paperReviewerName = paperReviewerName; }
+    public BigDecimal getReviewerScore() { return reviewerScore; }
+    public void setReviewerScore(BigDecimal reviewerScore) { this.reviewerScore = reviewerScore; }
+    public String getReviewerComment() { return reviewerComment; }
+    public void setReviewerComment(String reviewerComment) { this.reviewerComment = reviewerComment; }
+    public Date getReviewerReviewTime() { return reviewerReviewTime; }
+    public void setReviewerReviewTime(Date reviewerReviewTime) { this.reviewerReviewTime = reviewerReviewTime; }
     public Date getSubmitTime() { return submitTime; }
     public void setSubmitTime(Date submitTime) { this.submitTime = submitTime; }
     public Date getReviewTime() { return reviewTime; }
     public void setReviewTime(Date reviewTime) { this.reviewTime = reviewTime; }
     public Integer getReviewerId() { return reviewerId; }
     public void setReviewerId(Integer reviewerId) { this.reviewerId = reviewerId; }
+    public Integer getTeacherId() { return teacherId; }
+    public void setTeacherId(Integer teacherId) { this.teacherId = teacherId; }
+    public String getTeacherName() { return teacherName; }
+    public void setTeacherName(String teacherName) { this.teacherName = teacherName; }
     public String getStudentName() { return studentName; }
     public void setStudentName(String studentName) { this.studentName = studentName; }
     public String getStudentNo() { return studentNo; }

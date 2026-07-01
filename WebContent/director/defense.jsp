@@ -18,7 +18,7 @@
 <%@ include file="/WEB-INF/includes/sidebar.jsp" %>
 
 <div class="alert alert-info py-2">
-  当前范围：<%= EscapeUtil.html(directorScopeText) %>。终稿/结题材料通过后，由系主任为学生指定三名本专业答辩教师；三人评分完成后，答辩均分 60 分及以上视为通过；时间、地点、分组不在本模块维护。
+  当前范围：<%= EscapeUtil.html(directorScopeText) %>。终稿/结题材料通过后，由系主任为学生指定三名本专业答辩教师；三人评分完成后，答辩均分 60 分及以上视为通过，并按 40% 计入最终成绩；时间、地点、分组不在本模块维护。
 </div>
 
 <% if ("arrange_ok".equals(msg)) { %>

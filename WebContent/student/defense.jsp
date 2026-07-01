@@ -38,6 +38,7 @@
       <tr><th>评分进度</th><td><%= schedule.getScoreCount() %>/3</td></tr>
       <tr><th>答辩成绩</th><td><%= schedule.getAverageScore()==null?"待评定":schedule.getAverageScore() + " 分" %></td></tr>
       <tr><th>答辩结果</th><td><%= defenseResultBadge(schedule.getScoreCount(), schedule.getAverageScore()) %></td></tr>
+      <tr><th>最终成绩占比</th><td>40%</td></tr>
     </table>
 
     <div class="content-card mt-3 p-0">
