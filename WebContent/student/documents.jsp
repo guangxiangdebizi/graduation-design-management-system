@@ -15,6 +15,10 @@
   Document currentDoc = (Document) request.getAttribute("currentDocument");
   List<DocumentVersion> versions =
       (List<DocumentVersion>) request.getAttribute("documentVersions");
+  String uploadAccept = (String) request.getAttribute("uploadAccept");
+  Boolean uploadOpenAttr = (Boolean) request.getAttribute("uploadOpen");
+  boolean uploadOpen = uploadOpenAttr == null || uploadOpenAttr.booleanValue();
+  if (uploadAccept == null) uploadAccept = ".pdf,.doc,.docx,.zip,.rar";
   if (typeNames == null || versions == null) {
     response.sendRedirect(request.getContextPath() + "/student/document.action");
     return;
@@ -40,7 +44,7 @@
 
       <div class="icon">&#9888;</div>
 
-      <p>您还没有通过选题审批，无法提交文档</p>
+      <p>您还没有最终确认的毕业设计题目，无法提交阶段资料</p>
 
       <a href="topic.action" class="btn btn-primary btn-sm">去申请选题</a>
 
@@ -67,6 +71,15 @@
 <div class="content-card">
 
   <p class="text-muted small mb-3">当前课题: <strong><%= EscapeUtil.html(approved.getTopicTitle()) %></strong> | 指导教师: <%= EscapeUtil.html(approved.getTeacherName()) %></p>
+  <div class="alert alert-info py-2">
+    资料按阶段提交：开题报告通过后才能提交中期检查；中期检查通过后才能提交终稿/结题材料。开题和中期只做阶段审核；终稿通过后形成指导教师评分，系主任另行安排评阅教师评分，答辩成绩由三名答辩教师评分取平均。
+  </div>
+
+  <% if (!uploadOpen) { %>
+
+    <div class="alert alert-warning py-2">当前阶段上传入口已关闭，暂不能提交或重交<%= typeNames.get(activeType) %>。</div>
+
+  <% } %>
 
   <% if (currentDoc != null && !"draft".equals(currentDoc.getStatus())) { %>
 
@@ -74,9 +87,9 @@
 
       已提交 — 状态: <% request.setAttribute("status", currentDoc.getStatus()); %><%@ include file="/WEB-INF/includes/status-badge.jsp" %>
 
-      <% if (currentDoc.getScore()!=null) { %> | 分数: <%= currentDoc.getScore() %><% } %>
+      <% if (currentDoc.getAdvisorScore()!=null) { %> | 指导教师评分: <%= currentDoc.getAdvisorScore() %><% } %>
 
-      <% if (currentDoc.getFeedback()!=null) { %> | 反馈: <%= EscapeUtil.html(currentDoc.getFeedback()) %><% } %>
+      <% if (currentDoc.getAdvisorComment()!=null) { %> | 指导教师评语: <%= EscapeUtil.html(currentDoc.getAdvisorComment()) %><% } else if (currentDoc.getFeedback()!=null) { %> | 反馈: <%= EscapeUtil.html(currentDoc.getFeedback()) %><% } %>
 
     </div>
 
@@ -90,7 +103,7 @@
 
       <label class="form-label">文档标题</label>
 
-      <input name="title" class="form-control form-control-sm" value="<%= currentDoc!=null?EscapeUtil.attr(currentDoc.getTitle()):"" %>" placeholder="请输入<%= typeNames.get(activeType) %>标题" required>
+      <input name="title" class="form-control form-control-sm" value="<%= currentDoc!=null?EscapeUtil.attr(currentDoc.getTitle()):"" %>" placeholder="请输入<%= typeNames.get(activeType) %>标题" required <%= uploadOpen ? "" : "disabled" %>>
 
     </div>
 
@@ -98,7 +111,7 @@
 
       <label class="form-label">文档内容</label>
 
-      <textarea name="content" class="form-control" rows="8" placeholder="请输入文档正文内容..." required><% if (currentDoc!=null && currentDoc.getContent()!=null) { %><%= EscapeUtil.html(currentDoc.getContent()) %><% } %></textarea>
+      <textarea name="content" class="form-control" rows="8" placeholder="请输入文档正文内容..." required <%= uploadOpen ? "" : "disabled" %>><% if (currentDoc!=null && currentDoc.getContent()!=null) { %><%= EscapeUtil.html(currentDoc.getContent()) %><% } %></textarea>
 
     </div>
 
@@ -106,7 +119,7 @@
 
       <label class="form-label">上传附件</label>
 
-      <input type="file" name="file" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.zip,.rar">
+      <input type="file" name="file" class="form-control form-control-sm" accept="<%= EscapeUtil.attr(uploadAccept) %>" <%= uploadOpen ? "" : "disabled" %>>
 
       <% if (currentDoc!=null && currentDoc.getFilePath()!=null && currentDoc.getFilePath().length()>0) { %>
 
@@ -116,7 +129,7 @@
 
     </div>
 
-    <button type="submit" class="btn btn-primary btn-sm">提交文档</button>
+    <button type="submit" class="btn btn-primary btn-sm" <%= uploadOpen ? "" : "disabled" %>>提交文档</button>
 
   </form>
 

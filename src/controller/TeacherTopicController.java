@@ -10,9 +10,13 @@ import javax.servlet.http.HttpSession;
 import bean.Topic;
 import bean.User;
 import dao.TopicDao;
+import util.CollegeUtil;
+import util.DictionaryUtil;
 import util.OperationLogUtil;
+import util.SystemSwitchUtil;
 import util.WebUtil;
 import java.util.List;
+import java.util.Map;
 
 @WebServlet("/teacher/topic.action")
 public class TeacherTopicController extends HttpServlet {
@@ -24,6 +28,14 @@ public class TeacherTopicController extends HttpServlet {
         TopicDao dao = new TopicDao();
         List<Topic> topics = dao.findByTeacher(user.getId());
         request.setAttribute("topics", topics);
+        String teacherCollege = clean(user.getCollege());
+        request.setAttribute("teacherCollege", teacherCollege);
+        request.setAttribute("teacherCollegeName", CollegeUtil.getCollegeName(teacherCollege));
+        request.setAttribute("teacherMajor", clean(user.getMajor()));
+        request.setAttribute("majorOptions", CollegeUtil.getMajorsByCollege(teacherCollege));
+        request.setAttribute("topicStatusOptions", DictionaryUtil.items("topic_status"));
+        request.setAttribute("topicSubmitOpen",
+            Boolean.valueOf(SystemSwitchUtil.isEnabled(SystemSwitchUtil.TOPIC_SUBMIT)));
         request.getRequestDispatcher("/teacher/topics.jsp").forward(request, response);
     }
 
@@ -36,44 +48,49 @@ public class TeacherTopicController extends HttpServlet {
         TopicDao dao = new TopicDao();
 
         if ("add".equals(action)) {
+            if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.TOPIC_SUBMIT)) {
+                WebUtil.redirect(request, response, "/teacher/topic.action?msg=topic_submit_closed");
+                return;
+            }
             Topic t = new Topic();
             t.setTitle(request.getParameter("title"));
             t.setDescription(request.getParameter("description"));
             t.setTeacherId(user.getId());
-            t.setCollege(request.getParameter("college"));
+            t.setCollege(resolveCollege(user, request));
+            t.setMajor(resolveMajor(t.getCollege(), user, request.getParameter("major")));
             t.setMaxStudents(Integer.parseInt(request.getParameter("maxStudents")));
-            t.setStatus(request.getParameter("status"));
-            if (t.getMaxStudents() < 1 || !isValidStatus(t.getStatus())
-                    || dao.insert(t) <= 0) {
+            t.setStatus("pending");
+            if (t.getMaxStudents() < 1 || dao.insert(t) <= 0) {
                 WebUtil.redirect(request, response, "/teacher/topic.action?msg=error");
                 return;
             }
-            OperationLogUtil.log(user.getId(), "ADD", "topic", "发布课题: " + t.getTitle());
+            OperationLogUtil.log(user.getId(), "ADD", "topic", "提交课题审核: " + t.getTitle());
             WebUtil.redirect(request, response, "/teacher/topic.action?msg=add_ok");
         } else if ("edit".equals(action)) {
+            if (!SystemSwitchUtil.isEnabled(SystemSwitchUtil.TOPIC_SUBMIT)) {
+                WebUtil.redirect(request, response, "/teacher/topic.action?msg=topic_submit_closed");
+                return;
+            }
             Topic t = new Topic();
             t.setId(Integer.parseInt(request.getParameter("id")));
             t.setTitle(request.getParameter("title"));
             t.setDescription(request.getParameter("description"));
             t.setTeacherId(user.getId());
-            t.setCollege(request.getParameter("college"));
+            t.setCollege(resolveCollege(user, request));
+            t.setMajor(resolveMajor(t.getCollege(), user, request.getParameter("major")));
             t.setMaxStudents(Integer.parseInt(request.getParameter("maxStudents")));
-            t.setStatus(request.getParameter("status"));
+            t.setStatus("pending");
             Topic current = dao.findById(t.getId());
             if (current == null || current.getTeacherId() != user.getId()
-                    || t.getMaxStudents() < current.getSelectedCount()
-                    || !isValidStatus(t.getStatus())) {
+                    || t.getMaxStudents() < current.getSelectedCount()) {
                 WebUtil.redirect(request, response, "/teacher/topic.action?msg=invalid_quota");
                 return;
-            }
-            if (current.getSelectedCount() >= t.getMaxStudents()) {
-                t.setStatus("closed");
             }
             if (dao.update(t) <= 0) {
                 WebUtil.redirect(request, response, "/teacher/topic.action?msg=error");
                 return;
             }
-            OperationLogUtil.log(user.getId(), "UPDATE", "topic", "编辑课题 id=" + t.getId());
+            OperationLogUtil.log(user.getId(), "UPDATE", "topic", "编辑并重新提交课题 id=" + t.getId());
             WebUtil.redirect(request, response, "/teacher/topic.action?msg=edit_ok");
         } else if ("delete".equals(action)) {
             int id = Integer.parseInt(request.getParameter("id"));
@@ -89,7 +106,28 @@ public class TeacherTopicController extends HttpServlet {
         }
     }
 
-    private boolean isValidStatus(String status) {
-        return "open".equals(status) || "closed".equals(status);
+    private String resolveCollege(User user, HttpServletRequest request) {
+        String college = clean(user.getCollege());
+        return college != null ? college : clean(request.getParameter("college"));
+    }
+
+    private String resolveMajor(String college, User user, String requestedMajor) {
+        Map<String, String> majors = CollegeUtil.getMajorsByCollege(college);
+        String requested = clean(requestedMajor);
+        if (requested != null && majors.containsKey(requested)) {
+            return requested;
+        }
+        String ownMajor = clean(user.getMajor());
+        if (ownMajor != null && majors.containsKey(ownMajor)) {
+            return ownMajor;
+        }
+        return majors.isEmpty() ? null : majors.keySet().iterator().next();
+    }
+
+    private String clean(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
     }
 }

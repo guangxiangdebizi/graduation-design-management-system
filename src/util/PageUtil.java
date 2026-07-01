@@ -10,7 +10,7 @@ public class PageUtil {
     }
 
     public static int getPageSize(HttpServletRequest request) {
-        return parsePositive(request.getParameter("pageSize"), DEFAULT_PAGE_SIZE);
+        return parsePositive(request.getParameter("pageSize"), defaultPageSize());
     }
 
     public static int offset(int page, int pageSize) {
@@ -18,14 +18,14 @@ public class PageUtil {
             page = 1;
         }
         if (pageSize < 1) {
-            pageSize = DEFAULT_PAGE_SIZE;
+            pageSize = defaultPageSize();
         }
         return (page - 1) * pageSize;
     }
 
     public static int totalPages(int total, int pageSize) {
         if (pageSize < 1) {
-            pageSize = DEFAULT_PAGE_SIZE;
+            pageSize = defaultPageSize();
         }
         if (total <= 0) {
             return 0;
@@ -43,5 +43,9 @@ public class PageUtil {
         } catch (NumberFormatException ex) {
             return defaultValue;
         }
+    }
+
+    public static int defaultPageSize() {
+        return SystemConfigUtil.getInt("page.default_size", DEFAULT_PAGE_SIZE);
     }
 }

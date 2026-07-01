@@ -7,17 +7,22 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import bean.Document;
-import dbutil.SQLHelper;
+import util.SQLHelper;
 import util.DateUtil;
 import util.PageUtil;
 
 public class DocumentDao {
     private static final String BASE_SQL =
         "SELECT d.id,d.student_id,d.topic_id,d.doc_type,d.title,d.content,d.file_path,d.status,d.score,"
-        + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title "
+        + "d.feedback,d.submit_time,d.review_time,d.reviewer_id,u.real_name,u.student_no,t.title,"
+        + "d.self_review,d.peer_review,d.advisor_score,d.advisor_comment,d.paper_reviewer_id,"
+        + "pr.real_name,d.reviewer_score,d.reviewer_comment,d.reviewer_review_time,"
+        + "t.teacher_id,teacher.real_name "
         + "FROM documents d "
         + "JOIN users u ON d.student_id=u.id "
-        + "JOIN topics t ON d.topic_id=t.id ";
+        + "JOIN topics t ON d.topic_id=t.id "
+        + "JOIN users teacher ON t.teacher_id=teacher.id "
+        + "LEFT JOIN users pr ON d.paper_reviewer_id=pr.id ";
 
     public List<Document> findByStudent(int studentId) {
         List<Object[]> rows = SQLHelper.queryList(
@@ -116,8 +121,10 @@ public class DocumentDao {
             conn.setAutoCommit(false);
 
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT 1 FROM topic_selections WHERE student_id=? AND topic_id=? "
-                    + "AND status='approved' FOR UPDATE")) {
+                    "SELECT 1 FROM ("
+                    + "SELECT student_id,topic_id FROM topic_assignments "
+                    + "UNION SELECT student_id,topic_id FROM topic_selections WHERE status='approved'"
+                    + ") x WHERE student_id=? AND topic_id=?")) {
                 ps.setInt(1, doc.getStudentId());
                 ps.setInt(2, doc.getTopicId());
                 try (ResultSet rs = ps.executeQuery()) {
@@ -173,7 +180,10 @@ public class DocumentDao {
                 saveVersion(conn, existingId, oldTitle, oldContent, oldFilePath);
                 try (PreparedStatement ps = conn.prepareStatement(
                         "UPDATE documents SET title=?,content=?,file_path=?,status='submitted',"
-                        + "score=NULL,feedback=NULL,review_time=NULL,reviewer_id=NULL,submit_time=NOW() "
+                        + "score=NULL,feedback=NULL,self_review=NULL,peer_review=NULL,"
+                        + "advisor_score=NULL,advisor_comment=NULL,"
+                        + "reviewer_score=NULL,reviewer_comment=NULL,reviewer_review_time=NULL,"
+                        + "review_time=NULL,reviewer_id=NULL,submit_time=NOW() "
                         + "WHERE id=? AND status='rejected'")) {
                     ps.setString(1, doc.getTitle());
                     ps.setString(2, doc.getContent());
@@ -205,23 +215,171 @@ public class DocumentDao {
         }
     }
 
-    public int review(int id, int teacherId, String status, BigDecimal score, String feedback) {
+    public int review(int id, int teacherId, String status, BigDecimal advisorScore,
+            String feedback) {
         if (!"reviewed".equals(status) && !"rejected".equals(status)) {
             return 0;
         }
-        if ("reviewed".equals(status)
-                && (score == null || score.compareTo(BigDecimal.ZERO) < 0
-                || score.compareTo(new BigDecimal("100")) > 0)) {
+        boolean finalDoc = isFinalDoc(id);
+        if ("reviewed".equals(status) && finalDoc
+                && (advisorScore == null || !validScore(advisorScore))) {
             return 0;
         }
+        String advisorComment = finalDoc && "reviewed".equals(status) ? feedback : null;
+        if (!finalDoc) {
+            advisorScore = null;
+        }
         if ("rejected".equals(status)) {
-            score = null;
+            advisorScore = null;
+            advisorComment = null;
         }
         return SQLHelper.executeUpdate(
             "UPDATE documents d JOIN topics t ON d.topic_id=t.id "
-            + "SET d.status=?,d.score=?,d.feedback=?,d.review_time=NOW(),d.reviewer_id=? "
+            + "SET d.status=?,d.score=?,d.feedback=?,"
+            + "d.advisor_score=?,d.advisor_comment=?,d.self_review=?,"
+            + "d.review_time=NOW(),d.reviewer_id=? "
             + "WHERE d.id=? AND d.status='submitted' AND t.teacher_id=?",
-            status, score, feedback, teacherId, id, teacherId);
+            status, advisorScore, feedback, advisorScore, advisorComment,
+            advisorComment, teacherId, id, teacherId);
+    }
+
+    public List<Document> findFinalsForPaperReview(int reviewerId) {
+        List<Object[]> rows = SQLHelper.queryList(
+            BASE_SQL + "WHERE d.doc_type='final' AND d.status='reviewed' "
+            + "AND d.paper_reviewer_id=? ORDER BY "
+            + "CASE WHEN d.reviewer_score IS NULL THEN 0 ELSE 1 END,d.submit_time DESC",
+            reviewerId);
+        return mapList(rows);
+    }
+
+    public int countPendingPaperReview(int reviewerId) {
+        Object val = SQLHelper.queryScalar(
+            "SELECT COUNT(*) FROM documents WHERE doc_type='final' AND status='reviewed' "
+            + "AND paper_reviewer_id=? AND reviewer_score IS NULL",
+            reviewerId);
+        return val == null ? 0 : ((Number) val).intValue();
+    }
+
+    public int submitPaperReview(int documentId, int reviewerId, BigDecimal score,
+            String comment) {
+        if (!validScore(score)) {
+            return 0;
+        }
+        return SQLHelper.executeUpdate(
+            "UPDATE documents SET reviewer_score=?,reviewer_comment=?,"
+            + "peer_review=?,reviewer_review_time=NOW() "
+            + "WHERE id=? AND doc_type='final' AND status='reviewed' "
+            + "AND paper_reviewer_id=?",
+            score, comment, comment, documentId, reviewerId);
+    }
+
+    public int arrangePaperReviewer(int documentId, int paperReviewerId, int directorId,
+            String college, String major) {
+        if (directorId <= 0) {
+            return 0;
+        }
+        Connection conn = null;
+        try {
+            conn = SQLHelper.getConnection();
+            conn.setAutoCommit(false);
+
+            int supervisorId = 0;
+            int studentId = 0;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT d.student_id,t.teacher_id FROM documents d "
+                    + "JOIN users u ON d.student_id=u.id "
+                    + "JOIN topics t ON d.topic_id=t.id "
+                    + "WHERE d.id=? AND d.doc_type='final' AND d.status='reviewed' "
+                    + "AND u.role='student' AND u.status=1 "
+                    + "AND u.college=? AND u.major=? AND t.college=? AND t.major=? "
+                    + "FOR UPDATE")) {
+                ps.setInt(1, documentId);
+                ps.setString(2, college);
+                ps.setString(3, major);
+                ps.setString(4, college);
+                ps.setString(5, major);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        studentId = rs.getInt(1);
+                        supervisorId = rs.getInt(2);
+                    }
+                }
+            }
+            if (studentId <= 0 || supervisorId == paperReviewerId) {
+                conn.rollback();
+                return 0;
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT 1 FROM users WHERE id=? AND role IN ('teacher','director') "
+                    + "AND status=1 AND college=? AND major=? LIMIT 1")) {
+                ps.setInt(1, paperReviewerId);
+                ps.setString(2, college);
+                ps.setString(3, major);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        conn.rollback();
+                        return 0;
+                    }
+                }
+            }
+
+            int updated;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE documents SET paper_reviewer_id=?,reviewer_score=NULL,"
+                    + "reviewer_comment=NULL,peer_review=NULL,reviewer_review_time=NULL "
+                    + "WHERE id=?")) {
+                ps.setInt(1, paperReviewerId);
+                ps.setInt(2, documentId);
+                updated = ps.executeUpdate();
+            }
+            conn.commit();
+            return updated;
+        } catch (Exception ex) {
+            rollbackQuietly(conn);
+            ex.printStackTrace();
+            return 0;
+        } finally {
+            closeQuietly(conn);
+        }
+    }
+
+    public List<Document> findFinalsForReviewerArrangement(String college, String major) {
+        List<Object[]> rows = SQLHelper.queryList(
+            BASE_SQL + "WHERE d.doc_type='final' AND d.status='reviewed' "
+            + "AND u.role='student' AND u.status=1 "
+            + "AND u.college=? AND u.major=? AND t.college=? AND t.major=? "
+            + "ORDER BY CASE WHEN d.paper_reviewer_id IS NULL THEN 0 ELSE 1 END,"
+            + "u.student_no,u.id",
+            college, major, college, major);
+        return mapList(rows);
+    }
+
+    public List<bean.User> findPaperReviewerCandidates(String college, String major) {
+        List<Object[]> rows = SQLHelper.queryList(
+            "SELECT id,username,role,real_name,title,college,major,status "
+            + "FROM users WHERE role IN ('teacher','director') AND status=1 "
+            + "AND college=? AND major=? ORDER BY role,real_name,id",
+            college, major);
+        List<bean.User> list = new ArrayList<bean.User>();
+        for (Object[] row : rows) {
+            bean.User u = new bean.User();
+            u.setId(((Number) row[0]).intValue());
+            u.setUsername((String) row[1]);
+            u.setRole((String) row[2]);
+            u.setRealName((String) row[3]);
+            u.setTitle((String) row[4]);
+            u.setCollege((String) row[5]);
+            u.setMajor((String) row[6]);
+            u.setStatus(((Number) row[7]).intValue());
+            list.add(u);
+        }
+        return list;
+    }
+
+    private boolean validScore(BigDecimal score) {
+        return score != null && score.compareTo(BigDecimal.ZERO) >= 0
+            && score.compareTo(new BigDecimal("100")) <= 0;
     }
 
     public boolean isStageAvailable(int studentId, String docType) {
@@ -251,6 +409,11 @@ public class DocumentDao {
                 return rs.next() ? rs.getObject(1) : null;
             }
         }
+    }
+
+    private boolean isFinalDoc(int id) {
+        Object val = SQLHelper.queryScalar("SELECT doc_type FROM documents WHERE id=?", id);
+        return "final".equals(val == null ? null : String.valueOf(val));
     }
 
     private void saveVersion(Connection conn, int documentId, String title,
@@ -293,6 +456,30 @@ public class DocumentDao {
         return val == null ? 0 : ((Number) val).intValue();
     }
 
+    public List<Object[]> findProgressByScope(String college, String major) {
+        return SQLHelper.queryList(
+            "SELECT u.student_no,u.real_name,u.class_name,t.title,teacher.real_name,"
+            + "p.status,p.submit_time,p.review_time,"
+            + "m.status,m.submit_time,m.review_time,"
+            + "f.status,f.advisor_score,f.submit_time,f.review_time,"
+            + "pr.real_name,f.reviewer_score,f.reviewer_review_time "
+            + "FROM users u "
+            + "JOIN ("
+            + "  SELECT student_id,topic_id FROM topic_assignments "
+            + "  UNION SELECT student_id,topic_id FROM topic_selections WHERE status='approved'"
+            + ") sel ON sel.student_id=u.id "
+            + "JOIN topics t ON sel.topic_id=t.id "
+            + "JOIN users teacher ON t.teacher_id=teacher.id "
+            + "LEFT JOIN documents p ON p.student_id=u.id AND p.doc_type='proposal' "
+            + "LEFT JOIN documents m ON m.student_id=u.id AND m.doc_type='midterm' "
+            + "LEFT JOIN documents f ON f.student_id=u.id AND f.doc_type='final' "
+            + "LEFT JOIN users pr ON f.paper_reviewer_id=pr.id "
+            + "WHERE u.role='student' AND u.college=? AND u.major=? "
+            + "AND t.college=? AND t.major=? "
+            + "ORDER BY u.student_no",
+            college, major, college, major);
+    }
+
     private List<Document> mapList(List<Object[]> rows) {
         List<Document> list = new ArrayList<Document>();
         for (Object[] row : rows) {
@@ -319,6 +506,21 @@ public class DocumentDao {
         d.setStudentName((String) row[13]);
         d.setStudentNo((String) row[14]);
         d.setTopicTitle((String) row[15]);
+        d.setSelfReview(row.length > 16 ? (String) row[16] : null);
+        d.setPeerReview(row.length > 17 ? (String) row[17] : null);
+        d.setAdvisorScore(row.length > 18 && row[18] != null
+            ? new BigDecimal(row[18].toString()) : d.getScore());
+        d.setAdvisorComment(row.length > 19 ? (String) row[19] : d.getFeedback());
+        d.setPaperReviewerId(row.length > 20 && row[20] != null
+            ? ((Number) row[20]).intValue() : null);
+        d.setPaperReviewerName(row.length > 21 ? (String) row[21] : null);
+        d.setReviewerScore(row.length > 22 && row[22] != null
+            ? new BigDecimal(row[22].toString()) : null);
+        d.setReviewerComment(row.length > 23 ? (String) row[23] : null);
+        d.setReviewerReviewTime(row.length > 24 ? DateUtil.toDate(row[24]) : null);
+        d.setTeacherId(row.length > 25 && row[25] != null
+            ? ((Number) row[25]).intValue() : null);
+        d.setTeacherName(row.length > 26 ? (String) row[26] : null);
         return d;
     }
 }

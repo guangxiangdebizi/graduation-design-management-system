@@ -7,7 +7,7 @@
   Integer pgTotalObj = (Integer) request.getAttribute("total");
   if (pgBaseUrl == null) pgBaseUrl = "";
   int pgCurrent = pgPageObj != null ? pgPageObj : 1;
-  int pgSize = pgSizeObj != null ? pgSizeObj : PageUtil.DEFAULT_PAGE_SIZE;
+  int pgSize = pgSizeObj != null ? pgSizeObj : PageUtil.defaultPageSize();
   int pgTotal = pgTotalObj != null ? pgTotalObj : 0;
   int pgTotalPages = PageUtil.totalPages(pgTotal, pgSize);
   String pgSep = pgBaseUrl.contains("?") ? "&" : "?";

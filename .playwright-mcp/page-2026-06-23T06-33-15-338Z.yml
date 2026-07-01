@@ -1,0 +1,138 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - text: 毕业设计管理系统
+      - generic [ref=e5]: Graduation Design
+    - navigation [ref=e6]:
+      - link "■ 仪表盘" [ref=e7] [cursor=pointer]:
+        - /url: /graduation-design/dashboard.jsp
+      - link "■ 用户管理" [ref=e8] [cursor=pointer]:
+        - /url: /graduation-design/admin/user.action
+      - link "■ 系统开关" [ref=e9] [cursor=pointer]:
+        - /url: /graduation-design/admin/system-switch.action
+      - link "■ 公告管理" [ref=e10] [cursor=pointer]:
+        - /url: /graduation-design/admin/announcements.jsp
+      - link "■ 答辩安排" [ref=e11] [cursor=pointer]:
+        - /url: /graduation-design/admin/defenses.jsp
+      - link "■ 数据统计" [ref=e12] [cursor=pointer]:
+        - /url: /graduation-design/admin/statistics.jsp
+      - link "■ 模板管理" [ref=e13] [cursor=pointer]:
+        - /url: /graduation-design/admin/file-template.action
+      - link "■ AI 助手" [ref=e14] [cursor=pointer]:
+        - /url: /graduation-design/admin/ai.jsp
+      - link "■ 站内消息" [ref=e15] [cursor=pointer]:
+        - /url: /graduation-design/admin/messages.jsp
+      - link "■ 操作日志" [ref=e16] [cursor=pointer]:
+        - /url: /graduation-design/admin/logs.jsp
+      - link "■ 个人中心" [ref=e17] [cursor=pointer]:
+        - /url: /graduation-design/profile.action
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e21]: 仪表盘
+      - generic [ref=e22]:
+        - strong [ref=e23]: 沈明
+        - text: (管理员 / 管理员) |
+        - link "个人中心" [ref=e24] [cursor=pointer]:
+          - /url: /graduation-design/profile.action
+        - text: "|"
+        - link "退出" [ref=e25] [cursor=pointer]:
+          - /url: /graduation-design/logout.action
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e29]: 👥
+          - generic [ref=e30]: 教师人数
+          - generic [ref=e31]: "17"
+        - generic [ref=e32]:
+          - generic [ref=e33]: 🎓
+          - generic [ref=e34]: 学生人数
+          - generic [ref=e35]: "88"
+        - generic [ref=e36]:
+          - generic [ref=e37]: 📝
+          - generic [ref=e38]: 课题总数
+          - generic [ref=e39]: "52"
+        - generic [ref=e40]:
+          - generic [ref=e41]: ✅
+          - generic [ref=e42]: 已选题学生
+          - generic [ref=e43]: "37"
+      - generic [ref=e44]:
+        - heading "系统公告" [level=5] [ref=e45]
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - generic [ref=e48]: 置顶
+            - text: 人工智能专业模型演示材料提交提醒
+          - generic [ref=e49]: 沈明 · 2026-06-23 01:46
+          - generic [ref=e50]: 请人工智能专业学生答辩前补齐模型结构图、推理截图和评测指标。
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - generic [ref=e53]: 置顶
+            - text: 计算机科学与技术专业系统演示检查提醒
+          - generic [ref=e54]: 沈明 · 2026-06-23 01:46
+          - generic [ref=e55]: 请计算机科学与技术专业学生准备系统部署、接口测试和截图材料。
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - generic [ref=e58]: 置顶
+            - text: 计算机科学与技术专业答辩材料提交提醒
+          - generic [ref=e59]: 沈明 · 2026-06-23 00:47
+          - generic [ref=e60]: 请本专业学生在答辩前完成终稿、源代码、系统截图和测试记录提交。该公告由管理员按专业定向发布。
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]: 置顶
+            - text: 毕业设计终稿提交与答辩材料准备提醒
+          - generic [ref=e64]: 沈明 · 2026-06-22 21:38
+          - generic [ref=e65]: 请已完成终稿评阅的同学提前准备答辩PPT、项目源码、论文终稿和演示账号。
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - generic [ref=e68]: 置顶
+            - text: 2026届毕业设计工作安排通知
+          - generic [ref=e69]: 沈明 · 2026-05-22 12:27
+          - generic [ref=e70]: 请各位同学于5月30日前完成选题，6月15日前提交开题报告。详细安排请查看教务处网站。
+        - generic [ref=e71]:
+          - generic [ref=e72]: 交互测试：计算机专业定向公告
+          - generic [ref=e73]: 沈明 · 2026-06-23 02:05
+          - generic [ref=e74]: 用于验证计算机专业学生、教师、系主任是否能看到本专业公告。
+        - generic [ref=e75]:
+          - generic [ref=e76]: 交互测试：人工智能专业定向公告
+          - generic [ref=e77]: 沈明 · 2026-06-23 02:05
+          - generic [ref=e78]: 用于验证人工智能专业公告不会显示到计算机专业。
+        - generic [ref=e79]:
+          - generic [ref=e80]: 软件工程专业过程文档检查提醒
+          - generic [ref=e81]: 沈明 · 2026-06-23 01:46
+          - generic [ref=e82]: 请软件工程专业学生提交需求规格、测试用例和迭代记录。
+        - generic [ref=e83]:
+          - generic [ref=e84]: 数据科学专业数据来源说明提醒
+          - generic [ref=e85]: 沈明 · 2026-06-23 01:46
+          - generic [ref=e86]: 请数据科学专业学生在终稿中说明数据来源、清洗过程和指标口径。
+        - generic [ref=e87]:
+          - generic [ref=e88]: 各学院毕业设计答辩分组已陆续发布
+          - generic [ref=e89]: 秦文 · 2026-06-22 21:38
+          - generic [ref=e90]: 各学院答辩时间、地点和分组信息将通过系统持续更新，请学生和指导教师及时查看。
+        - generic [ref=e91]:
+          - generic [ref=e92]: 关于加强毕业设计过程材料归档的通知
+          - generic [ref=e93]: 许宁 · 2026-06-22 21:38
+          - generic [ref=e94]: 请教师在系统中及时完成文档评阅和反馈填写，学生应保存各阶段版本材料。
+        - generic [ref=e95]:
+          - generic [ref=e96]: 中期检查时间节点提醒
+          - generic [ref=e97]: 沈明 · 2026-05-22 12:27
+          - generic [ref=e98]: 中期检查时间为5月1日-5月20日，请各指导教师督促学生按时提交中期报告。
+        - generic [ref=e99]:
+          - generic [ref=e100]: 答辩安排（即将开放）
+          - generic [ref=e101]: 沈明 · 2026-05-22 12:27
+          - generic [ref=e102]: 答辩具体安排将在6月底发布，请同学们关注系统公告。
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - heading "完整版功能" [level=5] [ref=e105]
+          - link "导出成绩 Excel" [ref=e106] [cursor=pointer]:
+            - /url: admin/export.action
+        - generic [ref=e107]:
+          - link "ECharts 统计" [ref=e108] [cursor=pointer]:
+            - /url: admin/statistics.jsp
+          - link "公告管理" [ref=e109] [cursor=pointer]:
+            - /url: admin/announcements.jsp
+          - link "答辩安排" [ref=e110] [cursor=pointer]:
+            - /url: admin/defenses.jsp
+          - link "站内消息" [ref=e111] [cursor=pointer]:
+            - /url: admin/messages.jsp
+          - link "操作日志" [ref=e112] [cursor=pointer]:
+            - /url: admin/logs.jsp
+      - heading "选题概况" [level=6] [ref=e114]

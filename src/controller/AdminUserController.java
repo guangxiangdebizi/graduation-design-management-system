@@ -8,10 +8,16 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import bean.User;
+import bean.UserSearchCriteria;
 import dao.UserDao;
+import util.CollegeUtil;
+import util.DictionaryUtil;
 import util.OperationLogUtil;
 import util.PageUtil;
+import util.SystemConfigUtil;
 import util.WebUtil;
+import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.List;
 
 @WebServlet("/admin/user.action")
@@ -19,21 +25,34 @@ public class AdminUserController extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        String role = request.getParameter("role");
-        String college = request.getParameter("college");
+        UserSearchCriteria criteria = buildCriteria(request);
         int page = PageUtil.getPage(request);
         int pageSize = PageUtil.getPageSize(request);
 
         UserDao dao = new UserDao();
-        List<User> users = dao.findAllPaged(role, college, page, pageSize);
-        int total = dao.countAll(role, college);
+        List<User> users = dao.findAllPaged(criteria, page, pageSize);
+        int total = dao.countAll(criteria);
+        String filterQuery = buildFilterQuery(criteria);
 
         request.setAttribute("users", users);
         request.setAttribute("total", total);
         request.setAttribute("currentPage", page);
         request.setAttribute("pageSize", pageSize);
-        request.setAttribute("roleFilter", role);
-        request.setAttribute("collegeFilter", college);
+        request.setAttribute("roleFilter", criteria.getRole());
+        request.setAttribute("collegeFilter", criteria.getCollege());
+        request.setAttribute("majorFilter", criteria.getMajor());
+        request.setAttribute("classNameFilter", criteria.getClassName());
+        request.setAttribute("studentNoFilter", criteria.getStudentNo());
+        request.setAttribute("realNameFilter", criteria.getRealName());
+        request.setAttribute("filterQuery", filterQuery);
+        request.setAttribute("roleOptions", DictionaryUtil.items("role"));
+        request.setAttribute("userStatusOptions", DictionaryUtil.items("user_status"));
+        request.setAttribute("collegeOptions", CollegeUtil.getColleges());
+        request.setAttribute("majorGroups", CollegeUtil.getMajorGroups());
+        request.setAttribute("usernamePattern",
+            SystemConfigUtil.getString("validation.username_regex", "^[a-zA-Z0-9_]{3,20}$"));
+        request.setAttribute("passwordMinLength",
+            SystemConfigUtil.getInt("validation.password_min_length", 6));
         request.getRequestDispatcher("/admin/users.jsp").forward(request, response);
     }
 
@@ -52,6 +71,11 @@ public class AdminUserController extends HttpServlet {
             }
             User u = buildUser(request);
             u.setStatus(1);
+            if (u.getStudentNo() != null
+                    && dao.existsByStudentNoExcludeId(u.getStudentNo(), 0)) {
+                WebUtil.redirect(request, response, "/admin/user.action?msg=student_no_exists");
+                return;
+            }
             dao.insert(u);
             OperationLogUtil.log(loginUser.getId(), "ADD", "user", "新增用户 " + u.getUsername());
             WebUtil.redirect(request, response, "/admin/user.action?msg=add_ok");
@@ -81,6 +105,11 @@ public class AdminUserController extends HttpServlet {
                 WebUtil.redirect(request, response, "/admin/user.action?msg=last_admin");
                 return;
             }
+            if (u.getStudentNo() != null
+                    && dao.existsByStudentNoExcludeId(u.getStudentNo(), editId)) {
+                WebUtil.redirect(request, response, "/admin/user.action?msg=student_no_exists");
+                return;
+            }
             String pwd = request.getParameter("password");
             u.setPassword(pwd == null || pwd.trim().isEmpty() ? null : pwd);
             dao.update(u);
@@ -99,6 +128,34 @@ public class AdminUserController extends HttpServlet {
             }
             OperationLogUtil.log(loginUser.getId(), "DELETE", "user", "删除用户 id=" + id);
             WebUtil.redirect(request, response, "/admin/user.action?msg=delete_ok");
+        } else if ("resetSelected".equals(action)) {
+            String[] values = request.getParameterValues("selectedIds");
+            String newPassword = request.getParameter("newPassword");
+            if (!validNewPassword(newPassword)) {
+                WebUtil.redirect(request, response, "/admin/user.action?msg=reset_password_invalid");
+                return;
+            }
+            List<Integer> ids = parseIds(values);
+            int count = dao.resetStudentPasswords(ids, newPassword);
+            OperationLogUtil.log(loginUser.getId(), "RESET_PASSWORD", "user",
+                "按勾选重置学生密码 " + count + " 个");
+            WebUtil.redirect(request, response,
+                "/admin/user.action?msg=reset_ok&count=" + count);
+        } else if ("resetFiltered".equals(action)) {
+            String newPassword = request.getParameter("newPassword");
+            if (!validNewPassword(newPassword)) {
+                WebUtil.redirect(request, response, "/admin/user.action?msg=reset_password_invalid");
+                return;
+            }
+            UserSearchCriteria criteria = buildCriteria(request);
+            List<Integer> ids = dao.findStudentIdsForReset(criteria);
+            int count = dao.resetStudentPasswords(ids, newPassword);
+            OperationLogUtil.log(loginUser.getId(), "RESET_PASSWORD", "user",
+                "按筛选重置学生密码 " + count + " 个");
+            String query = buildFilterQuery(criteria);
+            WebUtil.redirect(request, response,
+                "/admin/user.action?" + query + (query.isEmpty() ? "" : "&")
+                    + "msg=reset_ok&count=" + count);
         } else {
             WebUtil.redirect(request, response, "/admin/user.action");
         }
@@ -106,17 +163,109 @@ public class AdminUserController extends HttpServlet {
 
     private User buildUser(HttpServletRequest request) {
         User u = new User();
-        u.setUsername(request.getParameter("username"));
+        u.setUsername(trimParam(request.getParameter("username")));
         u.setPassword(request.getParameter("password"));
         u.setRole(request.getParameter("role"));
-        u.setRealName(request.getParameter("realName"));
-        u.setStudentNo(request.getParameter("studentNo"));
-        u.setCollege(request.getParameter("college"));
-        u.setMajor(request.getParameter("major"));
-        u.setClassName(request.getParameter("className"));
-        u.setDepartment(request.getParameter("department"));
-        u.setEmail(request.getParameter("email"));
-        u.setPhone(request.getParameter("phone"));
+        u.setRealName(trimParam(request.getParameter("realName")));
+        u.setTitle(resolveTitle(request.getParameter("title"), u.getRole()));
+        u.setStudentNo("student".equals(u.getRole())
+            ? blankToNull(request.getParameter("studentNo")) : null);
+        u.setCollege(blankToNull(request.getParameter("college")));
+        u.setMajor(blankToNull(request.getParameter("major")));
+        u.setClassName("student".equals(u.getRole())
+            ? blankToNull(request.getParameter("className")) : null);
+        u.setDepartment(blankToNull(request.getParameter("department")));
+        u.setEmail(blankToNull(request.getParameter("email")));
+        u.setPhone(blankToNull(request.getParameter("phone")));
         return u;
+    }
+
+    private String blankToNull(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String trimParam(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private String resolveTitle(String title, String role) {
+        if (title != null && !title.trim().isEmpty()) {
+            return title.trim();
+        }
+        if ("admin".equals(role)) {
+            return "管理员";
+        }
+        if ("director".equals(role)) {
+            return "系主任";
+        }
+        if ("teacher".equals(role)) {
+            return "教师";
+        }
+        if ("student".equals(role)) {
+            return "学生";
+        }
+        return null;
+    }
+
+    private UserSearchCriteria buildCriteria(HttpServletRequest request) {
+        UserSearchCriteria criteria = new UserSearchCriteria();
+        criteria.setRole(request.getParameter("role"));
+        criteria.setCollege(request.getParameter("college"));
+        criteria.setMajor(request.getParameter("major"));
+        criteria.setClassName(request.getParameter("className"));
+        criteria.setStudentNo(request.getParameter("studentNo"));
+        criteria.setRealName(request.getParameter("realName"));
+        return criteria;
+    }
+
+    private List<Integer> parseIds(String[] values) {
+        List<Integer> ids = new ArrayList<Integer>();
+        if (values == null) {
+            return ids;
+        }
+        for (String value : values) {
+            if (value == null || value.trim().isEmpty()) {
+                continue;
+            }
+            try {
+                ids.add(Integer.parseInt(value.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return ids;
+    }
+
+    private boolean validNewPassword(String password) {
+        int minLength = SystemConfigUtil.getInt("validation.password_min_length", 6);
+        return password != null && password.length() >= minLength;
+    }
+
+    private String buildFilterQuery(UserSearchCriteria criteria) {
+        StringBuilder sb = new StringBuilder();
+        appendQuery(sb, "role", criteria.getRole());
+        appendQuery(sb, "college", criteria.getCollege());
+        appendQuery(sb, "major", criteria.getMajor());
+        appendQuery(sb, "className", criteria.getClassName());
+        appendQuery(sb, "studentNo", criteria.getStudentNo());
+        appendQuery(sb, "realName", criteria.getRealName());
+        return sb.toString();
+    }
+
+    private void appendQuery(StringBuilder sb, String key, String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return;
+        }
+        try {
+            if (sb.length() > 0) {
+                sb.append("&");
+            }
+            sb.append(URLEncoder.encode(key, "UTF-8"))
+                .append("=")
+                .append(URLEncoder.encode(value, "UTF-8"));
+        } catch (Exception ignored) {
+        }
     }
 }

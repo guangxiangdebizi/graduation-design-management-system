@@ -20,14 +20,17 @@ public class AdminStatsController extends HttpServlet {
         StatsDao statsDao = new StatsDao();
         UserDao userDao = new UserDao();
         int studentCount = userDao.countByRole("student");
+        int approvedCount = statsDao.approvedSelectionCount(null, null);
         Map<String, Integer> selection = statsDao.selectionStats(studentCount);
         Map<String, Integer> docPass = statsDao.docPassStats();
+        Map<String, Integer> defense = statsDao.defenseStats(approvedCount);
         List<Object[]> scores = statsDao.scoreDistribution();
 
         PrintWriter out = response.getWriter();
         out.print("{");
         out.print("\"selection\":" + mapToJson(selection) + ",");
         out.print("\"docPass\":" + mapToJson(docPass) + ",");
+        out.print("\"defense\":" + mapToJson(defense) + ",");
         out.print("\"scores\":{\"labels\":" + labelsJson(scores) + ",\"values\":" + valuesJson(scores) + "}");
         out.print("}");
         out.flush();
@@ -74,4 +77,5 @@ public class AdminStatsController extends HttpServlet {
     private String escape(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
+
 }

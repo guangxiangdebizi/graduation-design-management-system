@@ -13,7 +13,9 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import bean.User;
 import dao.UserDao;
+import dao.MessageDao;
 import util.CsrfUtil;
+import util.RoleUtil;
 
 @WebFilter("/*")
 public class AuthFilter implements Filter {
@@ -62,18 +64,31 @@ public class AuthFilter implements Filter {
             response.sendRedirect(ctx + "/login.jsp?error=account_changed");
             return;
         }
+        session.setAttribute("loginUser", currentUser);
+        user = currentUser;
 
         if (path.startsWith("/admin/") && !"admin".equals(user.getRole())) {
-            response.sendRedirect(ctx + "/dashboard.jsp");
+            response.sendRedirect(ctx + "/dashboard.action");
             return;
         }
-        if (path.startsWith("/teacher/") && !"teacher".equals(user.getRole())) {
-            response.sendRedirect(ctx + "/dashboard.jsp");
+        if (path.startsWith("/director/") && !"director".equals(user.getRole())) {
+            response.sendRedirect(ctx + "/dashboard.action");
+            return;
+        }
+        if (path.startsWith("/teacher/") && !RoleUtil.hasRole(user, "teacher")) {
+            response.sendRedirect(ctx + "/dashboard.action");
             return;
         }
         if (path.startsWith("/student/") && !"student".equals(user.getRole())) {
-            response.sendRedirect(ctx + "/dashboard.jsp");
+            response.sendRedirect(ctx + "/dashboard.action");
             return;
+        }
+
+        try {
+            request.setAttribute("unreadMsg",
+                Integer.valueOf(new MessageDao().countUnread(user.getId())));
+        } catch (Exception ignored) {
+            request.setAttribute("unreadMsg", Integer.valueOf(0));
         }
 
         if (isSafeMethod(request.getMethod())) {

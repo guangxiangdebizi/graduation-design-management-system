@@ -47,7 +47,7 @@ public class LoginController extends HttpServlet {
             OperationLogUtil.log(user.getId(), "LOGIN", user.getRole(), username + " 登录系统");
 
             // 登录成功后重定向到仪表盘
-            WebUtil.redirect(request, response, "/dashboard.jsp");
+            WebUtil.redirect(request, response, "/dashboard.action");
         } else {
             LoginAttemptUtil.recordFailure(session, username);
             WebUtil.redirect(request, response, "/login.jsp?error=1");

@@ -14,6 +14,7 @@ import javax.servlet.http.HttpSession;
 import bean.User;
 import dao.DocumentDao;
 import bean.Document;
+import util.RoleUtil;
 import util.WebUtil;
 
 @WebServlet("/download.action")
@@ -69,7 +70,7 @@ public class DownloadController extends HttpServlet {
         if ("admin".equals(user.getRole())) {
             return path.startsWith("uploads/");
         }
-        if ("teacher".equals(user.getRole())) {
+        if (RoleUtil.hasRole(user, "teacher")) {
             if (!path.startsWith("uploads/")) {
                 return false;
             }

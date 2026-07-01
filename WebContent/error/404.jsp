@@ -14,7 +14,7 @@
     <div style="font-size:4rem;line-height:1">404</div>
     <h1 class="h4 mt-2">页面未找到</h1>
     <p class="text-muted">您访问的页面不存在或已被移除</p>
-    <a href="<%= request.getContextPath() %>/dashboard.jsp" class="btn btn-primary btn-sm">返回首页</a>
+    <a href="<%= request.getContextPath() %>/dashboard.action" class="btn btn-primary btn-sm">返回首页</a>
     <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm ms-2">返回上一页</a>
   </div>
 </div>

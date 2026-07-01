@@ -1,17 +1,13 @@
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="bean.*,dao.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
+<%@ page import="bean.*,java.util.*,java.text.SimpleDateFormat,util.EscapeUtil" %>
 <%
-  request.setAttribute("pageTitle", "答辩安排");
+  if (request.getAttribute("pageTitle") == null) request.setAttribute("pageTitle", "答辩安排");
   User loginUser = (User) session.getAttribute("loginUser");
-  DefenseScheduleDao dao = new DefenseScheduleDao();
-  UserDao userDao = new UserDao();
-  SelectionDao selDao = new SelectionDao();
-  List<DefenseSchedule> schedules = dao.findAll();
-  List<User> approvedStudents = new ArrayList<User>();
-  for (User u : userDao.findAll("student")) {
-    if (selDao.findApprovedByStudent(u.getId()) != null) {
-      approvedStudents.add(u);
-    }
+  List<DefenseSchedule> schedules = (List<DefenseSchedule>) request.getAttribute("schedules");
+  List<User> approvedStudents = (List<User>) request.getAttribute("approvedStudents");
+  if (schedules == null || approvedStudents == null) {
+    response.sendRedirect(request.getContextPath() + "/admin/defense.action");
+    return;
   }
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm");
   SimpleDateFormat display = new SimpleDateFormat("yyyy-MM-dd HH:mm");
@@ -36,11 +32,12 @@
     <button type="submit" class="btn btn-success btn-sm">导入</button>
   </form>
   <%
-    String importMsg = request.getParameter("msg");
+    String importMsg = (String) request.getAttribute("msg");
     if ("import_ok".equals(importMsg)) {
-      int importSuccess = 0, importSkipped = 0;
-      try { importSuccess = Integer.parseInt(request.getParameter("success")); } catch (Exception ignored) {}
-      try { importSkipped = Integer.parseInt(request.getParameter("skipped")); } catch (Exception ignored) {}
+      Integer importSuccessObj = (Integer) request.getAttribute("importSuccess");
+      Integer importSkippedObj = (Integer) request.getAttribute("importSkipped");
+      int importSuccess = importSuccessObj == null ? 0 : importSuccessObj.intValue();
+      int importSkipped = importSkippedObj == null ? 0 : importSkippedObj.intValue();
   %>
   <div class="alert alert-success py-2 mt-2 mb-0">导入完成：成功 <%= importSuccess %> 条，跳过 <%= importSkipped %> 条</div>
   <% } else if ("import_empty".equals(importMsg)) { %>

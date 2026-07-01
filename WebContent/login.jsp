@@ -46,8 +46,10 @@
     <div class="demo-accounts">
       <strong>演示账号：</strong><br>
       管理员 admin / admin123<br>
-      教师 teacher01 / 123456<br>
-      学生 student01 / 123456
+      教师 teacher_ds / 123456<br>
+      学生 driector_ds / 123456<br>
+      student_ds / 123456<br>
+      
     </div>
   </div>
 </div>

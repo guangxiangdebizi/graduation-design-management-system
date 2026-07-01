@@ -8,6 +8,7 @@ public class User {
     private String password;
     private String role;
     private String realName;
+    private String title;       // 身份/职称，如：教授、副教授、系主任、学生
     private String studentNo;
     private String college;      // 学院代码
     private String collegeName;  // 学院名称（展示用）
@@ -30,6 +31,8 @@ public class User {
     public void setRole(String role) { this.role = role; }
     public String getRealName() { return realName; }
     public void setRealName(String realName) { this.realName = realName; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
     public String getStudentNo() { return studentNo; }
     public void setStudentNo(String studentNo) { this.studentNo = studentNo; }
     public String getCollege() { return college; }
@@ -53,16 +56,31 @@ public class User {
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
 
+    public String getDisplayTitle() {
+        if (title != null && !title.trim().isEmpty()) {
+            return title;
+        }
+        if ("admin".equals(role)) {
+            return "管理员";
+        }
+        if ("director".equals(role)) {
+            return "系主任";
+        }
+        if ("teacher".equals(role)) {
+            return "教师";
+        }
+        if ("student".equals(role)) {
+            return "学生";
+        }
+        return "";
+    }
+
     // 获取完整归属信息（用于显示）
     public String getFullAffiliation() {
-        if ("student".equals(role)) {
-            StringBuilder sb = new StringBuilder();
-            if (collegeName != null) sb.append(collegeName);
-            if (majorName != null) sb.append(" / ").append(majorName);
-            if (className != null) sb.append(" / ").append(className);
-            return sb.length() > 0 ? sb.toString() : (department != null ? department : "");
-        } else {
-            return department != null ? department : (collegeName != null ? collegeName : "");
-        }
+        StringBuilder sb = new StringBuilder();
+        if (collegeName != null) sb.append(collegeName);
+        if (majorName != null) sb.append(" / ").append(majorName);
+        if ("student".equals(role) && className != null) sb.append(" / ").append(className);
+        return sb.length() > 0 ? sb.toString() : (department != null ? department : "");
     }
 }
